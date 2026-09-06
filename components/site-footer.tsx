@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-const socials = ['Instagram', 'LinkedIn', 'X', 'YouTube']
+const socials = ['Facebook', 'LinkedIn']
 
 export function SiteFooter() {
   return (
@@ -28,7 +28,7 @@ export function SiteFooter() {
                 </li>
                 <li>
                   <Link href="/work" className="text-foreground/80 transition-colors hover:text-blueprint">
-                    Services &amp; Work
+                    Services &amp; Pricing
                   </Link>
                 </li>
                 <li>
