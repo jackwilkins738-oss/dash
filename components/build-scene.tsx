@@ -157,8 +157,12 @@ function House({ reduced }: { reduced: boolean }) {
 function Floor({ receiveShadows }: { receiveShadows: boolean }) {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.16, 0]} receiveShadow={receiveShadows}>
-      <circleGeometry args={[9, 48]} />
-      <meshPhysicalMaterial color="#0f131a" roughness={0.75} metalness={0.05} />
+      {/* Was radius 9 - roughly 3x the house's own scale and nearly as far
+          out as the camera itself, which very likely filled the entire
+          frustum edge-to-edge and read as a solid black frame rather than
+          a grounded studio floor. 4 keeps it a floor, not a wall. */}
+      <circleGeometry args={[4, 48]} />
+      <meshPhysicalMaterial color="#1a212c" roughness={0.75} metalness={0.05} />
     </mesh>
   )
 }
