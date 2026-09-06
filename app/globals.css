@@ -147,6 +147,42 @@
   }
 }
 
+/* Two flashes then a rest, looping - the spark jumping the break in
+   BrokenWire's cable. Pure CSS on purpose: deterministic, no JS timeline
+   to get wrong, trivially frozen for reduced-motion below. */
+@keyframes wire-flash {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  2%,
+  6% {
+    opacity: 1;
+  }
+  4% {
+    opacity: 0.3;
+  }
+  8%,
+  45% {
+    opacity: 0.15;
+  }
+  47%,
+  51% {
+    opacity: 1;
+  }
+  49% {
+    opacity: 0.4;
+  }
+  53%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+.wire-spark {
+  animation: wire-flash 3.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-marquee {
     animation: none;
@@ -154,6 +190,10 @@
   .js-reveal {
     opacity: 1;
     transform: none;
+  }
+  .wire-spark {
+    animation: none;
+    opacity: 1;
   }
   * {
     scroll-behavior: auto !important;
