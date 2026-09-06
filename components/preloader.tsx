@@ -101,54 +101,77 @@ export function Preloader() {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          {/* Materialized solid fills (revealed at the end) */}
-          <g className="bp-fill" fill="var(--blueprint)" opacity="0.14" stroke="none">
-            <path d="M70 175 L70 92 L230 92 L230 175 Z" />
+          <defs>
+            {/* Real cross-hatch fill for the wall faces, the way a section
+                drawing actually renders a solid material - not a flat tint. */}
+            <pattern id="pl-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="5" stroke="var(--blueprint)" strokeWidth="1" />
+            </pattern>
+          </defs>
+
+          {/* Materialized fills (revealed at the end) - two hatched wall
+              faces, two flat-tinted roof slopes, isometric */}
+          <g className="bp-fill" fill="url(#pl-hatch)" opacity="0.6" stroke="none">
+            <path d="M150 178 L237 128 L237 52 L150 102 Z" />
           </g>
-          <g className="bp-fill" fill="var(--blueprint)" opacity="0.22" stroke="none">
-            <path d="M58 92 L150 44 L242 92 Z" />
+          <g className="bp-fill" fill="url(#pl-hatch)" opacity="0.6" stroke="none">
+            <path d="M150 178 L77 136 L77 60 L150 102 Z" />
+          </g>
+          <g className="bp-fill" fill="var(--blueprint)" opacity="0.16" stroke="none">
+            <path d="M150 102 L237 52 L157 10 Z" />
+          </g>
+          <g className="bp-fill" fill="var(--blueprint)" opacity="0.24" stroke="none">
+            <path d="M150 102 L77 60 L157 10 Z" />
           </g>
 
-          {/* Ground */}
-          <path className="bp-draw bp-ground" d="M18 175 L282 175" stroke="var(--blueprint)" strokeWidth="1.5" />
+          {/* Ground line, isometric */}
+          <path className="bp-draw bp-ground" d="M53 137 L261 126" stroke="var(--blueprint)" strokeWidth="1.5" />
 
-          {/* Walls */}
-          <path className="bp-draw bp-wall" d="M70 175 L70 92" stroke="var(--blueprint)" strokeWidth="1.5" />
-          <path className="bp-draw bp-wall" d="M230 175 L230 92" stroke="var(--blueprint)" strokeWidth="1.5" />
-          <path className="bp-draw bp-wall" d="M70 92 L230 92" stroke="var(--blueprint)" strokeWidth="1.5" />
+          {/* Walls: shared front edge, then each face's perimeter */}
+          <path className="bp-draw bp-wall" d="M150 178 L150 102" stroke="var(--blueprint)" strokeWidth="1.5" />
+          <path className="bp-draw bp-wall" d="M150 178 L237 128 L237 52 L150 102" stroke="var(--blueprint)" strokeWidth="1.5" />
+          <path className="bp-draw bp-wall" d="M150 178 L77 136 L77 60 L150 102" stroke="var(--blueprint)" strokeWidth="1.5" />
 
-          {/* Roof */}
-          <path className="bp-draw bp-roof" d="M58 92 L150 44 L242 92" stroke="var(--blueprint)" strokeWidth="1.5" />
+          {/* Hip roof, isometric - two visible slopes to a single ridge apex */}
+          <path className="bp-draw bp-roof" d="M150 102 L157 10 L237 52 M157 10 L77 60" stroke="var(--blueprint)" strokeWidth="1.5" />
 
-          {/* Details: door + windows */}
-          <path className="bp-draw bp-detail" d="M135 175 L135 132 L165 132 L165 175" stroke="var(--blueprint)" strokeWidth="1.2" />
-          <path className="bp-draw bp-detail" d="M90 112 L116 112 L116 138 L90 138 Z" stroke="var(--blueprint)" strokeWidth="1.2" />
-          <path className="bp-draw bp-detail" d="M184 112 L210 112 L210 138 L184 138 Z" stroke="var(--blueprint)" strokeWidth="1.2" />
+          {/* Details: door + two windows, each a proper isometric parallelogram */}
+          <path className="bp-draw bp-detail" d="M155 175 L168 168 L168 132 L155 139 Z" stroke="var(--blueprint)" strokeWidth="1" />
+          <path className="bp-draw bp-detail" d="M183 142 L201 132 L201 109 L183 119 Z" stroke="var(--blueprint)" strokeWidth="1" />
+          <path className="bp-draw bp-detail" d="M117 142 L99 132 L99 109 L117 119 Z" stroke="var(--blueprint)" strokeWidth="1" />
 
-          {/* Corner nodes */}
+          {/* Structural corner nodes */}
           {[
-            [70, 92],
-            [230, 92],
-            [70, 175],
-            [230, 175],
-            [150, 44],
+            [150, 178],
+            [237, 128],
+            [77, 136],
+            [150, 102],
+            [157, 10],
           ].map(([cx, cy]) => (
-            <circle key={`${cx}-${cy}`} className="bp-node" cx={cx} cy={cy} r="3" fill="var(--blueprint)" />
+            <circle key={`${cx}-${cy}`} className="bp-node" cx={cx} cy={cy} r="2.75" fill="var(--blueprint)" />
           ))}
 
-          {/* Dimension lines */}
-          <g className="bp-dim" stroke="var(--muted-foreground)" strokeWidth="0.75">
-            <path d="M70 196 L230 196" />
-            <path d="M70 191 L70 201" />
-            <path d="M230 191 L230 201" />
+          {/* Dimension lines with real callouts - width along the ground
+              edge, height along the front corner, drafting-style extension
+              ticks off each measured edge */}
+          <g className="bp-dim" stroke="var(--muted-foreground)" strokeWidth="0.6">
+            <path d="M150 178 L157 190" />
+            <path d="M237 128 L244 140" />
+            <path d="M157 190 L244 140" />
           </g>
-          <g className="bp-dim" stroke="var(--muted-foreground)" strokeWidth="0.75">
-            <path d="M48 92 L48 175" />
-            <path d="M43 92 L53 92" />
-            <path d="M43 175 L53 175" />
+          <text className="bp-dim" x="188" y="172" textAnchor="middle" fill="var(--muted-foreground)" fontSize="7" fontFamily="var(--font-mono)">
+            3600
+          </text>
+          <g className="bp-dim" stroke="var(--muted-foreground)" strokeWidth="0.6">
+            <path d="M150 178 L136 178" />
+            <path d="M150 102 L136 102" />
+            <path d="M136 178 L136 102" />
           </g>
-          <text className="bp-dim" x="150" y="212" textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="var(--font-mono)">
-            SCOPE
+          <text className="bp-dim" x="112" y="143" textAnchor="middle" fill="var(--muted-foreground)" fontSize="7" fontFamily="var(--font-mono)">
+            3200
+          </text>
+          <text className="bp-dim" x="150" y="214" textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="var(--font-mono)">
+            A-101
           </text>
 
           {/* Materialize flash */}
