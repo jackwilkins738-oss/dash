@@ -20,7 +20,7 @@ export function Pricing() {
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           <Reveal>
             <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Pricing</span>
-            <h2 className="mt-4 text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+            <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
               One fixed price. No surprises, no monthly rental.
             </h2>
             <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
@@ -47,7 +47,7 @@ export function Pricing() {
               <div
                 className="pointer-events-none absolute inset-0 opacity-70"
                 style={{
-                  background: 'radial-gradient(80% 60% at 100% 0%, oklch(0.82 0.13 197 / 0.14), transparent 60%)',
+                  background: 'radial-gradient(80% 60% at 100% 0%, oklch(0.62 0.135 244 / 0.18), transparent 60%)',
                 }}
                 aria-hidden="true"
               />

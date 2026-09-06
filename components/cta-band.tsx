@@ -9,11 +9,11 @@ export function CtaBand() {
           <div className="blueprint-grid pointer-events-none absolute inset-0 opacity-30" aria-hidden="true" />
           <div
             className="pointer-events-none absolute inset-0"
-            style={{ background: 'radial-gradient(70% 120% at 100% 0%, oklch(0.82 0.13 197 / 0.14), transparent 55%)' }}
+            style={{ background: 'radial-gradient(70% 120% at 100% 0%, oklch(0.62 0.135 244 / 0.18), transparent 55%)' }}
             aria-hidden="true"
           />
           <div className="relative max-w-2xl">
-            <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+            <h2 className="font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
               Ready to look like the best firm in town?
             </h2>
             <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">

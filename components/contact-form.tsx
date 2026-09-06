@@ -58,7 +58,7 @@ export function ContactForm() {
         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-blueprint/50 text-blueprint">
           <Check className="h-6 w-6" strokeWidth={2} />
         </div>
-        <h3 className="mt-6 text-2xl font-bold">Got it — message sent.</h3>
+        <h3 className="mt-6 font-display text-2xl font-bold">Got it — message sent.</h3>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           Thanks for reaching out. I read every enquiry myself and I&apos;ll come back to you within 2 hours during
           working hours with a plan and a fixed price. If it&apos;s urgent, drop me a WhatsApp.

@@ -23,7 +23,7 @@ export function BuildShowcase() {
           <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
             Assembled, not installed
           </span>
-          <h2 className="mt-4 text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+          <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             Every site is built like a structure, not dropped from a template.
           </h2>
           <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">

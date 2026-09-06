@@ -40,7 +40,7 @@ export function Services() {
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="max-w-2xl">
           <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">What you get</span>
-          <h2 className="mt-4 text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+          <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             Everything a trade site needs. Nothing it doesn&apos;t.
           </h2>
           <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
@@ -60,7 +60,7 @@ export function Services() {
                 <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-secondary text-blueprint transition-colors group-hover:border-blueprint/40">
                   <Icon className="h-5 w-5" strokeWidth={1.75} />
                 </div>
-                <h3 className="mt-6 text-lg font-semibold">{s.title}</h3>
+                <h3 className="mt-6 font-display text-lg font-semibold">{s.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
               </div>
             )

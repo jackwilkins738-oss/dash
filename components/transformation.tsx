@@ -25,7 +25,7 @@ export function Transformation() {
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="max-w-2xl">
           <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">The difference</span>
-          <h2 className="mt-4 text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+          <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             Same trade. Two very different first impressions.
           </h2>
           <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
@@ -60,7 +60,7 @@ export function Transformation() {
           >
             <div
               className="pointer-events-none absolute inset-0 opacity-60"
-              style={{ background: 'radial-gradient(90% 70% at 100% 0%, oklch(0.82 0.13 197 / 0.10), transparent 60%)' }}
+              style={{ background: 'radial-gradient(90% 70% at 100% 0%, oklch(0.62 0.135 244 / 0.14), transparent 60%)' }}
               aria-hidden="true"
             />
             <div className="relative flex items-center justify-between">

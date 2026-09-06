@@ -24,10 +24,12 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-blueprint: var(--blueprint);
+  --color-brass: var(--brass);
   --color-line: var(--line);
 
-  --font-sans: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
 
   --radius-sm: calc(var(--radius) * 0.5);
   --radius-md: calc(var(--radius) * 0.75);
@@ -37,27 +39,38 @@
 
 :root {
   color-scheme: dark;
-  --background: oklch(0.16 0.008 240);
-  --foreground: oklch(0.95 0.004 240);
-  --card: oklch(0.196 0.009 240);
-  --card-foreground: oklch(0.95 0.004 240);
-  --popover: oklch(0.196 0.009 240);
-  --popover-foreground: oklch(0.95 0.004 240);
-  --primary: oklch(0.82 0.13 197);
-  --primary-foreground: oklch(0.17 0.02 220);
-  --secondary: oklch(0.24 0.01 240);
-  --secondary-foreground: oklch(0.95 0.004 240);
-  --muted: oklch(0.24 0.01 240);
-  --muted-foreground: oklch(0.66 0.012 240);
-  --accent: oklch(0.24 0.01 240);
-  --accent-foreground: oklch(0.95 0.004 240);
+  /* Deep cyanotype navy rather than neutral near-black - the literal
+     meaning of "blueprint" (pale lines on a deep blue field), not a
+     generic dark-mode grey-black. */
+  --background: oklch(0.145 0.024 255);
+  --foreground: oklch(0.95 0.006 240);
+  --card: oklch(0.195 0.028 255);
+  --card-foreground: oklch(0.95 0.006 240);
+  --popover: oklch(0.195 0.028 255);
+  --popover-foreground: oklch(0.95 0.006 240);
+  /* A real Prussian/cyanotype blue instead of a bright flat cyan - reads
+     as ink and precision rather than neon tech-SaaS accent. */
+  --primary: oklch(0.62 0.135 244);
+  --primary-foreground: oklch(0.97 0.01 240);
+  --secondary: oklch(0.245 0.022 250);
+  --secondary-foreground: oklch(0.95 0.006 240);
+  --muted: oklch(0.245 0.022 250);
+  --muted-foreground: oklch(0.67 0.02 250);
+  --accent: oklch(0.245 0.022 250);
+  --accent-foreground: oklch(0.95 0.006 240);
   --destructive: oklch(0.62 0.2 25);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.82 0.13 197);
-  --blueprint: oklch(0.82 0.13 197);
+  --ring: oklch(0.62 0.135 244);
+  --blueprint: oklch(0.62 0.135 244);
+  /* Warm brass/bronze - a premium-material counterpoint to the cool
+     blueprint blue, spent sparingly (pricing, key CTAs) rather than
+     everywhere. */
+  --brass: oklch(0.78 0.1 80);
   --line: oklch(1 0 0 / 6%);
-  --radius: 0.5rem;
+  /* Sharper than a typical soft-SaaS card radius - reads as structural/
+     drafted rather than rounded-friendly-app. */
+  --radius: 0.25rem;
 }
 
 @layer base {
@@ -72,7 +85,7 @@
     font-feature-settings: 'ss01', 'cv01';
   }
   ::selection {
-    background: oklch(0.82 0.13 197 / 0.25);
+    background: color-mix(in oklch, var(--blueprint) 25%, transparent);
     color: var(--foreground);
   }
 }
@@ -86,7 +99,7 @@
   }
 
   .text-glow {
-    text-shadow: 0 0 32px oklch(0.82 0.13 197 / 0.35);
+    text-shadow: 0 0 32px color-mix(in oklch, var(--blueprint) 35%, transparent);
   }
 
   .mask-fade-x {

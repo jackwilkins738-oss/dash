@@ -83,7 +83,7 @@ export function BlueprintCanvas() {
       const cols = Math.ceil(width / spacing) + 1
       const rows = Math.ceil(height / spacing) + 1
       ctx.lineWidth = 1
-      ctx.strokeStyle = 'rgba(120, 200, 220, 0.10)'
+      ctx.strokeStyle = 'rgba(77, 132, 196, 0.14)'
       ctx.beginPath()
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
@@ -110,7 +110,7 @@ export function BlueprintCanvas() {
         const t = Math.max(0, 1 - dist / radius)
         const size = 0.8 + t * 2.2
         ctx.beginPath()
-        ctx.fillStyle = `rgba(150, 220, 235, ${0.15 + t * 0.6})`
+        ctx.fillStyle = `rgba(110, 165, 220, ${0.15 + t * 0.6})`
         ctx.arc(n.x, n.y, size, 0, Math.PI * 2)
         ctx.fill()
       }

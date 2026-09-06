@@ -38,7 +38,7 @@ export function Hero() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(120% 90% at 50% 0%, transparent 40%, var(--background) 100%), radial-gradient(80% 60% at 15% 30%, oklch(0.82 0.13 197 / 0.10), transparent 60%)',
+            'radial-gradient(120% 90% at 50% 0%, transparent 40%, var(--background) 100%), radial-gradient(80% 60% at 15% 30%, oklch(0.62 0.135 244 / 0.14), transparent 60%)',
         }}
         aria-hidden="true"
       />
@@ -52,7 +52,7 @@ export function Hero() {
             </span>
           </div>
 
-          <h1 className="mt-7 text-balance text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
+          <h1 className="mt-7 font-display text-balance text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
             Websites that look more expensive than the job you&apos;re quoting.
           </h1>
 

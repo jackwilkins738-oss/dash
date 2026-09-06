@@ -52,7 +52,7 @@ export default function ContactPage() {
                 </span>
               </div>
 
-              <h2 className="mt-6 text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+              <h2 className="mt-6 font-display text-balance text-2xl font-bold tracking-tight sm:text-3xl">
                 Prefer to skip the form?
               </h2>
               <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">

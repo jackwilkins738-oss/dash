@@ -6,7 +6,7 @@ import { Edges, Environment, ContactShadows, Float, MeshTransmissionMaterial } f
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
-const EDGE = '#7fd9e8'
+const EDGE = '#4d84c4'
 const WALL = '#e8e4dc'
 const ROOF = '#1c2226'
 const CONCRETE = '#6b7075'

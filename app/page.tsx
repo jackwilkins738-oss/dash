@@ -35,7 +35,7 @@ export default function HomePage() {
             <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
               How I work
             </span>
-            <h2 className="mt-4 text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+            <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
               I treat your website like you treat a job well done.
             </h2>
             <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
@@ -51,7 +51,7 @@ export default function HomePage() {
                 className="group rounded-xl border border-border bg-card/40 p-7 transition-colors hover:border-blueprint/40"
               >
                 <span className="font-mono text-sm text-blueprint">{p.n}</span>
-                <h3 className="mt-5 text-lg font-semibold">{p.title}</h3>
+                <h3 className="mt-5 font-display text-lg font-semibold">{p.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
               </div>
             ))}
