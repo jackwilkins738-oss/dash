@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import { Reveal } from '@/components/reveal'
 
@@ -44,7 +45,9 @@ export function BuildShowcase() {
         </Reveal>
 
         <div className="relative order-first h-[360px] w-full sm:h-[460px] lg:order-last lg:h-[520px]">
-          <BuildScene />
+          <Suspense fallback={<div className="absolute inset-0 blueprint-grid opacity-40" />}>
+            <BuildScene />
+          </Suspense>
           <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
             Live 3D · WebGL
           </div>

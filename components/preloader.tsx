@@ -38,12 +38,14 @@ export function Preloader() {
       const state = { value: 0 }
       const tl = gsap.timeline()
 
-      // Counter runs across the whole build
+      // Same choreography as before, rescaled to ~1.3s total (was ~4.1s) -
+      // snappier reads as precise/high-tech rather than as the old
+      // sequence just sped up crudely.
       tl.to(
         state,
         {
           value: 100,
-          duration: 3.1,
+          duration: 1.0,
           ease: 'power1.inOut',
           onUpdate: () => setCount(Math.round(state.value)),
         },
@@ -51,27 +53,27 @@ export function Preloader() {
       )
 
       // 1. Draw the structure, ground up
-      tl.to('.bp-ground', { strokeDashoffset: 0, duration: 0.5, ease: 'power2.inOut' }, 0.1)
-        .to('.bp-wall', { strokeDashoffset: 0, duration: 0.7, ease: 'power2.inOut', stagger: 0.12 }, 0.35)
-        .to('.bp-roof', { strokeDashoffset: 0, duration: 0.6, ease: 'power2.inOut' }, 0.95)
-        .to('.bp-detail', { strokeDashoffset: 0, duration: 0.6, ease: 'power2.out', stagger: 0.08 }, 1.35)
+      tl.to('.bp-ground', { strokeDashoffset: 0, duration: 0.16, ease: 'power2.inOut' }, 0.032)
+        .to('.bp-wall', { strokeDashoffset: 0, duration: 0.224, ease: 'power2.inOut', stagger: 0.038 }, 0.112)
+        .to('.bp-roof', { strokeDashoffset: 0, duration: 0.192, ease: 'power2.inOut' }, 0.304)
+        .to('.bp-detail', { strokeDashoffset: 0, duration: 0.192, ease: 'power2.out', stagger: 0.026 }, 0.432)
         // 2. Snap corner nodes in
-        .to('.bp-node', { scale: 1, duration: 0.4, ease: 'back.out(3)', stagger: 0.05 }, 1.5)
+        .to('.bp-node', { scale: 1, duration: 0.128, ease: 'back.out(3)', stagger: 0.016 }, 0.48)
         // 3. Dimension lines measure the plan
-        .to('.bp-dim', { opacity: 1, duration: 0.5, ease: 'power2.out', stagger: 0.1 }, 1.8)
+        .to('.bp-dim', { opacity: 1, duration: 0.16, ease: 'power2.out', stagger: 0.032 }, 0.576)
         // 4. Materialize — blueprint becomes a solid build
-        .to('.bp-fill', { opacity: 1, duration: 0.7, ease: 'power2.inOut', stagger: 0.06 }, 2.3)
-        .to('.bp-draw', { stroke: 'var(--foreground)', duration: 0.6, ease: 'power2.inOut' }, 2.3)
+        .to('.bp-fill', { opacity: 1, duration: 0.224, ease: 'power2.inOut', stagger: 0.019 }, 0.736)
+        .to('.bp-draw', { stroke: 'var(--foreground)', duration: 0.192, ease: 'power2.inOut' }, 0.736)
         .fromTo(
           '.bp-flash',
           { opacity: 0 },
-          { opacity: 0.6, duration: 0.2, yoyo: true, repeat: 1, ease: 'power2.in' },
-          2.5,
+          { opacity: 0.6, duration: 0.064, yoyo: true, repeat: 1, ease: 'power2.in' },
+          0.8,
         )
         // 5. Wordmark locks
-        .from('.pl-word', { opacity: 0, y: 14, duration: 0.5, ease: 'power3.out' }, 2.6)
+        .from('.pl-word', { opacity: 0, y: 14, duration: 0.16, ease: 'power3.out' }, 0.832)
         // 6. Curtain lifts to reveal the site
-        .to('.pl-panel', { yPercent: -100, duration: 0.9, ease: 'power4.inOut', stagger: 0.06, onComplete: finish }, 3.2)
+        .to('.pl-panel', { yPercent: -100, duration: 0.288, ease: 'power4.inOut', stagger: 0.019, onComplete: finish }, 1.024)
 
       return () => tl.kill()
     }, root)
