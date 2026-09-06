@@ -44,17 +44,26 @@ export default function HomePage() {
             </p>
           </Reveal>
 
-          <Reveal stagger className="mt-14 grid gap-5 md:grid-cols-3">
-            {PRINCIPLES.map((p) => (
-              <div
-                key={p.n}
-                className="group rounded-xl border border-border bg-card/40 p-7 transition-colors hover:border-blueprint/40"
-              >
-                <span className="font-mono text-sm text-blueprint">{p.n}</span>
-                <h3 className="mt-5 font-display text-lg font-semibold">{p.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
-              </div>
-            ))}
+          {/* Asymmetric - the founding principle gets real weight, not
+              equal billing with a uniform 3-up card grid. */}
+          <Reveal stagger className="mt-14 grid gap-5 md:grid-cols-2">
+            <div className="group rounded-xl border border-border bg-card/40 p-8 transition-colors hover:border-blueprint/40 md:p-10">
+              <span className="font-mono text-sm text-blueprint">{PRINCIPLES[0].n}</span>
+              <h3 className="mt-5 font-display text-2xl font-semibold sm:text-3xl">{PRINCIPLES[0].title}</h3>
+              <p className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground">{PRINCIPLES[0].body}</p>
+            </div>
+            <div className="flex flex-col gap-5">
+              {PRINCIPLES.slice(1).map((p) => (
+                <div
+                  key={p.n}
+                  className="group rounded-xl border border-border bg-card/40 p-6 transition-colors hover:border-blueprint/40"
+                >
+                  <span className="font-mono text-sm text-blueprint">{p.n}</span>
+                  <h3 className="mt-4 font-display text-lg font-semibold">{p.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
+                </div>
+              ))}
+            </div>
           </Reveal>
         </div>
       </section>

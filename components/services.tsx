@@ -49,19 +49,24 @@ export function Services() {
           </p>
         </Reveal>
 
-        <Reveal stagger className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {SERVICES.map((s) => {
+        {/* A spec sheet, not a feature grid - numbered rows with hairline
+            dividers read as a real technical enumeration, fitting the
+            blueprint concept, rather than six identical bordered cards. */}
+        <Reveal stagger className="mt-14 divide-y divide-border border-y border-border">
+          {SERVICES.map((s, i) => {
             const Icon = s.icon
             return (
-              <div
-                key={s.title}
-                className="group rounded-xl border border-border bg-card/40 p-7 transition-colors hover:border-blueprint/40"
-              >
-                <div className="btn-chamfer-sm flex h-11 w-11 items-center justify-center border border-blueprint/30 bg-blueprint/10 text-blueprint transition-colors group-hover:border-blueprint/60 group-hover:bg-blueprint/15">
-                  <Icon className="h-5 w-5" strokeWidth={1.75} />
+              <div key={s.title} className="group flex flex-col gap-4 py-8 sm:flex-row sm:items-center sm:gap-6">
+                <div className="flex flex-none items-center gap-4 sm:w-36">
+                  <span className="font-mono text-sm text-muted-foreground">{String(i + 1).padStart(2, '0')}</span>
+                  <div className="btn-chamfer-sm flex h-11 w-11 items-center justify-center border border-blueprint/30 bg-blueprint/10 text-blueprint transition-colors group-hover:border-blueprint/60 group-hover:bg-blueprint/15">
+                    <Icon className="h-5 w-5" strokeWidth={1.75} />
+                  </div>
                 </div>
-                <h3 className="mt-6 font-display text-lg font-semibold">{s.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+                <div>
+                  <h3 className="font-display text-lg font-semibold">{s.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+                </div>
               </div>
             )
           })}
