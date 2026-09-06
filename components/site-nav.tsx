@@ -59,7 +59,7 @@ export function SiteNav() {
           ))}
           <Link
             href="/contact"
-            className="group relative inline-flex items-center gap-2 rounded-full bg-blueprint px-5 py-2 font-mono text-xs font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-transform hover:scale-[1.03]"
+            className="btn-chamfer-sm group relative inline-flex items-center gap-2 bg-blueprint px-5 py-2 font-mono text-xs font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
           >
             Start your build
             <span className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
@@ -97,7 +97,7 @@ export function SiteNav() {
             ))}
             <Link
               href="/contact"
-              className="mt-2 inline-flex items-center justify-center rounded-full bg-blueprint px-5 py-3 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground"
+              className="btn-chamfer-sm mt-2 inline-flex items-center justify-center bg-blueprint px-5 py-3 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground"
             >
               Start your build &rarr;
             </Link>

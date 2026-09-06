@@ -81,7 +81,7 @@ export function Pricing() {
 
                 <Link
                   href="/contact"
-                  className="group mt-9 inline-flex w-full items-center justify-center gap-2 rounded-full bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-transform hover:scale-[1.02]"
+                  className="btn-chamfer group mt-9 inline-flex w-full items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
                 >
                   Start your build
                   <span className="transition-transform group-hover:translate-x-1">&rarr;</span>

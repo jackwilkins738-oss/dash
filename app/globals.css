@@ -113,6 +113,16 @@
     transform: translateY(28px);
     will-change: transform, opacity;
   }
+
+  /* A machined-panel chamfer instead of a pill - replaces rounded-full on
+     every primary/secondary CTA. Two sizes since buttons range from
+     compact nav pills to full-width form submits. */
+  .btn-chamfer {
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  }
+  .btn-chamfer-sm {
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  }
 }
 
 @keyframes marquee-x {
