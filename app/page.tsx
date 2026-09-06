@@ -1,9 +1,15 @@
 import { Hero } from '@/components/hero'
 import { TrustMarquee } from '@/components/trust-marquee'
-import { BrokenWire } from '@/components/broken-wire'
+import { ElectricCable } from '@/components/electric-cable'
 import { Transformation } from '@/components/transformation'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
+
+const SPECS = [
+  { k: 'Time to dead lead', v: 'Under 24 hours, unanswered' },
+  { k: 'Time to reply here', v: 'Under 2 hours, every time' },
+  { k: 'What that’s worth', v: 'The job that would’ve gone elsewhere' },
+]
 
 const PRINCIPLES = [
   {
@@ -25,7 +31,8 @@ const PRINCIPLES = [
 
 export default function HomePage() {
   return (
-    <main>
+    <main className="relative isolate">
+      <ElectricCable />
       <Hero />
       <TrustMarquee />
 
@@ -68,7 +75,32 @@ export default function HomePage() {
         </div>
       </section>
 
-      <BrokenWire />
+      <section className="relative border-y border-border py-24 sm:py-32">
+        <div className="mx-auto max-w-2xl px-5 text-center sm:px-8">
+          <Reveal>
+            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
+              It&apos;s called a lead for a reason
+            </span>
+            <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+              Cut the wire and it&apos;s dead in seconds. Same with an enquiry.
+            </h2>
+            <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
+              A lead that sits unanswered for a day is a lead that&apos;s already gone cold. Every site I build gets
+              your enquiries to you the second they land — because the difference between a live wire and a dead one
+              is exactly how fast someone gets to it.
+            </p>
+
+            <dl className="mx-auto mt-10 flex max-w-lg flex-col gap-4 border-t border-border pt-8 text-left">
+              {SPECS.map((s) => (
+                <div key={s.k} className="flex items-baseline justify-between gap-4">
+                  <dt className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">{s.k}</dt>
+                  <dd className="text-right text-sm text-foreground">{s.v}</dd>
+                </div>
+              ))}
+            </dl>
+          </Reveal>
+        </div>
+      </section>
       <Transformation />
       <CtaBand />
     </main>
