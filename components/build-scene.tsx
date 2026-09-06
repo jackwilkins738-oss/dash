@@ -3,7 +3,7 @@
 import { useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Edges, Environment, ContactShadows, Float, MeshTransmissionMaterial } from '@react-three/drei'
-import { EffectComposer, Bloom } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
 const EDGE = '#4d84c4'
@@ -119,11 +119,12 @@ function House({ reduced }: { reduced: boolean }) {
         <SolidMesh args={[1.3, 1.1, 1.8]} color={WALL} roughness={0.6} clearcoat={0.15} />
       </Piece>
 
-      {/* Roof — 4-sided pyramid, brushed-metal tone */}
-      <Piece target={[0, 2.35, 0]} from={[0, 6, 0]} delay={1.05} reduced={reduced}>
+      {/* Roof — 4-sided pyramid, brushed-metal tone, with a real eave
+          overhang past the wall line rather than sitting flush */}
+      <Piece target={[0, 2.3, 0]} from={[0, 6, 0]} delay={1.05} reduced={reduced}>
         <mesh rotation={[0, Math.PI / 4, 0]} castShadow receiveShadow>
-          <coneGeometry args={[2.1, 1.2, 4]} />
-          <meshPhysicalMaterial color={ROOF} roughness={0.35} metalness={0.6} />
+          <coneGeometry args={[2.35, 1.2, 4]} />
+          <meshPhysicalMaterial color={ROOF} roughness={0.32} metalness={0.65} />
           <Edges color={EDGE} threshold={12} transparent opacity={0.35} />
         </mesh>
       </Piece>
@@ -149,8 +150,21 @@ function House({ reduced }: { reduced: boolean }) {
   )
 }
 
-// Faint grid kept beneath the real contact shadow - a nod to the blueprint
-// concept without it being the ground's whole visual job any more.
+// A real ground surface, not just a shadow floating over nothing - this is
+// most of what turns "object rendered on a page" into "product sitting on
+// a studio floor." Cheap enough to keep on mobile too; only its shadow-
+// receiving is gated behind heavyEffects.
+function Floor({ receiveShadows }: { receiveShadows: boolean }) {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.16, 0]} receiveShadow={receiveShadows}>
+      <circleGeometry args={[9, 48]} />
+      <meshPhysicalMaterial color="#0f131a" roughness={0.75} metalness={0.05} />
+    </mesh>
+  )
+}
+
+// Faint grid kept above the floor - a nod to the blueprint concept without
+// it being the ground's whole visual job any more.
 function FaintGrid() {
   return (
     <gridHelper
@@ -176,17 +190,30 @@ export default function BuildScene() {
     <Canvas
       shadows={heavyEffects}
       dpr={[1, 2]}
-      gl={{ antialias: true, alpha: true }}
+      gl={{
+        antialias: true,
+        alpha: true,
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 1.15,
+      }}
       camera={{ position: [5.5, 3.6, 6.5], fov: 42 }}
     >
-      <ambientLight intensity={0.35} />
+      {/* Key light */}
       <directionalLight
         position={[4, 6, 3]}
         intensity={1.4}
         castShadow={heavyEffects}
         shadow-mapSize={[1024, 1024]}
       />
+      {/* Soft cool fill from the opposite side, so the shadowed face of the
+          house reads as lit-but-cooler rather than going flat black */}
+      <directionalLight position={[-4, 3, -3]} intensity={0.35} color="#9db8d8" />
+      {/* A touch of blueprint-blue rim light from behind, for edge
+          separation against the dark background */}
+      <pointLight position={[-3, 4, 4]} intensity={0.3} color="#4d84c4" />
+      <ambientLight intensity={0.3} />
       <FaintGrid />
+      <Floor receiveShadows={heavyEffects} />
       {heavyEffects && (
         <>
           <Environment preset="studio" />
@@ -203,6 +230,7 @@ export default function BuildScene() {
       {heavyEffects && (
         <EffectComposer>
           <Bloom intensity={0.4} luminanceThreshold={0.65} luminanceSmoothing={0.9} mipmapBlur />
+          <Vignette eskil={false} offset={0.15} darkness={0.6} />
         </EffectComposer>
       )}
     </Canvas>
