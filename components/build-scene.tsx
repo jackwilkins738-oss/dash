@@ -190,11 +190,14 @@ export default function BuildScene() {
     <Canvas
       shadows={heavyEffects}
       dpr={[1, 2]}
-      gl={{
-        antialias: true,
-        alpha: true,
-        toneMapping: THREE.ACESFilmicToneMapping,
-        toneMappingExposure: 1.15,
+      gl={{ antialias: true, alpha: true }}
+      onCreated={({ gl }) => {
+        // Renderer properties like tone mapping aren't WebGLRenderer
+        // constructor params, so they need to be set here rather than in
+        // the gl prop object above - the previous approach silently
+        // produced a fully black canvas instead of erroring.
+        gl.toneMapping = THREE.ACESFilmicToneMapping
+        gl.toneMappingExposure = 1.15
       }}
       camera={{ position: [5.5, 3.6, 6.5], fov: 42 }}
     >
