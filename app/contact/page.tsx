@@ -71,7 +71,7 @@ export default function ContactPage() {
                       rel={c.external ? 'noopener noreferrer' : undefined}
                       className="group flex items-center gap-4 rounded-xl border border-border bg-card/40 p-5 transition-colors hover:border-blueprint/40"
                     >
-                      <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-secondary text-blueprint">
+                      <div className="btn-chamfer-sm flex h-11 w-11 items-center justify-center border border-blueprint/30 bg-blueprint/10 text-blueprint transition-colors group-hover:border-blueprint/60 group-hover:bg-blueprint/15">
                         <Icon className="h-5 w-5" strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0">
