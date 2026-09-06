@@ -1,5 +1,6 @@
 import { Hero } from '@/components/hero'
 import { TrustMarquee } from '@/components/trust-marquee'
+import { BuildShowcase } from '@/components/build-showcase'
 import { Transformation } from '@/components/transformation'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
@@ -58,6 +59,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      <BuildShowcase />
       <Transformation />
       <CtaBand />
     </main>
