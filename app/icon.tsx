@@ -12,6 +12,10 @@ export const contentType = 'image/png'
 export default function Icon() {
   return new ImageResponse(
     (
+      // Gold on near-black, restrained weight, wide tracking - the
+      // classic luxury-monogram signal (hospitality/jewelry branding),
+      // rather than a bright saturated gradient with heavy bold text,
+      // which reads as tech-startup rather than premium.
       <div
         style={{
           width: '100%',
@@ -19,14 +23,35 @@ export default function Icon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(155deg, #4d84c4, #1f3a5c)',
+          background: 'radial-gradient(circle at 50% 40%, #171c24, #0a0e16)',
           borderRadius: 14,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', color: 'white', fontSize: 30, fontWeight: 800 }}>
-          <span>S</span>
-          <span style={{ color: '#8fc4ee', margin: '0 1px' }}>·</span>
-          <span>D</span>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 46,
+            height: 46,
+            borderRadius: '50%',
+            border: '1.5px solid #c9a15a',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              color: '#c9a15a',
+              fontSize: 19,
+              fontWeight: 500,
+              letterSpacing: 2,
+            }}
+          >
+            <span>S</span>
+            <span style={{ margin: '0 1px', opacity: 0.75 }}>·</span>
+            <span>D</span>
+          </div>
         </div>
       </div>
     ),

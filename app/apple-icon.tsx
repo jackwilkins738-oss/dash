@@ -10,6 +10,8 @@ export const contentType = 'image/png'
 export default function AppleIcon() {
   return new ImageResponse(
     (
+      // Same gold-on-black medallion as icon.tsx, scaled up - no radius
+      // here since iOS applies its own corner mask on top of this.
       <div
         style={{
           width: '100%',
@@ -17,13 +19,34 @@ export default function AppleIcon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(155deg, #4d84c4, #1f3a5c)',
+          background: 'radial-gradient(circle at 50% 40%, #171c24, #0a0e16)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', color: 'white', fontSize: 84, fontWeight: 800 }}>
-          <span>S</span>
-          <span style={{ color: '#8fc4ee', margin: '0 2px' }}>·</span>
-          <span>D</span>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 130,
+            height: 130,
+            borderRadius: '50%',
+            border: '3px solid #c9a15a',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              color: '#c9a15a',
+              fontSize: 54,
+              fontWeight: 500,
+              letterSpacing: 6,
+            }}
+          >
+            <span>S</span>
+            <span style={{ margin: '0 3px', opacity: 0.75 }}>·</span>
+            <span>D</span>
+          </div>
         </div>
       </div>
     ),
