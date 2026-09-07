@@ -4,14 +4,16 @@ import { useEffect, useRef } from 'react'
 
 type Node = { baseX: number; x: number; y: number; vx: number; vy: number }
 type Pt = { x: number; y: number }
+type Anchor = { x: number; y: number }
 
-const SPACING = 30
+const SPACING = 34
 const CABLE_WIDTH = 25
 const CORE_WIDTH = 5
 const MOUSE_RADIUS = 150
-const ROTATIONS = 2.4
+const LEG_HEIGHT = 640
+const RENDER_BUFFER = 260
+const GAP = 5
 
-// Site blueprint palette — oklch(0.62 0.135 244) family
 const BLUE = { core: '#4a9fd4', glow: '#3d8fd4', bright: '#dcefff', spark: '#7fc4ff' }
 const BRASS = '#c9a15a'
 
@@ -32,11 +34,13 @@ export function PowerCable() {
     let height = 0
     let dpr = 1
     let nodes: Node[] = []
+    let breaks: [number, number][] = []
     let raf = 0
     let t = 0
     let wirePulse = 0
     let visible = true
     const mouse = { x: -9999, y: -9999, active: false }
+    const normals: Pt[] = []
 
     const measure = () => {
       const footer = document.querySelector('footer')
@@ -57,23 +61,30 @@ export function PowerCable() {
 
       const startX = 20
       const endX = Math.max(startX, width - 34)
-      const margin = 30
-      const maxRadius = Math.max(0, Math.min(startX, width - endX, width * 0.34) - margin * 0.4)
+
+      // Zig-zag anchors, left/right/left..., forced to land on the right
+      // at the very bottom - a literal routed run, not a smooth spiral.
+      let legCount = Math.max(2, Math.round(height / LEG_HEIGHT))
+      if (legCount % 2 === 0) legCount += 1
+      const anchors: Anchor[] = []
+      for (let k = 0; k <= legCount; k++) {
+        anchors.push({ x: k % 2 === 0 ? startX : endX, y: (k / legCount) * height })
+      }
 
       const count = Math.ceil(height / SPACING) + 1
       const prevNodes = nodes
       nodes = []
       for (let i = 0; i < count; i++) {
         const y = Math.min(i * SPACING, height)
-        const p = height > 0 ? y / height : 0
-        // Corkscrew that starts pinned at the logo, bulges outward through
-        // the middle of the page, and unwinds back to zero radius exactly
-        // at the bottom-right landing point - so both ends stay put while
-        // the middle spirals.
-        const centerX = startX + p * (endX - startX)
-        const radius = maxRadius * Math.sin(Math.PI * p)
-        const angle = p * ROTATIONS * Math.PI * 2
-        const baseX = centerX + Math.cos(angle) * radius
+        let leg = Math.min(legCount - 1, Math.floor((y / height) * legCount) || 0)
+        if (!isFinite(leg)) leg = 0
+        const a = anchors[leg]
+        const b = anchors[leg + 1]
+        const span = b.y - a.y || 1
+        const u = Math.max(0, Math.min(1, (y - a.y) / span))
+        const eased = u * u * (3 - 2 * u)
+        const wiggle = Math.sin(i * 0.7) * 4.5 + Math.cos(i * 0.33) * 2.2
+        const baseX = a.x + (b.x - a.x) * eased + wiggle
         const prev = prevNodes[i]
         nodes.push({
           baseX,
@@ -83,6 +94,11 @@ export function PowerCable() {
           vy: prev ? prev.vy : 0,
         })
       }
+
+      breaks = [
+        [Math.floor(count * 0.34), Math.floor(count * 0.34) + GAP],
+        [Math.floor(count * 0.71), Math.floor(count * 0.71) + GAP],
+      ]
     }
 
     const updateWirePulse = () => {
@@ -99,19 +115,14 @@ export function PowerCable() {
       wirePulse += (proximity - wirePulse) * 0.06
     }
 
-    // Per-node outward normal, averaged from the two adjacent segments so
-    // it stays continuous through the spiral's curves instead of only
-    // being correct on straight runs.
-    const normals: Pt[] = []
-    const computeNormals = () => {
-      normals.length = 0
-      for (let i = 0; i < nodes.length; i++) {
+    const computeNormals = (lo: number, hi: number) => {
+      for (let i = lo; i <= hi; i++) {
         const a = nodes[Math.max(0, i - 1)]
         const b = nodes[Math.min(nodes.length - 1, i + 1)]
         const dx = b.x - a.x
         const dy = b.y - a.y
         const len = Math.hypot(dx, dy) || 1
-        normals.push({ x: -dy / len, y: dx / len })
+        normals[i] = { x: -dy / len, y: dx / len }
       }
     }
 
@@ -127,14 +138,28 @@ export function PowerCable() {
       ctx.lineTo(last.x, last.y)
     }
 
-    const smoothPath = () => smoothPathFrom(nodes)
+    const runPoints = (lo: number, hi: number, offset = 0) => {
+      const pts: Pt[] = []
+      for (let i = lo; i <= hi; i++) {
+        const n = nodes[i]
+        if (offset === 0) pts.push({ x: n.x, y: n.y })
+        else pts.push({ x: n.x + normals[i].x * offset, y: n.y + normals[i].y * offset })
+      }
+      return pts
+    }
 
-    const offsetPath = (amount: number | ((i: number) => number)) =>
-      nodes.map((n, i) => {
-        const a = typeof amount === 'function' ? amount(i) : amount
-        const nrm = normals[i]
-        return { x: n.x + nrm.x * a, y: n.y + nrm.y * a }
-      })
+    // Split [lo,hi] into runs that exclude any break gaps they overlap
+    const runsInRange = (lo: number, hi: number): [number, number][] => {
+      const out: [number, number][] = []
+      let cursor = lo
+      for (const [bs, be] of breaks) {
+        if (be < lo || bs > hi) continue
+        if (bs > cursor) out.push([cursor, Math.min(bs - 1, hi)])
+        cursor = Math.max(cursor, be + 1)
+      }
+      if (cursor <= hi) out.push([cursor, hi])
+      return out.filter(([a, b]) => b - a >= 1)
+    }
 
     const drawTie = (i: number) => {
       const n = nodes[i]
@@ -152,8 +177,6 @@ export function PowerCable() {
       g.addColorStop(1, '#121418')
       ctx.fillStyle = g
       ctx.fillRect(-CABLE_WIDTH * 0.74, -4, CABLE_WIDTH * 1.48, 8)
-      ctx.fillStyle = 'rgba(255,255,255,0.12)'
-      ctx.fillRect(-CABLE_WIDTH * 0.74, -4, CABLE_WIDTH * 1.48, 1.2)
       ctx.fillStyle = '#0d0e11'
       ctx.beginPath()
       ctx.arc(-CABLE_WIDTH * 0.5, 0, 1.6, 0, Math.PI * 2)
@@ -162,50 +185,54 @@ export function PowerCable() {
       ctx.restore()
     }
 
-    // Fine molded ribbing, perpendicular ticks that fade in and out to
-    // suggest the jacket twisting as it follows the spiral.
-    const drawJacketTexture = () => {
-      for (let i = 0; i < nodes.length - 1; i += 2) {
-        const n = nodes[i]
-        const nrm = normals[i]
-        const twist = Math.sin(i * 0.5 + t * 0.35) * 0.5 + 0.5
-        const half = CABLE_WIDTH * 0.42 * (0.55 + twist * 0.45)
-        ctx.strokeStyle = `rgba(0,0,0,${0.16 + twist * 0.12})`
-        ctx.lineWidth = 1
+    const drawFrayedEnd = (i: number, forward: 1 | -1) => {
+      const n = nodes[i]
+      const nb = nodes[i - forward] ?? n
+      const angle = Math.atan2(n.x - nb.x, n.y - nb.y)
+      ctx.save()
+      ctx.translate(n.x, n.y)
+      ctx.rotate(angle)
+      for (let s = 0; s < 4; s++) {
+        const spread = (s / 3 - 0.5) * 1.3
+        const len = 10 + Math.sin(t * 3 + s) * 3
         ctx.beginPath()
-        ctx.moveTo(n.x - nrm.x * half, n.y - nrm.y * half)
-        ctx.lineTo(n.x + nrm.x * half, n.y + nrm.y * half)
+        ctx.moveTo(0, 0)
+        ctx.quadraticCurveTo(Math.sin(spread) * len * 0.6, len * 0.6, Math.sin(spread) * len, len)
+        ctx.strokeStyle = s % 2 === 0 ? '#e0924a' : '#f0b46a'
+        ctx.lineWidth = 1.3
+        ctx.shadowColor = '#ffb066'
+        ctx.shadowBlur = 5
         ctx.stroke()
       }
+      ctx.shadowBlur = 0
+      ctx.restore()
     }
 
-    // A thin brass tracer stripe wound helically along the jacket - the
-    // identification line real armoured/multicore cable carries.
-    const drawTracerStripe = () => {
-      const pts = nodes.map((n, i) => {
-        const twist = Math.sin(i * 0.5 + t * 0.35)
-        const off = twist * CABLE_WIDTH * 0.36
-        const nrm = normals[i]
-        return { x: n.x + nrm.x * off, y: n.y + nrm.y * off, front: twist > 0 }
-      })
-      ctx.save()
-      ctx.lineWidth = 1.6
-      ctx.strokeStyle = BRASS
-      ctx.globalAlpha = 0.55
-      let segStart = 0
-      for (let i = 1; i <= pts.length; i++) {
-        const brokeRun = i === pts.length || pts[i].front !== pts[segStart].front
-        if (brokeRun) {
-          if (pts[segStart].front) {
-            ctx.beginPath()
-            ctx.moveTo(pts[segStart].x, pts[segStart].y)
-            for (let j = segStart + 1; j < i; j++) ctx.lineTo(pts[j].x, pts[j].y)
-            ctx.stroke()
-          }
-          segStart = i
-        }
+    const drawSparkGap = (bs: number, be: number) => {
+      const a = nodes[bs - 1]
+      const b = nodes[be + 1]
+      if (!a || !b) return
+      drawFrayedEnd(bs - 1, 1)
+      drawFrayedEnd(be + 1, -1)
+
+      const cycle = (t * 1.1 + bs) % 3
+      if (cycle > 2.55) {
+        const flicker = (cycle - 2.55) / 0.45
+        ctx.save()
+        ctx.strokeStyle = `rgba(220,240,255,${0.5 + flicker * 0.4})`
+        ctx.lineWidth = 1.6
+        ctx.shadowColor = BLUE.spark
+        ctx.shadowBlur = 14
+        ctx.beginPath()
+        ctx.moveTo(a.x, a.y)
+        const midx = (a.x + b.x) / 2 + (Math.sin(t * 30) ) * 10
+        const midy = (a.y + b.y) / 2 + (Math.cos(t * 26)) * 6
+        ctx.lineTo(midx, midy)
+        ctx.lineTo(b.x, b.y)
+        ctx.stroke()
+        ctx.shadowBlur = 0
+        ctx.restore()
       }
-      ctx.restore()
     }
 
     const drawEndCap = (index: number, direction: 1 | -1) => {
@@ -216,7 +243,6 @@ export function PowerCable() {
       ctx.translate(n.x, n.y)
       ctx.rotate(angle)
 
-      // Rounded rubber boot capping the cut end
       const bootLen = 16
       const bootGrad = ctx.createLinearGradient(-CABLE_WIDTH / 2, 0, CABLE_WIDTH / 2, 0)
       bootGrad.addColorStop(0, '#050506')
@@ -232,7 +258,6 @@ export function PowerCable() {
       ctx.quadraticCurveTo(-CABLE_WIDTH / 2, bootLen, -CABLE_WIDTH / 2, 0)
       ctx.fill()
 
-      // Chrome ferrule ring
       const ferrule = ctx.createLinearGradient(-CABLE_WIDTH / 2, 0, CABLE_WIDTH / 2, 0)
       ferrule.addColorStop(0, '#4c515a')
       ferrule.addColorStop(0.3, '#c7ccd3')
@@ -242,17 +267,126 @@ export function PowerCable() {
       ctx.fillStyle = ferrule
       ctx.fillRect(-CABLE_WIDTH * 0.52, -2, CABLE_WIDTH * 1.04, 5)
 
-      // Live glow bleeding from the seam between ferrule and boot
-      const glow = 6 + wirePulse * 14
       ctx.fillStyle = BLUE.spark
       ctx.shadowColor = BLUE.glow
-      ctx.shadowBlur = glow
+      ctx.shadowBlur = 6 + wirePulse * 14
       ctx.beginPath()
       ctx.arc(0, bootLen * 0.5, 2.4, 0, Math.PI * 2)
       ctx.fill()
       ctx.shadowBlur = 0
-
       ctx.restore()
+    }
+
+    // Draw one unbroken stretch of cable: shadow, jacket, texture, core.
+    const drawRun = (lo: number, hi: number) => {
+      if (hi - lo < 1) return
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+
+      // Cast shadow - plain offset stroke, no blur (blur across a long
+      // path is the single most expensive op canvas offers)
+      ctx.save()
+      ctx.translate(6, 8)
+      smoothPathFrom(runPoints(lo, hi))
+      ctx.strokeStyle = 'rgba(0,0,0,0.32)'
+      ctx.lineWidth = CABLE_WIDTH
+      ctx.stroke()
+      ctx.restore()
+
+      // Base rubber jacket
+      smoothPathFrom(runPoints(lo, hi))
+      ctx.strokeStyle = '#1b1d22'
+      ctx.lineWidth = CABLE_WIDTH
+      ctx.stroke()
+
+      // Molded ribbing - one path, one stroke call
+      ctx.save()
+      ctx.strokeStyle = 'rgba(0,0,0,0.22)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      for (let i = lo; i < hi; i += 2) {
+        const n = nodes[i]
+        const nrm = normals[i]
+        const twist = Math.sin(i * 0.5 + t * 0.35) * 0.5 + 0.5
+        const half = CABLE_WIDTH * 0.42 * (0.55 + twist * 0.45)
+        ctx.moveTo(n.x - nrm.x * half, n.y - nrm.y * half)
+        ctx.lineTo(n.x + nrm.x * half, n.y + nrm.y * half)
+      }
+      ctx.stroke()
+      ctx.restore()
+
+      // Helical brass tracer - front-facing arcs only
+      ctx.save()
+      ctx.strokeStyle = BRASS
+      ctx.globalAlpha = 0.5
+      ctx.lineWidth = 1.6
+      let segStart = -1
+      for (let i = lo; i <= hi; i++) {
+        const front = Math.sin(i * 0.5 + t * 0.35) > 0
+        if (front && segStart < 0) segStart = i
+        if ((!front || i === hi) && segStart >= 0) {
+          const end = front ? i : i - 1
+          if (end > segStart) {
+            ctx.beginPath()
+            for (let j = segStart; j <= end; j++) {
+              const twist = Math.sin(j * 0.5 + t * 0.35) * CABLE_WIDTH * 0.36
+              const nrm = normals[j]
+              const px = nodes[j].x + nrm.x * twist
+              const py = nodes[j].y + nrm.y * twist
+              if (j === segStart) ctx.moveTo(px, py)
+              else ctx.lineTo(px, py)
+            }
+            ctx.stroke()
+          }
+          segStart = -1
+        }
+      }
+      ctx.restore()
+
+      // Specular highlight + far-side shadow, offset along true normals
+      smoothPathFrom(runPoints(lo, hi, -CABLE_WIDTH * 0.24))
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)'
+      ctx.lineWidth = 1.6
+      ctx.stroke()
+
+      smoothPathFrom(runPoints(lo, hi, CABLE_WIDTH * 0.3))
+      ctx.strokeStyle = 'rgba(0,0,0,0.32)'
+      ctx.lineWidth = 4
+      ctx.stroke()
+
+      for (let i = lo + 4; i < hi - 4; i += 9) drawTie(i)
+
+      // Live core
+      const pulseBoost = 1 + wirePulse * 1.6
+      const glowBlur = prefersReduced ? 0 : 10 + wirePulse * 18
+
+      smoothPathFrom(runPoints(lo, hi))
+      ctx.strokeStyle = `rgba(74, 159, 212, ${0.14 + wirePulse * 0.12})`
+      ctx.lineWidth = CORE_WIDTH + 10 * pulseBoost
+      ctx.shadowColor = BLUE.glow
+      ctx.shadowBlur = glowBlur
+      ctx.stroke()
+      ctx.shadowBlur = 0
+
+      smoothPathFrom(runPoints(lo, hi))
+      const a = nodes[lo]
+      const b = nodes[hi]
+      const coreGrad = ctx.createLinearGradient(0, a.y, 0, b.y)
+      const phase = prefersReduced ? 0 : (t * (85 + wirePulse * 40)) % 60
+      const runLen = b.y - a.y || 1
+      for (let s = -60; s < runLen + 60; s += 60) {
+        const p0 = Math.max(0, Math.min(1, (s + phase) / runLen))
+        const p1 = Math.max(0, Math.min(1, (s + phase + 34) / runLen))
+        if (p1 > p0) {
+          const alpha = 0.15 + wirePulse * 0.1
+          coreGrad.addColorStop(p0, `rgba(120,190,255,${alpha})`)
+          coreGrad.addColorStop((p0 + p1) / 2, BLUE.bright)
+          coreGrad.addColorStop(p1, `rgba(120,190,255,${alpha})`)
+        }
+      }
+      ctx.strokeStyle = coreGrad
+      ctx.lineWidth = CORE_WIDTH
+      ctx.stroke()
     }
 
     const simulate = () => {
@@ -261,7 +395,6 @@ export function PowerCable() {
       const top = nodes[0]
       top.x += (top.baseX - top.x) * 0.18
       top.vx *= 0.5
-      top.vy *= 0.5
 
       for (let i = 1; i < nodes.length; i++) {
         const n = nodes[i]
@@ -273,37 +406,13 @@ export function PowerCable() {
           if (dist < MOUSE_RADIUS && dist > 0.001) {
             const strength = (1 - dist / MOUSE_RADIUS) ** 1.4
             force = (dx / dist) * strength * 34
-            n.vy += (dy / dist) * strength * 5
           }
         }
         const target = n.baseX + force
         n.vx += (target - n.x) * 0.07
-        n.vx *= 0.84
-        n.vy *= 0.88
+        n.vx *= 0.86
         n.x += n.vx
-        n.y += n.vy
-        n.vy += 0.01
       }
-
-      for (let pass = 0; pass < 4; pass++) {
-        for (let i = 0; i < nodes.length - 1; i++) {
-          const a = nodes[i]
-          const b = nodes[i + 1]
-          const dx = b.x - a.x
-          const dy = b.y - a.y
-          const dist = Math.hypot(dx, dy) || 1
-          const diff = (SPACING - dist) / dist
-          const ox = dx * diff * 0.5
-          const oy = dy * diff * 0.5
-          if (i > 0) {
-            a.x -= ox
-            a.y -= oy
-          }
-          b.x += ox
-          b.y += oy
-        }
-      }
-      // Keep the landing point pinned to the spiral's bottom-right target
       const bottom = nodes[nodes.length - 1]
       bottom.x += (bottom.baseX - bottom.x) * 0.18
     }
@@ -313,8 +422,6 @@ export function PowerCable() {
         raf = requestAnimationFrame(draw)
         return
       }
-
-      ctx.clearRect(0, 0, width, height)
       if (nodes.length < 2) {
         raf = requestAnimationFrame(draw)
         return
@@ -322,98 +429,25 @@ export function PowerCable() {
 
       updateWirePulse()
       simulate()
-      computeNormals()
 
-      ctx.lineCap = 'round'
-      ctx.lineJoin = 'round'
+      // Only touch the slice of the (possibly very tall) canvas that's
+      // actually near the viewport - this is what keeps a page-spanning
+      // canvas cheap regardless of document length.
+      const viewTop = Math.max(0, window.scrollY - RENDER_BUFFER)
+      const viewBottom = Math.min(height, window.scrollY + window.innerHeight + RENDER_BUFFER)
+      let lo = Math.max(0, Math.floor(viewTop / SPACING) - 2)
+      let hi = Math.min(nodes.length - 1, Math.ceil(viewBottom / SPACING) + 2)
 
-      // Cast shadow - constant light direction regardless of the curve
-      ctx.save()
-      smoothPath()
-      ctx.strokeStyle = 'rgba(0,0,0,0.001)'
-      ctx.lineWidth = CABLE_WIDTH
-      ctx.shadowColor = 'rgba(0,0,0,0.55)'
-      ctx.shadowBlur = 12
-      ctx.shadowOffsetX = 6
-      ctx.shadowOffsetY = 8
-      ctx.stroke()
-      ctx.shadowColor = 'transparent'
-      ctx.shadowBlur = 0
-      ctx.shadowOffsetX = 0
-      ctx.shadowOffsetY = 0
-      ctx.restore()
+      ctx.clearRect(0, Math.max(0, nodes[lo].y - 40), width, nodes[hi].y - nodes[lo].y + 80)
+      computeNormals(lo, hi)
 
-      // Base rubber jacket - flat mid-tone, shading comes from the
-      // curve-following highlight/shadow strokes drawn next
-      smoothPath()
-      ctx.strokeStyle = '#1b1d22'
-      ctx.lineWidth = CABLE_WIDTH
-      ctx.stroke()
-
-      drawJacketTexture()
-      drawTracerStripe()
-
-      // Specular highlight - offset along the true per-node normal so it
-      // reads correctly through every turn of the spiral, not just on
-      // vertical runs
-      smoothPathFrom(offsetPath(-CABLE_WIDTH * 0.2))
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)'
-      ctx.lineWidth = 5
-      ctx.stroke()
-      smoothPathFrom(offsetPath(-CABLE_WIDTH * 0.24))
-      ctx.strokeStyle = 'rgba(255,255,255,0.3)'
-      ctx.lineWidth = 1.6
-      ctx.stroke()
-
-      // Core shadow on the far side, same treatment
-      smoothPathFrom(offsetPath(CABLE_WIDTH * 0.3))
-      ctx.strokeStyle = 'rgba(0,0,0,0.34)'
-      ctx.lineWidth = 4
-      ctx.stroke()
-
-      // Outer jacket edge darkening
-      smoothPathFrom(offsetPath(CABLE_WIDTH * 0.49))
-      ctx.strokeStyle = 'rgba(0,0,0,0.5)'
-      ctx.lineWidth = 2
-      ctx.stroke()
-      smoothPathFrom(offsetPath(-CABLE_WIDTH * 0.49))
-      ctx.strokeStyle = 'rgba(0,0,0,0.5)'
-      ctx.lineWidth = 2
-      ctx.stroke()
-
-      for (let i = 8; i < nodes.length - 10; i += 9) drawTie(i)
-
-      // Live core glow - intensifies near the "cut the wire" section
-      const pulseBoost = 1 + wirePulse * 1.6
-      const glowBlur = prefersReduced ? 0 : 14 + wirePulse * 22
-
-      smoothPath()
-      ctx.strokeStyle = `rgba(74, 159, 212, ${0.14 + wirePulse * 0.12})`
-      ctx.lineWidth = CORE_WIDTH + 12 * pulseBoost
-      ctx.shadowColor = BLUE.glow
-      ctx.shadowBlur = glowBlur
-      ctx.stroke()
-      ctx.shadowBlur = 0
-
-      smoothPath()
-      const coreGrad = ctx.createLinearGradient(0, 0, 0, height)
-      const phase = prefersReduced ? 0 : (t * (85 + wirePulse * 40)) % 60
-      for (let s = -60; s < height + 60; s += 60) {
-        const p0 = Math.max(0, Math.min(1, (s + phase) / height))
-        const p1 = Math.max(0, Math.min(1, (s + phase + 34) / height))
-        if (p1 > p0) {
-          const alpha = 0.15 + wirePulse * 0.1
-          coreGrad.addColorStop(p0, `rgba(120,190,255,${alpha})`)
-          coreGrad.addColorStop((p0 + p1) / 2, BLUE.bright)
-          coreGrad.addColorStop(p1, `rgba(120,190,255,${alpha})`)
-        }
+      for (const [lo2, hi2] of runsInRange(lo, hi)) drawRun(lo2, hi2)
+      for (const [bs, be] of breaks) {
+        if (be >= lo && bs <= hi) drawSparkGap(bs, be)
       }
-      ctx.strokeStyle = coreGrad
-      ctx.lineWidth = CORE_WIDTH
-      ctx.stroke()
 
-      drawEndCap(0, 1)
-      drawEndCap(nodes.length - 1, -1)
+      if (lo === 0) drawEndCap(0, 1)
+      if (hi === nodes.length - 1) drawEndCap(nodes.length - 1, -1)
 
       if (!prefersReduced) t += 1 / 60
       raf = requestAnimationFrame(draw)
@@ -430,6 +464,7 @@ export function PowerCable() {
     }
 
     measure()
+    computeNormals(0, nodes.length - 1)
     draw()
     if (prefersReduced) cancelAnimationFrame(raf)
 
@@ -450,7 +485,7 @@ export function PowerCable() {
       ([entry]) => {
         visible = entry.isIntersecting
       },
-      { rootMargin: '120px 0px' },
+      { rootMargin: '200px 0px' },
     )
     io.observe(wrap)
 
