@@ -75,7 +75,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="relative border-y border-border py-24 sm:py-32">
+      <section data-wire-section className="relative border-y border-border py-24 sm:py-32">
         <div className="mx-auto max-w-2xl px-5 text-center sm:px-8">
           <Reveal>
             <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
