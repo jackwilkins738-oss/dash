@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 import { BlueprintCanvas } from '@/components/blueprint-canvas'
+import { TrustBadges } from '@/components/trust-badges'
 
 export function Hero() {
   const root = useRef<HTMLElement>(null)
@@ -89,6 +90,8 @@ export function Hero() {
               </div>
             ))}
           </dl>
+
+          <TrustBadges className="mt-8" />
         </div>
       </div>
 
