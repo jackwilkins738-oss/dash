@@ -148,6 +148,74 @@ export function PowerCable() {
       return pts
     }
 
+    // Organic diameter - a real extruded jacket is never perfectly
+    // cylindrical along its length.
+    const radiusScale = (i: number) => 1 + Math.sin(i * 0.13) * 0.05 + Math.sin(i * 0.037 + 1.2) * 0.035
+
+    const runPointsScaled = (lo: number, hi: number, frac: number) => {
+      const pts: Pt[] = []
+      for (let i = lo; i <= hi; i++) {
+        const n = nodes[i]
+        const off = frac * CABLE_WIDTH * radiusScale(i)
+        pts.push({ x: n.x + normals[i].x * off, y: n.y + normals[i].y * off })
+      }
+      return pts
+    }
+
+    // The cross-section shading, as a stack of offset strokes from one
+    // jacket edge to the other - a cheap but convincing stand-in for a
+    // true perpendicular gradient on a curved canvas stroke.
+    const JACKET_BANDS: [frac: number, color: string, width: number][] = [
+      [-0.52, 'rgba(0,0,0,0.6)', 3],
+      [-0.4, '#040405', 5],
+      [-0.28, '#15171b', 6],
+      [-0.18, '#2b2e35', 6],
+      [-0.09, '#454a54', 5],
+      [0.02, '#57606d', 3.4],
+      [0.1, '#3a3f48', 5],
+      [0.24, '#1c1e23', 6],
+      [0.38, '#0a0b0d', 5.5],
+      [0.52, 'rgba(0,0,0,0.62)', 3],
+    ]
+
+    const drawJacketBands = (lo: number, hi: number) => {
+      for (const [frac, color, w] of JACKET_BANDS) {
+        smoothPathFrom(runPointsScaled(lo, hi, frac))
+        ctx.strokeStyle = color
+        ctx.lineWidth = w
+        ctx.stroke()
+      }
+      // Soft wide sheen - the subsurface glow rubber gets under light
+      smoothPathFrom(runPointsScaled(lo, hi, -0.12))
+      ctx.strokeStyle = 'rgba(180,200,220,0.1)'
+      ctx.lineWidth = 9
+      ctx.filter = 'blur(2.5px)'
+      ctx.stroke()
+      ctx.filter = 'none'
+      // Sharp glint on top
+      smoothPathFrom(runPointsScaled(lo, hi, -0.1))
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+      ctx.lineWidth = 1.1
+      ctx.stroke()
+    }
+
+    const drawGrain = (lo: number, hi: number) => {
+      ctx.save()
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'
+      for (let i = lo; i < hi; i++) {
+        const hash = Math.sin(i * 12.9898) * 43758.5453
+        const frac = (hash - Math.floor(hash)) * 2 - 1
+        if (Math.abs(frac) > 0.72) continue
+        const n = nodes[i]
+        const nrm = normals[i]
+        const off = frac * CABLE_WIDTH * 0.42
+        ctx.beginPath()
+        ctx.arc(n.x + nrm.x * off, n.y + nrm.y * off, 0.6, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.restore()
+    }
+
     // Split [lo,hi] into runs that exclude any break gaps they overlap
     const runsInRange = (lo: number, hi: number): [number, number][] => {
       const out: [number, number][] = []
@@ -293,11 +361,9 @@ export function PowerCable() {
       ctx.stroke()
       ctx.restore()
 
-      // Base rubber jacket
-      smoothPathFrom(runPoints(lo, hi))
-      ctx.strokeStyle = '#1b1d22'
-      ctx.lineWidth = CABLE_WIDTH
-      ctx.stroke()
+      // Rubber jacket - layered cross-section bands instead of a flat fill
+      drawJacketBands(lo, hi)
+      drawGrain(lo, hi)
 
       // Molded ribbing - one path, one stroke call
       ctx.save()
@@ -342,17 +408,6 @@ export function PowerCable() {
         }
       }
       ctx.restore()
-
-      // Specular highlight + far-side shadow, offset along true normals
-      smoothPathFrom(runPoints(lo, hi, -CABLE_WIDTH * 0.24))
-      ctx.strokeStyle = 'rgba(255,255,255,0.28)'
-      ctx.lineWidth = 1.6
-      ctx.stroke()
-
-      smoothPathFrom(runPoints(lo, hi, CABLE_WIDTH * 0.3))
-      ctx.strokeStyle = 'rgba(0,0,0,0.32)'
-      ctx.lineWidth = 4
-      ctx.stroke()
 
       for (let i = lo + 4; i < hi - 4; i += 9) drawTie(i)
 
