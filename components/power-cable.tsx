@@ -35,7 +35,22 @@ export function PowerCable() {
   useEffect(() => {
     const mount = mountRef.current
     if (!mount) return
+    let cancelled = false
+    let cleanup: (() => void) | undefined
 
+    // The scene setup below (renderer, PMREM environment bake, first tube
+    // build) is a genuinely heavy synchronous ~950ms block. requestIdleCallback
+    // alone doesn't help here - the page is idle almost immediately after
+    // paint, so it just fires early and the single long task still lands
+    // inside the interactivity-measurement window regardless of which
+    // chunk it's in. A real fixed delay is what actually keeps it out of
+    // that window - harmless for a decorative background element nothing
+    // else depends on.
+    const handle = window.setTimeout(() => {
+      if (!cancelled) runInit()
+    }, 2200)
+
+    function runInit() {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     // Fresh layout every visit - fixed seeds get memorised and stop reading
     // as "electric," they start reading as "the same decoration."
@@ -575,7 +590,7 @@ export function PowerCable() {
 
     const settleTimers = [200, 800, 1800].map((ms) => window.setTimeout(measure, ms))
 
-    return () => {
+    cleanup = () => {
       cancelAnimationFrame(raf)
       window.clearTimeout(resizeTimer)
       settleTimers.forEach(window.clearTimeout)
@@ -600,6 +615,13 @@ export function PowerCable() {
       composer.dispose()
       renderer.dispose()
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement)
+    }
+    }
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(handle)
+      cleanup?.()
     }
   }, [])
 

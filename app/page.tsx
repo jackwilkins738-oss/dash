@@ -1,6 +1,6 @@
 import { Hero } from '@/components/hero'
 import { TrustMarquee } from '@/components/trust-marquee'
-import { PowerCable } from '@/components/power-cable'
+import { PowerCable } from '@/components/power-cable-loader'
 import { Transformation } from '@/components/transformation'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
