@@ -1,13 +1,12 @@
-import { Code2, ShieldCheck } from 'lucide-react'
+import { BadgeCheck, Code2, ShieldCheck } from 'lucide-react'
 
-// Only claims that are actually true today. Two more were discussed
-// (an "Est. 20XX" / projects-completed counter, and an ICO
-// registration badge) but need real numbers before they can go here -
-// add them once there's a real founding year/count and a real ICO
-// registration number, not before.
+// Only claims that are actually true today. An ICO registration badge
+// was discussed too, but Scalar Digital isn't registered yet - add it
+// once there's a real registration number, not before.
 const BADGES = [
   { icon: Code2, label: 'Hand-coded — no page-builder' },
   { icon: ShieldCheck, label: 'SSL secured' },
+  { icon: BadgeCheck, label: 'Est. 2026' },
 ]
 
 export function TrustBadges({ className = '' }: { className?: string }) {
