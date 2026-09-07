@@ -67,7 +67,7 @@ const jsonLd = {
   description: 'Hand-coded websites for UK trade businesses — loft conversions, driveways, landscaping and extensions.',
   url: 'https://www.scalardigital.co.uk',
   email: 'hello@scalardigital.co.uk',
-  telephone: '+447000000000',
+  telephone: '+447401696272',
   areaServed: 'GB',
   priceRange: '£750+',
   address: { '@type': 'PostalAddress', addressCountry: 'GB' },

@@ -23,8 +23,8 @@ const CHANNELS = [
   {
     icon: Phone,
     label: 'Phone',
-    value: '+44 7000 000 000',
-    href: 'tel:+447000000000',
+    value: '+44 7401 696272',
+    href: 'tel:+447401696272',
   },
   {
     icon: Mail,

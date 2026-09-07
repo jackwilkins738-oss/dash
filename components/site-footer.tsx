@@ -53,8 +53,8 @@ export function SiteFooter() {
                   </a>
                 </li>
                 <li>
-                  <a href="tel:+447000000000" className="text-foreground/80 transition-colors hover:text-blueprint">
-                    +44 7000 000 000
+                  <a href="tel:+447401696272" className="text-foreground/80 transition-colors hover:text-blueprint">
+                    +44 7401 696272
                   </a>
                 </li>
               </ul>
@@ -77,7 +77,12 @@ export function SiteFooter() {
 
         <div className="mt-14 flex flex-col gap-3 border-t border-border pt-6 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>&copy; {new Date().getFullYear()} Scalar Digital. All rights reserved.</span>
-          <span>Pure code. No WordPress. No excuses.</span>
+          <span className="flex items-center gap-4">
+            <Link href="/privacy" className="transition-colors hover:text-blueprint">
+              Privacy Policy
+            </Link>
+            <span>Pure code. No WordPress. No excuses.</span>
+          </span>
         </div>
       </div>
     </footer>

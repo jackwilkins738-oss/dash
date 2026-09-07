@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { track } from '@vercel/analytics'
 import { Check, Loader2 } from 'lucide-react'
@@ -219,6 +220,12 @@ export function ContactForm() {
       </button>
       <p className="mt-4 text-center font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
         I reply within 2 hours · no sales call
+      </p>
+      <p className="mt-3 text-center text-xs text-muted-foreground">
+        Sent straight to me to reply to your enquiry, nothing else.{' '}
+        <Link href="/privacy" className="underline-offset-2 hover:underline">
+          Privacy policy
+        </Link>
       </p>
     </form>
   )
