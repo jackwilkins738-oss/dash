@@ -1,6 +1,6 @@
 import { Hero } from '@/components/hero'
 import { TrustMarquee } from '@/components/trust-marquee'
-import { ElectricCable } from '@/components/electric-cable'
+import { PowerCable } from '@/components/power-cable'
 import { Transformation } from '@/components/transformation'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
@@ -31,8 +31,8 @@ const PRINCIPLES = [
 
 export default function HomePage() {
   return (
-    <main className="relative isolate">
-      <ElectricCable />
+    <main className="relative">
+      <PowerCable />
       <Hero />
       <TrustMarquee />
 
