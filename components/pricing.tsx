@@ -1,8 +1,9 @@
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Check } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 
-const LANDING_INCLUDED = [
+const LANDING_INCLUDED: ReactNode[] = [
   '1 hand-coded landing page',
   'Custom design — no templates',
   'Mobile-first, sub-second load times',
@@ -12,13 +13,16 @@ const LANDING_INCLUDED = [
   '14 days of tweaks after launch',
 ]
 
-const BUILD_INCLUDED = [
+const BUILD_INCLUDED: ReactNode[] = [
   '5 hand-coded pages, including a Gallery and Service Areas page',
   'Custom design — no templates',
   'Mobile-first, sub-second load times',
   'Local SEO built into the site structure, not just a meta tag',
   'WhatsApp, call and enquiry form',
-  'Google Business & reviews wired in — listings with photos get 42% more direction requests',
+  <>
+    Google Business & reviews wired in — listings with photos get{' '}
+    <strong className="font-semibold text-blueprint">42% more direction requests</strong>
+  </>,
   'You own the code and domain outright',
   '30 days of tweaks after launch',
 ]
@@ -67,7 +71,7 @@ function PriceCard({
 }: {
   label: string
   price: string
-  included: string[]
+  included: ReactNode[]
   footnote: string
   highlighted?: boolean
 }) {
@@ -104,8 +108,8 @@ function PriceCard({
         <div className="my-8 h-px w-full bg-border" />
 
         <ul className="space-y-3.5">
-          {included.map((f) => (
-            <li key={f} className="flex items-start gap-3 text-sm text-foreground/90">
+          {included.map((f, i) => (
+            <li key={i} className="flex items-start gap-3 text-sm text-foreground/90">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-blueprint" strokeWidth={2.5} />
               {f}
             </li>

@@ -4,12 +4,7 @@ import { PowerCable } from '@/components/power-cable-loader'
 import { Transformation } from '@/components/transformation'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
-
-const SPECS = [
-  { k: 'Average business reply time', v: '42 hours' },
-  { k: 'Time to reply here', v: 'Under 2 hours, every time' },
-  { k: 'What that’s worth', v: 'The job that would’ve gone elsewhere' },
-]
+import { JumpStat } from '@/components/jump-stat'
 
 const PRINCIPLES = [
   {
@@ -85,19 +80,35 @@ export default function HomePage() {
               Cut the wire and it&apos;s dead in seconds. Same with an enquiry.
             </h2>
             <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
-              The average business takes 42 hours to reply to a website enquiry. Most customers don&apos;t wait that
-              long — 78% hire whichever company gets back to them first, not whoever&apos;s better. Every site I
-              build gets your enquiries to you the second they land, so that&apos;s never the job you lose.
+              The average business takes <strong className="font-semibold text-foreground">42 hours</strong> to
+              reply to a website enquiry. Most customers don&apos;t wait that long —{' '}
+              <strong className="font-semibold text-foreground">78%</strong> hire whichever company gets back to
+              them first, not whoever&apos;s better. Every site I build gets your enquiries to you the second they
+              land, so that&apos;s never the job you lose.
             </p>
 
-            <dl className="mx-auto mt-10 flex max-w-lg flex-col gap-4 border-t border-border pt-8 text-left">
-              {SPECS.map((s) => (
-                <div key={s.k} className="flex items-baseline justify-between gap-4">
-                  <dt className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">{s.k}</dt>
-                  <dd className="text-right text-sm text-foreground">{s.v}</dd>
+            <div className="mx-auto mt-12 flex max-w-lg items-center justify-center gap-6 border-t border-border pt-10 sm:gap-10">
+              <div className="text-center">
+                <div className="font-mono text-3xl font-bold text-muted-foreground/50 line-through decoration-2 sm:text-4xl">
+                  42 hrs
                 </div>
-              ))}
-            </dl>
+                <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Average business
+                </div>
+              </div>
+              <span className="text-2xl text-muted-foreground/40" aria-hidden="true">
+                &rarr;
+              </span>
+              <div className="text-center">
+                <JumpStat
+                  value="<2 hrs"
+                  className="inline-block font-mono text-4xl font-bold text-blueprint text-glow sm:text-5xl"
+                />
+                <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Every site I build
+                </div>
+              </div>
+            </div>
           </Reveal>
         </div>
       </section>

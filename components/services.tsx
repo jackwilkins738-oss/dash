@@ -1,21 +1,40 @@
 import { Zap, Smartphone, Feather, KeyRound, MessageCircle, MapPin } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 
+const stat = (text: string) => <strong className="font-semibold text-blueprint">{text}</strong>
+
 const SERVICES = [
   {
     icon: Zap,
     title: 'Genuinely fast',
-    body: 'Hand-coded and lightweight, so your site loads before a customer even thinks about hitting back. Amazon found every extra 0.1 seconds of load time cost them 1% in sales — yours won’t have that problem.',
+    body: (
+      <>
+        Hand-coded and lightweight, so your site loads before a customer even thinks about hitting back. Amazon
+        found every extra {stat('0.1 seconds')} of load time cost them {stat('1% in sales')} — yours won&apos;t have
+        that problem.
+      </>
+    ),
   },
   {
     icon: Smartphone,
     title: 'Mobile-first, always',
-    body: 'Most of your customers are on a phone in a driveway or a garden. A site that isn’t built for that loses visitors 5 times faster than one that is — yours is built for the thumb first, not squeezed to fit it after.',
+    body: (
+      <>
+        Most of your customers are on a phone in a driveway or a garden. A site that isn&apos;t built for that loses
+        visitors {stat('5 times faster')} than one that is — yours is built for the thumb first, not squeezed to fit
+        it after.
+      </>
+    ),
   },
   {
     icon: Feather,
     title: 'No WordPress bloat',
-    body: 'No themes, no 30 plugins, no security holes. 9 in 10 hacked business websites run WordPress — almost always through a plugin, not WordPress itself. Yours has none to break in through.',
+    body: (
+      <>
+        No themes, no 30 plugins, no security holes. {stat('9 in 10')} hacked business websites run WordPress —
+        almost always through a plugin, not WordPress itself. Yours has none to break in through.
+      </>
+    ),
   },
   {
     icon: KeyRound,
