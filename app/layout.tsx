@@ -32,6 +32,7 @@ const plexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.scalardigital.co.uk'),
   title: 'Scalar Digital — Pure-code websites for high-end UK trades',
   description:
     'We build fast, hand-coded websites for driveways, landscaping, loft conversions, extensions and roofing firms. No WordPress bloat. Full ownership. From £2,500.',
@@ -43,12 +44,33 @@ export const metadata: Metadata = {
     'builder website UK',
     'local SEO trades',
   ],
+  alternates: { canonical: '/' },
   openGraph: {
     title: 'Scalar Digital — Pure-code websites for high-end UK trades',
     description:
       'Websites that look more expensive than the jobs you quote. Fast, hand-coded, fully owned. From £2,500.',
     type: 'website',
+    url: '/',
+    siteName: 'Scalar Digital',
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Scalar Digital — Pure-code websites for high-end UK trades',
+    description: 'Websites that look more expensive than the jobs you quote. From £2,500.',
+  },
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ProfessionalService',
+  name: 'Scalar Digital',
+  description: 'Hand-coded websites for UK trade businesses — loft conversions, driveways, landscaping and extensions.',
+  url: 'https://www.scalardigital.co.uk',
+  email: 'hello@scalardigital.co.uk',
+  telephone: '+447000000000',
+  areaServed: 'GB',
+  priceRange: '£2,500+',
+  address: { '@type': 'PostalAddress', addressCountry: 'GB' },
 }
 
 export const viewport: Viewport = {
@@ -65,6 +87,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB" className={`${bricolage.variable} ${instrumentSans.variable} ${plexMono.variable}`}>
       <body className="antialiased font-sans">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <Preloader />
         <SmoothScroll />
         <SiteNav />

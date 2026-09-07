@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: 'Contact — Scalar Digital',
   description:
     'Start your build. Send an enquiry, message on WhatsApp, or call directly. Reply within 2 hours, no sales call.',
+  alternates: { canonical: '/contact' },
 }
 
 const CHANNELS = [

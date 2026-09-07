@@ -1,5 +1,24 @@
 import { NextResponse } from 'next/server'
 
+// In-memory sliding-window limit - good enough for a single-instance
+// marketing site's contact form; resets on redeploy/restart.
+const RATE_LIMIT = 5
+const WINDOW_MS = 10 * 60 * 1000
+const hits = new Map<string, number[]>()
+
+function isRateLimited(ip: string) {
+  const now = Date.now()
+  const recent = (hits.get(ip) ?? []).filter((t) => now - t < WINDOW_MS)
+  recent.push(now)
+  hits.set(ip, recent)
+  if (hits.size > 5000) {
+    for (const [key, times] of hits) {
+      if (times.every((t) => now - t > WINDOW_MS)) hits.delete(key)
+    }
+  }
+  return recent.length > RATE_LIMIT
+}
+
 type ContactPayload = {
   name?: string
   email?: string
@@ -16,6 +35,11 @@ function isEmail(value: string) {
 }
 
 export async function POST(request: Request) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  if (isRateLimited(ip)) {
+    return NextResponse.json({ error: 'Too many requests. Please try again shortly.' }, { status: 429 })
+  }
+
   let body: ContactPayload
   try {
     body = await request.json()

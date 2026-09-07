@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: 'Services & Pricing — Scalar Digital',
   description:
     'What I build and how it works. Fast, hand-coded websites for UK trades, one fixed price from £2,500.',
+  alternates: { canonical: '/work' },
 }
 
 export default function WorkPage() {
