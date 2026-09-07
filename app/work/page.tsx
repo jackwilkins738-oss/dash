@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Services } from '@/components/services'
 import { Pricing } from '@/components/pricing'
+import { CostCalculator } from '@/components/cost-calculator'
 import { CtaBand } from '@/components/cta-band'
 import { PageHeader } from '@/components/page-header'
 
@@ -21,6 +22,7 @@ export default function WorkPage() {
       />
       <Services />
       <Pricing />
+      <CostCalculator />
       <CtaBand />
     </main>
   )

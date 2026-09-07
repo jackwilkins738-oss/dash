@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { MessageCircle, Phone, Mail, Clock } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { ContactForm } from '@/components/contact-form'
@@ -103,7 +104,9 @@ export default function ContactPage() {
             </Reveal>
 
             <Reveal delay={0.1}>
-              <ContactForm />
+              <Suspense fallback={null}>
+                <ContactForm />
+              </Suspense>
             </Reveal>
           </div>
         </div>

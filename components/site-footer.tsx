@@ -32,6 +32,11 @@ export function SiteFooter() {
                   </Link>
                 </li>
                 <li>
+                  <Link href="/process" className="text-foreground/80 transition-colors hover:text-blueprint">
+                    Process
+                  </Link>
+                </li>
+                <li>
                   <Link href="/contact" className="text-foreground/80 transition-colors hover:text-blueprint">
                     Contact
                   </Link>

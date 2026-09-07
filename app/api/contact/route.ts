@@ -25,6 +25,7 @@ type ContactPayload = {
   phone?: string
   trade?: string
   budget?: string
+  projectType?: string
   message?: string
   // Honeypot — real users never fill this
   company?: string
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
     `Email: ${email}`,
     body.phone ? `Phone: ${body.phone.trim()}` : null,
     body.trade ? `Trade: ${body.trade.trim()}` : null,
+    body.projectType ? `Project type: ${body.projectType.trim()}` : null,
     body.budget ? `Budget: ${body.budget.trim()}` : null,
     '',
     'Message:',

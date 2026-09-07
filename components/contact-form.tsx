@@ -1,7 +1,11 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { track } from '@vercel/analytics'
 import { Check, Loader2 } from 'lucide-react'
+
+const PROJECT_TYPES = ['New website', 'Redesign my current site', 'Not sure yet']
 
 const TRADES = [
   'Resin Driveways',
@@ -23,6 +27,9 @@ const labelClass = 'mb-2 block font-mono text-[11px] uppercase tracking-[0.2em] 
 export function ContactForm() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [error, setError] = useState('')
+  const searchParams = useSearchParams()
+  const prefillBudget = searchParams.get('budget')
+  const prefillEstimate = searchParams.get('estimate')
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -45,6 +52,11 @@ export function ContactForm() {
         return
       }
       setStatus('success')
+      track('contact_form_submitted', {
+        trade: String(data.trade || ''),
+        projectType: String(data.projectType || ''),
+        budget: String(data.budget || ''),
+      })
       form.reset()
     } catch {
       setError('Network error. Please try again or message on WhatsApp.')
@@ -90,6 +102,29 @@ export function ContactForm() {
         aria-hidden="true"
       />
 
+      {prefillEstimate && (
+        <div className="mb-5 rounded-lg border border-blueprint/30 bg-blueprint/[0.06] px-4 py-3 text-sm text-foreground">
+          Based on your instant estimate: <span className="font-semibold">£{Number(prefillEstimate).toLocaleString('en-GB')}</span>.
+          Send this over and I&apos;ll confirm the real fixed price.
+        </div>
+      )}
+
+      <div className="mb-5">
+        <label htmlFor="projectType" className={labelClass}>
+          What are you looking to do
+        </label>
+        <select id="projectType" name="projectType" defaultValue="" className={fieldClass}>
+          <option value="" disabled>
+            Select one
+          </option>
+          {PROJECT_TYPES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
           <label htmlFor="name" className={labelClass}>
@@ -132,7 +167,7 @@ export function ContactForm() {
           <label htmlFor="budget" className={labelClass}>
             Rough budget
           </label>
-          <select id="budget" name="budget" defaultValue="" className={fieldClass}>
+          <select id="budget" name="budget" defaultValue={prefillBudget ?? ''} className={fieldClass}>
             <option value="" disabled>
               Select a range
             </option>
