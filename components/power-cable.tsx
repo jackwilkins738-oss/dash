@@ -14,7 +14,6 @@ const RADIUS = 12
 const LEG_HEIGHT = 640
 const RENDER_BUFFER = 340
 const GAP = 5
-const MOUSE_RADIUS = 150
 
 // Deterministic PRNG so the randomised path is stable across re-measures
 // instead of reshuffling every resize.
@@ -101,7 +100,6 @@ export function PowerCable() {
     let wirePulse = 0
     let raf = 0
     let visible = true
-    const mouse = { x: -9999, y: -9999, active: false }
 
     // ---- renderer / scene ---------------------------------------------
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' })
@@ -340,18 +338,7 @@ export function PowerCable() {
       nodes[0].x += (nodes[0].baseX - nodes[0].x) * 0.18
       for (let i = Math.max(1, lo); i <= hi; i++) {
         const n = nodes[i]
-        let force = 0
-        if (mouse.active) {
-          const dx = n.x - mouse.x
-          const dy = n.y - window.scrollY - mouse.y
-          const dist = Math.hypot(dx, dy)
-          if (dist < MOUSE_RADIUS && dist > 0.001) {
-            const strength = (1 - dist / MOUSE_RADIUS) ** 1.4
-            force = (dx / dist) * strength * 30
-          }
-        }
-        const target = n.baseX + force
-        n.vx += (target - n.x) * 0.08
+        n.vx += (n.baseX - n.x) * 0.08
         n.vx *= 0.85
         n.x += n.vx
       }
@@ -610,20 +597,6 @@ export function PowerCable() {
       raf = requestAnimationFrame(draw)
     }
 
-    const onMove = (e: PointerEvent) => {
-      // Touch only ever fires pointermove while a finger is actively
-      // dragging (e.g. a scroll swipe) - there's no hover state like a
-      // mouse has. Reacting to it meant every touch-scroll yanked the
-      // cable toward the finger's path instead of a calm hover response.
-      if (e.pointerType === 'touch') return
-      mouse.x = e.clientX
-      mouse.y = e.clientY
-      mouse.active = true
-    }
-    const onLeave = () => {
-      mouse.active = false
-    }
-
     await nextFrame()
     if (bailIfCancelled()) return
 
@@ -636,8 +609,6 @@ export function PowerCable() {
       resizeTimer = window.setTimeout(measure, 120)
     }
     window.addEventListener('resize', onResize)
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerleave', onLeave)
     window.addEventListener('scroll', updateWirePulse, { passive: true })
 
     const ro = new ResizeObserver(onResize)
@@ -655,8 +626,6 @@ export function PowerCable() {
       window.clearTimeout(resizeTimer)
       settleTimers.forEach(window.clearTimeout)
       window.removeEventListener('resize', onResize)
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerleave', onLeave)
       window.removeEventListener('scroll', updateWirePulse)
       ro.disconnect()
       io.disconnect()
