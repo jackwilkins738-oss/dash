@@ -93,33 +93,63 @@ export function PowerCable() {
     const travelLight2 = new THREE.PointLight(0x7fc4ff, 0, 200, 2)
     scene.add(travelLight2)
 
-    // Procedural fine-grain bump texture for the jacket surface
+    // Procedural fine-grain bump texture for the jacket surface - soft
+    // blurred blobs rather than raw per-pixel noise, which reads as TV
+    // static once magnified rather than a rubber weave.
     const noiseCanvas = document.createElement('canvas')
-    noiseCanvas.width = 96
-    noiseCanvas.height = 96
+    noiseCanvas.width = 128
+    noiseCanvas.height = 128
     const nctx = noiseCanvas.getContext('2d')!
-    const img = nctx.createImageData(96, 96)
-    for (let i = 0; i < img.data.length; i += 4) {
-      const v = 128 + (Math.random() - 0.5) * 60
-      img.data[i] = v
-      img.data[i + 1] = v
-      img.data[i + 2] = v
-      img.data[i + 3] = 255
+    nctx.fillStyle = '#808080'
+    nctx.fillRect(0, 0, 128, 128)
+    nctx.filter = 'blur(1px)'
+    for (let i = 0; i < 900; i++) {
+      const v = 128 + (Math.random() - 0.5) * 100
+      nctx.fillStyle = `rgb(${v},${v},${v})`
+      nctx.beginPath()
+      nctx.arc(Math.random() * 128, Math.random() * 128, 0.6 + Math.random() * 1.8, 0, Math.PI * 2)
+      nctx.fill()
     }
-    nctx.putImageData(img, 0, 0)
     const grainTex = new THREE.CanvasTexture(noiseCanvas)
     grainTex.wrapS = THREE.RepeatWrapping
     grainTex.wrapT = THREE.RepeatWrapping
+    // A TubeGeometry's V coordinate always spans 0-1 along its own length
+    // regardless of how many world-units long that particular run is - the
+    // texture needs an explicit repeat or it stretches into invisibility.
+    grainTex.repeat.set(3, 22)
+
+    // A simple procedural "room" the clearcoat can actually reflect -
+    // without this, glossy/clearcoat properties have nothing to show and
+    // the jacket reads flat no matter how it's lit directly.
+    const pmrem = new THREE.PMREMGenerator(renderer)
+    const envScene = new THREE.Scene()
+    const envGeo = new THREE.SphereGeometry(50, 16, 16)
+    const envMatTop = new THREE.MeshBasicMaterial({ color: 0x3a4a63, side: THREE.BackSide })
+    const envSphere = new THREE.Mesh(envGeo, envMatTop)
+    envScene.add(envSphere)
+    const envLight1 = new THREE.PointLight(0xbcd6ff, 6, 90)
+    envLight1.position.set(-20, 25, 10)
+    envScene.add(envLight1)
+    const envLight2 = new THREE.PointLight(0x2a3550, 4, 90)
+    envLight2.position.set(15, -20, -10)
+    envScene.add(envLight2)
+    const envTarget = pmrem.fromScene(envScene, 0.06)
+    scene.environment = envTarget.texture
+    pmrem.dispose()
+    envGeo.dispose()
+    envMatTop.dispose()
 
     const jacketMat = new THREE.MeshPhysicalMaterial({
       color: 0x1a1c22,
-      roughness: 0.4,
+      roughness: 0.38,
       metalness: 0.02,
-      clearcoat: 0.65,
-      clearcoatRoughness: 0.15,
+      clearcoat: 0.7,
+      clearcoatRoughness: 0.14,
+      envMapIntensity: 0.9,
       bumpMap: grainTex,
       bumpScale: 0.5,
     })
+    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false })
     const tracerMat = new THREE.MeshStandardMaterial({ color: 0xc9a15a, roughness: 0.4, metalness: 0.3 })
     const tieMat = new THREE.MeshStandardMaterial({ color: 0x2c3038, roughness: 0.45, metalness: 0.5 })
     const copperMat = new THREE.MeshStandardMaterial({
@@ -284,6 +314,15 @@ export function PowerCable() {
       }
       const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.15)
       const segments = Math.max(4, (hi - lo) * 2)
+
+      // Contact shadow - darkens the page behind/below the cable so it
+      // reads as sitting in front of something instead of floating on
+      // nothing. Offset opposite the key light, drawn further from camera.
+      const shadowPts = pts.map((p) => p.clone().add(new THREE.Vector3(6, -8, -18)))
+      const shadowCurve = new THREE.CatmullRomCurve3(shadowPts, false, 'catmullrom', 0.15)
+      const shadowGeo = new THREE.TubeGeometry(shadowCurve, segments, RADIUS * 1.1, 8, false)
+      runGroup.add(new THREE.Mesh(shadowGeo, shadowMat))
+
       const geo = new THREE.TubeGeometry(curve, segments, RADIUS, 10, false)
       const mesh = new THREE.Mesh(geo, jacketMat)
       runGroup.add(mesh)
@@ -553,6 +592,8 @@ export function PowerCable() {
       tieMat.dispose()
       copperMat.dispose()
       coreGlowMat.dispose()
+      shadowMat.dispose()
+      envTarget.dispose()
       copperGlowMat.dispose()
       boltCore.dispose()
       boltHalo.dispose()
