@@ -358,12 +358,15 @@ export function PowerCable() {
       return out.filter(([a, b]) => b - a >= 3)
     }
 
-    const buildTubeForRun = (lo: number, hi: number, scrollY: number) => {
+    const buildTubeForRun = (lo: number, hi: number) => {
       const pts: THREE.Vector3[] = []
       for (let i = lo; i <= hi; i++) {
         const n = nodes[i]
         const z = Math.sin(i * 0.22) * 5
-        pts.push(toScene(n.x, n.y - scrollY, z))
+        // Document-space Y, no scroll subtracted - scroll position is
+        // applied once as a cheap group transform every real frame
+        // instead of being baked into every rebuilt vertex (see draw()).
+        pts.push(toScene(n.x, n.y, z))
       }
       const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.15)
       const segments = Math.max(4, (hi - lo) * 2)
@@ -460,10 +463,10 @@ export function PowerCable() {
       runGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, segs, 3.2 + strength * 2.2, 6, false), boltHalo))
     }
 
-    const buildFrayed = (i: number, forward: 1 | -1, scrollY: number) => {
+    const buildFrayed = (i: number, forward: 1 | -1) => {
       const n = nodes[i]
       if (!n) return
-      const base = toScene(n.x, n.y - scrollY, 0)
+      const base = toScene(n.x, n.y, 0)
       for (let s = 0; s < 5; s++) {
         const spread = (s / 4 - 0.5) * 1.4
         const len = 14 + Math.sin(t * 3 + s) * 4
@@ -479,14 +482,14 @@ export function PowerCable() {
 
     // A knife-slash gouge in the jacket - doesn't sever the run, just
     // exposes the conductor and arcs on its own irregular cycle.
-    const buildSlash = (i: number, scrollY: number) => {
+    const buildSlash = (i: number) => {
       const n = nodes[i]
       const a = nodes[Math.max(0, i - 2)]
       const b = nodes[Math.min(nodes.length - 1, i + 2)]
       if (!n || !a || !b) return
-      const pa = toScene(a.x, a.y - scrollY, 0)
-      const pb = toScene(b.x, b.y - scrollY, 0)
-      const base = toScene(n.x, n.y - scrollY, 0)
+      const pa = toScene(a.x, a.y, 0)
+      const pb = toScene(b.x, b.y, 0)
+      const base = toScene(n.x, n.y, 0)
       const tangent = pb.clone().sub(pa).normalize()
       const front = base.clone().add(new THREE.Vector3(0, 0, RADIUS * 0.92))
 
@@ -529,18 +532,18 @@ export function PowerCable() {
       }
     }
 
-    const buildSparkGap = (bs: number, be: number, scrollY: number) => {
+    const buildSparkGap = (bs: number, be: number) => {
       const a = nodes[bs - 1]
       const b = nodes[be + 1]
       if (!a || !b) return
-      buildFrayed(bs - 1, 1, scrollY)
-      buildFrayed(be + 1, -1, scrollY)
+      buildFrayed(bs - 1, 1)
+      buildFrayed(be + 1, -1)
 
       const cycle = (t * 1.1 + bs) % 3
       if (cycle > 1.7) {
         const strength = Math.min(1, (cycle - 1.7) / 0.5)
-        const p0 = toScene(a.x, a.y - scrollY, 4)
-        const p1 = toScene(b.x, b.y - scrollY, 4)
+        const p0 = toScene(a.x, a.y, 4)
+        const p1 = toScene(b.x, b.y, 4)
         buildBolt(p0, p1, strength)
         const flashLight = new THREE.PointLight(0x9fd6ff, strength * 4.5, 200, 2)
         flashLight.position.copy(p0.clone().lerp(p1, 0.5))
@@ -548,42 +551,47 @@ export function PowerCable() {
       }
     }
 
-    // Every frame here disposes and rebuilds real TubeGeometry objects
-    // (jacket, glow, shadow, tracer, ties) for the whole visible range,
-    // plus a multi-pass bloom render - genuinely heavy, and doing it a
-    // full 60 times a second is what was causing the stutter during
-    // scroll (competing with the browser's own scroll compositing), not
-    // just on first load. Throttled to ~30fps: imperceptible for a
-    // slow ambient sway, half the CPU/GPU cost every single frame from
-    // here on, indefinitely - not just a one-time startup cost.
+    // Rebuilding real TubeGeometry objects (jacket, glow, shadow, tracer,
+    // ties) for the whole visible range is genuinely heavy CPU/GPU work,
+    // so that part is throttled to ~30fps. But baking the scroll offset
+    // directly into those rebuilt vertices meant the cable's on-screen
+    // position only updated 30 times a second too - visible as a shake/
+    // judder while scrolling, since scroll position itself changes every
+    // real frame. Fixed by separating the two: geometry is now built in
+    // document space (no scroll baked in) and repositioned every real
+    // frame via a single cheap group transform, so scroll-tracking stays
+    // smooth at 60fps regardless of how often the geometry itself rebuilds.
     let lastFrameTime = 0
     const FRAME_INTERVAL = 1000 / 30
 
     const draw = () => {
       raf = requestAnimationFrame(draw)
       if (!visible) return
-      const now = performance.now()
-      if (now - lastFrameTime < FRAME_INTERVAL) return
-      lastFrameTime = now
-
-      updateWirePulse()
-      simulate()
-      clearRunGroup()
-      coreGlowMat.opacity = 0.22 + wirePulse * 0.16
 
       const scrollY = window.scrollY
-      const lo = Math.max(0, Math.floor((scrollY - RENDER_BUFFER) / SPACING) - 2)
-      const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + RENDER_BUFFER) / SPACING) + 2)
+      runGroup.position.y = scrollY
 
-      for (const [lo2, hi2] of runsInRange(lo, hi)) buildTubeForRun(lo2, hi2, scrollY)
-      for (const [bs, be] of breaks) {
-        if (be >= lo && bs <= hi) buildSparkGap(bs, be, scrollY)
-      }
-      for (const si of slashes) {
-        if (si >= lo && si <= hi) buildSlash(si, scrollY)
+      const now = performance.now()
+      if (now - lastFrameTime >= FRAME_INTERVAL) {
+        lastFrameTime = now
+        updateWirePulse()
+        simulate()
+        clearRunGroup()
+        coreGlowMat.opacity = 0.22 + wirePulse * 0.16
+
+        const lo = Math.max(0, Math.floor((scrollY - RENDER_BUFFER) / SPACING) - 2)
+        const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + RENDER_BUFFER) / SPACING) + 2)
+
+        for (const [lo2, hi2] of runsInRange(lo, hi)) buildTubeForRun(lo2, hi2)
+        for (const [bs, be] of breaks) {
+          if (be >= lo && bs <= hi) buildSparkGap(bs, be)
+        }
+        for (const si of slashes) {
+          if (si >= lo && si <= hi) buildSlash(si)
+        }
       }
 
-      // Travelling current - a real moving light, not a painted gradient
+      // Travelling current - every real frame (cheap, no geometry rebuild)
       const speed = 1 + wirePulse * 1.2
       const totalLen = Math.max(1, docHeight)
       const phase1 = (t * 620 * speed) % totalLen
@@ -606,7 +614,7 @@ export function PowerCable() {
       lightAt(phase2, travelLight2)
 
       composer.render()
-      if (!prefersReduced) t += 1 / 30
+      if (!prefersReduced) t += 1 / 60
     }
 
     await nextFrame()
