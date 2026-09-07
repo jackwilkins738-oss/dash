@@ -96,6 +96,16 @@ export default function RootLayout({
         <SiteFooter />
         <WhatsAppButton />
         {process.env.NODE_ENV === 'production' && <Analytics />}
+        {/* Scalar Digital's own dashboard product, tracking this site as a
+            real test tenant - page views and leads (via the contact
+            form's data-lead-form attribute) flow into /admin's dashboard,
+            same as any real customer's site. */}
+        <script
+          src="https://admin.scalardigital.co.uk/track.js"
+          data-tenant="abdc6408-1fd5-4fb6-9c4c-53600b571a6d"
+          data-site-key="4bdac492-8a7d-4826-8e25-059326f5c07f"
+          defer
+        />
       </body>
     </html>
   )

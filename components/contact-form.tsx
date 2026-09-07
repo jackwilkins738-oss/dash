@@ -90,6 +90,7 @@ export function ContactForm() {
   return (
     <form
       onSubmit={onSubmit}
+      data-lead-form
       className="rounded-2xl border border-border bg-card/40 p-6 sm:p-8"
       noValidate
     >
