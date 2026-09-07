@@ -6,6 +6,7 @@ import { SmoothScroll } from '@/components/smooth-scroll'
 import { Preloader } from '@/components/preloader'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
+import { WhatsAppButton } from '@/components/whatsapp-button'
 
 // Bricolage/Instrument/Plex Mono instead of Space Grotesk + Geist Mono -
 // the latter pair is the recognizable "safe AI-generated site" default
@@ -93,6 +94,7 @@ export default function RootLayout({
         <SiteNav />
         {children}
         <SiteFooter />
+        <WhatsAppButton />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
