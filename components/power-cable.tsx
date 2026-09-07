@@ -548,11 +548,24 @@ export function PowerCable() {
       }
     }
 
+    // Every frame here disposes and rebuilds real TubeGeometry objects
+    // (jacket, glow, shadow, tracer, ties) for the whole visible range,
+    // plus a multi-pass bloom render - genuinely heavy, and doing it a
+    // full 60 times a second is what was causing the stutter during
+    // scroll (competing with the browser's own scroll compositing), not
+    // just on first load. Throttled to ~30fps: imperceptible for a
+    // slow ambient sway, half the CPU/GPU cost every single frame from
+    // here on, indefinitely - not just a one-time startup cost.
+    let lastFrameTime = 0
+    const FRAME_INTERVAL = 1000 / 30
+
     const draw = () => {
-      if (!visible) {
-        raf = requestAnimationFrame(draw)
-        return
-      }
+      raf = requestAnimationFrame(draw)
+      if (!visible) return
+      const now = performance.now()
+      if (now - lastFrameTime < FRAME_INTERVAL) return
+      lastFrameTime = now
+
       updateWirePulse()
       simulate()
       clearRunGroup()
@@ -593,8 +606,7 @@ export function PowerCable() {
       lightAt(phase2, travelLight2)
 
       composer.render()
-      if (!prefersReduced) t += 1 / 60
-      raf = requestAnimationFrame(draw)
+      if (!prefersReduced) t += 1 / 30
     }
 
     await nextFrame()
