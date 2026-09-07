@@ -19,11 +19,17 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              // admin.scalardigital.co.uk serves track.js - the dashboard
+              // product's tracking snippet used on this site itself.
+              "script-src 'self' 'unsafe-inline' https://admin.scalardigital.co.uk",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
-              "connect-src 'self'",
+              // track.js posts page views straight to Supabase, and leads
+              // through admin.scalardigital.co.uk/api/leads - both need to
+              // be reachable or the script loads but every fetch it makes
+              // gets silently blocked too.
+              "connect-src 'self' https://admin.scalardigital.co.uk https://wfyzsnyfliohevpjpuib.supabase.co",
               "frame-ancestors 'none'",
               "object-src 'none'",
               "base-uri 'self'",
