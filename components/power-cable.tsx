@@ -13,6 +13,19 @@ const RENDER_BUFFER = 340
 const GAP = 5
 const MOUSE_RADIUS = 150
 
+// Deterministic PRNG so the randomised path is stable across re-measures
+// instead of reshuffling every resize.
+function mulberry32(seed: number) {
+  let a = seed
+  return () => {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let x = Math.imul(a ^ (a >>> 15), 1 | a)
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 export function PowerCable() {
   const mountRef = useRef<HTMLDivElement>(null)
 
@@ -31,6 +44,7 @@ export function PowerCable() {
     let legCount = 2
     let nodes: Node[] = []
     let breaks: [number, number][] = []
+    let slashes: number[] = []
     let t = 0
     let wirePulse = 0
     let raf = 0
@@ -127,34 +141,52 @@ export function PowerCable() {
         ? footer.getBoundingClientRect().top + window.scrollY
         : document.documentElement.scrollHeight
 
-      legCount = Math.max(2, Math.round(docHeight / LEG_HEIGHT))
-      if (legCount % 2 === 0) legCount += 1
-      anchors = []
-      for (let k = 0; k <= legCount; k++) {
-        anchors.push({ x: k % 2 === 0 ? startX : endX, y: (k / legCount) * docHeight })
+      // Randomised zig-zag - variable leg length and edge jitter so no two
+      // bends read as the same shape, instead of a metronomic left-right.
+      const rand = mulberry32(0xc0ffee)
+      anchors = [{ x: startX, y: 0 }]
+      let side: 1 | -1 = 1
+      let y = 0
+      const span = endX - startX
+      while (y < docHeight - LEG_HEIGHT * 0.4) {
+        y += LEG_HEIGHT * (0.62 + rand() * 0.85)
+        const edge = side === 1 ? endX : startX
+        const jitter = (rand() - 0.5) * span * 0.3
+        anchors.push({ x: Math.max(startX, Math.min(endX, edge - side * Math.abs(jitter))), y: Math.min(y, docHeight) })
+        side = side === 1 ? -1 : 1
       }
+      anchors.push({ x: endX, y: docHeight })
+      legCount = anchors.length - 1
 
+      let legPtr = 0
       const count = Math.ceil(docHeight / SPACING) + 1
       const prevNodes = nodes
       nodes = []
       for (let i = 0; i < count; i++) {
-        const y = Math.min(i * SPACING, docHeight)
-        const leg = Math.min(legCount - 1, Math.floor((y / docHeight) * legCount) || 0)
-        const a = anchors[leg]
-        const b = anchors[leg + 1]
-        const span = b.y - a.y || 1
-        const u = Math.max(0, Math.min(1, (y - a.y) / span))
-        const eased = u * u * (3 - 2 * u)
+        const ny = Math.min(i * SPACING, docHeight)
+        while (legPtr < legCount - 1 && ny > anchors[legPtr + 1].y) legPtr++
+        const a = anchors[legPtr]
+        const b = anchors[legPtr + 1]
+        const legSpan = b.y - a.y || 1
+        const u = Math.max(0, Math.min(1, (ny - a.y) / legSpan))
+        // ease-in-out with a touch of overshoot variance per leg, via its
+        // own seeded wobble, so turns don't all carve the identical curve
+        const overshoot = Math.sin(legPtr * 12.9 + 3.7) * 0.12
+        const eased = u * u * (3 - 2 * u) + Math.sin(u * Math.PI) * overshoot
         const wiggle = Math.sin(i * 0.7) * 4.5 + Math.cos(i * 0.33) * 2.2
         const baseX = a.x + (b.x - a.x) * eased + wiggle
         const prev = prevNodes[i]
-        nodes.push({ baseX, x: prev ? prev.x : baseX, y, vx: prev ? prev.vx : 0 })
+        nodes.push({ baseX, x: prev ? prev.x : baseX, y: ny, vx: prev ? prev.vx : 0 })
       }
 
       breaks = [
         [Math.floor(count * 0.34), Math.floor(count * 0.34) + GAP],
         [Math.floor(count * 0.71), Math.floor(count * 0.71) + GAP],
       ]
+      const slashFracs = [0.12, 0.24, 0.45, 0.58, 0.79, 0.9]
+      slashes = slashFracs
+        .map((f) => Math.floor(count * f))
+        .filter((idx) => breaks.every(([bs, be]) => idx < bs - 8 || idx > be + 8))
 
       camera.left = -vw / 2
       camera.right = vw / 2
@@ -286,6 +318,65 @@ export function PowerCable() {
       }
     }
 
+    // A knife-slash gouge in the jacket - doesn't sever the run, just
+    // exposes the conductor and arcs on its own irregular cycle.
+    const buildSlash = (i: number, scrollY: number) => {
+      const n = nodes[i]
+      const a = nodes[Math.max(0, i - 2)]
+      const b = nodes[Math.min(nodes.length - 1, i + 2)]
+      if (!n || !a || !b) return
+      const pa = toScene(a.x, a.y - scrollY, 0)
+      const pb = toScene(b.x, b.y - scrollY, 0)
+      const base = toScene(n.x, n.y - scrollY, 0)
+      const tangent = pb.clone().sub(pa).normalize()
+      const front = base.clone().add(new THREE.Vector3(0, 0, RADIUS * 0.92))
+
+      // Diagonal cut across the jacket surface
+      const gash = new THREE.Mesh(new THREE.BoxGeometry(RADIUS * 1.5, 3.5, 2), tieMat)
+      gash.position.copy(front)
+      const gashQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), tangent)
+      gash.quaternion.copy(gashQuat)
+      gash.rotateZ(Math.PI / 2.6)
+      runGroup.add(gash)
+
+      // A sliver of exposed copper conductor in the wound
+      const copper = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, RADIUS * 1.1, 8), copperMat)
+      copper.position.copy(front).add(new THREE.Vector3(0, 0, 0.6))
+      copper.quaternion.copy(gashQuat)
+      copper.rotateZ(Math.PI / 2.6)
+      runGroup.add(copper)
+
+      // Irregular arcing - phase seeded per slash so they never fire in sync
+      const phase = (t * (1.4 + (i % 5) * 0.23) + i * 3.1) % 4
+      if (phase > 3.35) {
+        const flicker = (phase - 3.35) / 0.65
+        for (let s = 0; s < 3; s++) {
+          const ang = (i * 1.7 + s * 2.4 + t * 6) % (Math.PI * 2)
+          const tilt = Math.sin(i + s) * 0.6
+          const len = 16 + flicker * 14
+          const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang) * 0.5 + tilt, 0.6 + Math.sin(ang * 2))
+            .normalize()
+            .multiplyScalar(len)
+          const bolt = front.clone().add(dir)
+          const kink = new THREE.Vector3(Math.sin(t * 40 + s), Math.cos(t * 33 + s), 0)
+          const boltGeo = new THREE.BufferGeometry().setFromPoints([
+            front,
+            front.clone().lerp(bolt, 0.5).add(kink),
+            bolt,
+          ])
+          const boltMat = new THREE.LineBasicMaterial({
+            color: 0xcfe9ff,
+            transparent: true,
+            opacity: 0.35 + flicker * 0.65,
+          })
+          runGroup.add(new THREE.Line(boltGeo, boltMat))
+        }
+        const flash = new THREE.PointLight(0x8fd0ff, flicker * 3.2, 160, 2)
+        flash.position.copy(front)
+        runGroup.add(flash)
+      }
+    }
+
     const buildSparkGap = (bs: number, be: number, scrollY: number) => {
       const a = nodes[bs - 1]
       const b = nodes[be + 1]
@@ -334,21 +425,27 @@ export function PowerCable() {
       for (const [bs, be] of breaks) {
         if (be >= lo && bs <= hi) buildSparkGap(bs, be, scrollY)
       }
+      for (const si of slashes) {
+        if (si >= lo && si <= hi) buildSlash(si, scrollY)
+      }
 
       // Travelling current - a real moving light, not a painted gradient
       const speed = 1 + wirePulse * 1.2
       const totalLen = Math.max(1, docHeight)
       const phase1 = (t * 620 * speed) % totalLen
       const phase2 = (phase1 + totalLen * 0.5) % totalLen
-      const lightAt = (docY: number, light: THREE.PointLight) => {
-        const leg = Math.min(legCount - 1, Math.floor((docY / docHeight) * legCount) || 0)
+      const xAtY = (docY: number) => {
+        let leg = 0
+        while (leg < legCount - 1 && docY > anchors[leg + 1].y) leg++
         const a = anchors[leg]
         const b = anchors[leg + 1]
         const span = b.y - a.y || 1
         const u = Math.max(0, Math.min(1, (docY - a.y) / span))
         const eased = u * u * (3 - 2 * u)
-        const x = a.x + (b.x - a.x) * eased
-        light.position.copy(toScene(x, docY - scrollY, RADIUS + 4))
+        return a.x + (b.x - a.x) * eased
+      }
+      const lightAt = (docY: number, light: THREE.PointLight) => {
+        light.position.copy(toScene(xAtY(docY), docY - scrollY, RADIUS + 4))
         light.intensity = prefersReduced ? 1 : 3.4 + wirePulse * 4.5
       }
       lightAt(phase1, travelLight)
