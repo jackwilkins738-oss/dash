@@ -55,17 +55,30 @@ export function PowerCable() {
     // same as before, just off a real signal instead of a guessed delay.
     const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
-    const start = () => {
-      if (cancelled) return
+    const removeStartListeners = () => {
       window.removeEventListener('scroll', start)
       window.removeEventListener('pointermove', start)
       window.removeEventListener('touchstart', start)
+    }
+    const start = () => {
+      if (cancelled) return
+      removeStartListeners()
       window.clearTimeout(fallback)
       void runInit()
     }
-    window.addEventListener('scroll', start, { once: true, passive: true })
-    window.addEventListener('pointermove', start, { once: true, passive: true })
-    window.addEventListener('touchstart', start, { once: true, passive: true })
+    // A pointermove can fire within the first frame in real browsers (the
+    // cursor is often already resting over the page) - arming these
+    // immediately meant the heavy init frequently landed while the
+    // preloader's own GSAP timeline (~1.3s) was still mid-animation,
+    // both fighting for the main thread. That's the actual stutter, not
+    // a Lighthouse artifact. Arm the listeners only once the preloader
+    // has had time to finish, so the two never overlap.
+    const armTimer = window.setTimeout(() => {
+      if (cancelled) return
+      window.addEventListener('scroll', start, { once: true, passive: true })
+      window.addEventListener('pointermove', start, { once: true, passive: true })
+      window.addEventListener('touchstart', start, { once: true, passive: true })
+    }, 1700)
     const fallback = window.setTimeout(start, 4000)
 
     async function runInit() {
@@ -662,9 +675,8 @@ export function PowerCable() {
 
     return () => {
       cancelled = true
-      window.removeEventListener('scroll', start)
-      window.removeEventListener('pointermove', start)
-      window.removeEventListener('touchstart', start)
+      removeStartListeners()
+      window.clearTimeout(armTimer)
       window.clearTimeout(fallback)
       cleanup?.()
     }
