@@ -187,10 +187,9 @@ export function PowerCable() {
       startX = navRect.left + 20
       endX = Math.max(startX + 200, navRect.right - 34)
 
-      const footer = document.querySelector('footer')
-      docHeight = footer
-        ? footer.getBoundingClientRect().top + window.scrollY
-        : document.documentElement.scrollHeight
+      // Full page height, not just down to the footer's top edge - the
+      // wire should run the entire length of the site.
+      docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)
 
       // Randomised zig-zag, reshuffled fresh each page load - variable leg
       // length, heavy edge jitter, and the occasional repeated-side leg so
