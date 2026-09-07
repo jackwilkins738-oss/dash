@@ -40,7 +40,12 @@ export function SmoothScroll() {
     }
     window.addEventListener('load', resync)
     document.fonts?.ready.then(resync)
-    const settleTimer = window.setTimeout(resync, 2500)
+    // Kept clear of the power-cable's own init window (~2.2s-3.5s, see
+    // power-cable.tsx) - firing a refresh while that runs competes for
+    // the main thread at the exact moment it's already doing ~1.3s of
+    // synchronous WebGL work, and that's the stutter the settle timer
+    // was itself supposed to be smoothing over.
+    const settleTimer = window.setTimeout(resync, 3800)
 
     return () => {
       window.removeEventListener('load', resync)

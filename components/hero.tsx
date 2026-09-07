@@ -12,7 +12,11 @@ export function Hero() {
   useEffect(() => {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (prefersReduced) return
-    // Delay hero intro slightly so it plays as the preloader lifts
+    // Delay hero intro so it plays as the preloader curtain lifts. This
+    // was 2.7s, tuned for the preloader's old ~4.1s runtime - it's since
+    // been rescaled to ~1.3s (see preloader.tsx), but this delay was
+    // never updated, leaving the hero blank for a second-plus after the
+    // curtain had already lifted, then snapping in - the load "glitch."
     const ctx = gsap.context(() => {
       gsap.from('.hero-stagger > *', {
         opacity: 0,
@@ -20,7 +24,7 @@ export function Hero() {
         duration: 1,
         ease: 'power3.out',
         stagger: 0.12,
-        delay: 2.7,
+        delay: 1.1,
       })
     }, root)
     return () => ctx.revert()
