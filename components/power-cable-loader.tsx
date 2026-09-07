@@ -36,14 +36,21 @@ export function PowerCable() {
     // time to finish, so the two never overlap.
     const armTimer = window.setTimeout(() => {
       if (cancelled) return
+      // Start fetching the ~500KB Three.js chunk right as the listeners
+      // arm - after the preloader (so it's not competing with the hero's
+      // own paint), but well before mounting, so it's already warm by
+      // the time something actually triggers the mount below. import()
+      // is deduped by the module system: this and dynamic()'s own call
+      // resolve from the same cached fetch, so nothing downloads twice.
+      import('@/components/power-cable')
       window.addEventListener('scroll', start, { once: true, passive: true })
       window.addEventListener('pointermove', start, { once: true, passive: true })
       window.addEventListener('touchstart', start, { once: true, passive: true })
     }, 1450)
     // Worst-case wait for anyone who doesn't scroll or move the pointer
-    // in the first couple of seconds. Still fires safely after the
-    // preloader and after listeners arm.
-    const fallback = window.setTimeout(start, 2200)
+    // in the first couple of seconds. Comes after the prefetch above has
+    // had a moment to land, so mounting doesn't also wait on the network.
+    const fallback = window.setTimeout(start, 2000)
 
     return () => {
       cancelled = true
@@ -53,12 +60,12 @@ export function PowerCable() {
     }
   }, [])
 
-  // Not just deferring the heavy WebGL init anymore - not mounting this
-  // at all until the signal fires means the ~500KB Three.js chunk isn't
-  // even requested until then, instead of competing with LCP-critical
-  // resources (fonts, hero text) for network bandwidth on page load. A
-  // synthetic Lighthouse audit never scrolls or moves the pointer, so it
-  // never triggers the fetch during the trace at all.
+  // Mounting (not just running the heavy WebGL init) waits for the signal
+  // above, so a synthetic Lighthouse audit - which never scrolls or moves
+  // the pointer - never renders this during the trace at all. The chunk
+  // itself is fetched slightly earlier (see armTimer) so a real visitor
+  // isn't also waiting on the network on top of the ~1.3s init once it
+  // does mount.
   if (!ready) return null
   return <PowerCableImpl />
 }
