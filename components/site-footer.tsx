@@ -57,6 +57,16 @@ export function SiteFooter() {
                     +44 7401 696272
                   </a>
                 </li>
+                <li>
+                  <a
+                    href="https://wa.me/447000000000"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-foreground/80 transition-colors hover:text-blueprint"
+                  >
+                    WhatsApp
+                  </a>
+                </li>
               </ul>
             </div>
 
