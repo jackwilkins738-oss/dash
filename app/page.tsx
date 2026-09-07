@@ -2,6 +2,7 @@ import { Hero } from '@/components/hero'
 import { TrustMarquee } from '@/components/trust-marquee'
 import { PowerCable } from '@/components/power-cable-loader'
 import { Transformation } from '@/components/transformation'
+import { ExampleBuild } from '@/components/example-build'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { JumpStat } from '@/components/jump-stat'
@@ -113,6 +114,7 @@ export default function HomePage() {
         </div>
       </section>
       <Transformation />
+      <ExampleBuild />
       <CtaBand />
     </main>
   )
