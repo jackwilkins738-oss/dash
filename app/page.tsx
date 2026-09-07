@@ -31,7 +31,7 @@ const PRINCIPLES = [
 
 export default function HomePage() {
   return (
-    <main className="relative">
+    <main className="relative isolate">
       <PowerCable />
       <Hero />
       <TrustMarquee />
