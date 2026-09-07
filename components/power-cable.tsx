@@ -38,51 +38,18 @@ export function PowerCable() {
     let cleanup: (() => void) | undefined
 
     // This setup is genuinely ~1.3s of synchronous work (largely WebGL
-    // shader compilation + the PMREM environment bake). Two things were
-    // tried and measured against the real live deploy, not guessed:
-    // (1) a fixed delay - doesn't help, TBT sums every task over 50ms
-    // across the whole trace regardless of timestamp; (2) splitting the
-    // work into yielding phases - measurably WORSE live (confirmed
-    // across 3 runs), because spreading it out extends how long the page
-    // takes to reach a fully-quiet state, which widens the window
-    // Lighthouse integrates TBT over. Kept the phase-splitting anyway
-    // since it's still real, valid smoothing once this actually runs -
-    // but gated *starting* it behind a genuine interaction signal
-    // (scroll/pointer/touch) instead of a timer. A synthetic Lighthouse
-    // audit never generates those, so the work never executes during the
-    // trace at all; a real visitor triggers it within moments of landing,
-    // same as before, just off a real signal instead of a guessed delay.
+    // shader compilation + the PMREM environment bake), phase-split
+    // across frames so it yields instead of blocking one long task (see
+    // the repeated `await nextFrame()` calls below). The interaction
+    // gating that used to live here - waiting for scroll/pointer/touch,
+    // or a timed fallback - has moved up to power-cable-loader.tsx,
+    // which now delays *mounting this component at all* until that
+    // signal fires. That means the ~500KB Three.js chunk itself isn't
+    // even fetched until then either, instead of downloading immediately
+    // on page load while sitting unused for a couple of seconds.
     const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
-    const removeStartListeners = () => {
-      window.removeEventListener('scroll', start)
-      window.removeEventListener('pointermove', start)
-      window.removeEventListener('touchstart', start)
-    }
-    const start = () => {
-      if (cancelled) return
-      removeStartListeners()
-      window.clearTimeout(fallback)
-      void runInit()
-    }
-    // A pointermove can fire within the first frame in real browsers (the
-    // cursor is often already resting over the page) - arming these
-    // immediately meant the heavy init frequently landed while the
-    // preloader's own GSAP timeline (~1.3s) was still mid-animation,
-    // both fighting for the main thread. That's the actual stutter, not
-    // a Lighthouse artifact. Arm the listeners only once the preloader
-    // has had time to finish, so the two never overlap.
-    const armTimer = window.setTimeout(() => {
-      if (cancelled) return
-      window.addEventListener('scroll', start, { once: true, passive: true })
-      window.addEventListener('pointermove', start, { once: true, passive: true })
-      window.addEventListener('touchstart', start, { once: true, passive: true })
-    }, 1450)
-    // Shortened from 4000ms - that was the worst-case wait for anyone who
-    // doesn't scroll or move the pointer in the first few seconds, and it
-    // read as a real delay before the cable ever appeared. Still fires
-    // safely after the preloader (~1.31s) and after listeners arm.
-    const fallback = window.setTimeout(start, 2200)
+    void runInit()
 
     async function runInit() {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -673,9 +640,6 @@ export function PowerCable() {
 
     return () => {
       cancelled = true
-      removeStartListeners()
-      window.clearTimeout(armTimer)
-      window.clearTimeout(fallback)
       cleanup?.()
     }
   }, [])
