@@ -77,8 +77,12 @@ export function PowerCable() {
       window.addEventListener('scroll', start, { once: true, passive: true })
       window.addEventListener('pointermove', start, { once: true, passive: true })
       window.addEventListener('touchstart', start, { once: true, passive: true })
-    }, 1700)
-    const fallback = window.setTimeout(start, 4000)
+    }, 1450)
+    // Shortened from 4000ms - that was the worst-case wait for anyone who
+    // doesn't scroll or move the pointer in the first few seconds, and it
+    // read as a real delay before the cable ever appeared. Still fires
+    // safely after the preloader (~1.31s) and after listeners arm.
+    const fallback = window.setTimeout(start, 2200)
 
     async function runInit() {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
