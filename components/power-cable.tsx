@@ -611,6 +611,11 @@ export function PowerCable() {
     }
 
     const onMove = (e: PointerEvent) => {
+      // Touch only ever fires pointermove while a finger is actively
+      // dragging (e.g. a scroll swipe) - there's no hover state like a
+      // mouse has. Reacting to it meant every touch-scroll yanked the
+      // cable toward the finger's path instead of a calm hover response.
+      if (e.pointerType === 'touch') return
       mouse.x = e.clientX
       mouse.y = e.clientY
       mouse.active = true
