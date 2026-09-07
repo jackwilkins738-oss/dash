@@ -38,19 +38,21 @@ export function PowerCable() {
     let cancelled = false
     let cleanup: (() => void) | undefined
 
-    // The scene setup below (renderer, PMREM environment bake, first tube
-    // build) is a genuinely heavy synchronous ~950ms block. requestIdleCallback
-    // alone doesn't help here - the page is idle almost immediately after
-    // paint, so it just fires early and the single long task still lands
-    // inside the interactivity-measurement window regardless of which
-    // chunk it's in. A real fixed delay is what actually keeps it out of
-    // that window - harmless for a decorative background element nothing
-    // else depends on.
-    const handle = window.setTimeout(() => {
-      if (!cancelled) runInit()
-    }, 2200)
+    // Measured on the live deploy: this setup is genuinely ~1.3s of
+    // synchronous work (largely WebGL shader compilation + the PMREM
+    // environment bake), and it turns out delaying WHEN a monolithic task
+    // runs does NOT exempt it from Lighthouse's Total Blocking Time window
+    // - TBT sums every task over 50ms across the whole trace, regardless
+    // of timestamp. The only thing that actually reduces TBT is cutting
+    // the single long task into several smaller ones with real yields
+    // (a frame each) in between, so the browser can breathe between them.
+    const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
-    function runInit() {
+    const handle = window.setTimeout(() => {
+      if (!cancelled) void runInit()
+    }, 300)
+
+    async function runInit() {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     // Fresh layout every visit - fixed seeds get memorised and stop reading
     // as "electric," they start reading as "the same decoration."
@@ -80,6 +82,17 @@ export function PowerCable() {
     renderer.toneMappingExposure = 1.2
     mount.appendChild(renderer.domElement)
 
+    // If unmounted mid-init (fast route change right after landing), at
+    // minimum tear down the WebGL context and its canvas - that's the
+    // scarce resource (browsers cap concurrent contexts); a few textures
+    // or materials never wired up are comparatively harmless.
+    const bailIfCancelled = () => {
+      if (!cancelled) return false
+      renderer.dispose()
+      if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement)
+      return true
+    }
+
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-vw / 2, vw / 2, vh / 2, -vh / 2, -1000, 1000)
     camera.position.z = 500
@@ -108,6 +121,10 @@ export function PowerCable() {
     const travelLight2 = new THREE.PointLight(0x7fc4ff, 0, 200, 2)
     scene.add(travelLight2)
 
+    if (bailIfCancelled()) return
+    await nextFrame()
+    if (bailIfCancelled()) return
+
     // Procedural fine-grain bump texture for the jacket surface - soft
     // blurred blobs rather than raw per-pixel noise, which reads as TV
     // static once magnified rather than a rubber weave.
@@ -133,6 +150,9 @@ export function PowerCable() {
     // texture needs an explicit repeat or it stretches into invisibility.
     grainTex.repeat.set(3, 22)
 
+    await nextFrame()
+    if (bailIfCancelled()) return
+
     // A simple procedural "room" the clearcoat can actually reflect -
     // without this, glossy/clearcoat properties have nothing to show and
     // the jacket reads flat no matter how it's lit directly.
@@ -153,6 +173,9 @@ export function PowerCable() {
     pmrem.dispose()
     envGeo.dispose()
     envMatTop.dispose()
+
+    await nextFrame()
+    if (bailIfCancelled()) return
 
     const jacketMat = new THREE.MeshPhysicalMaterial({
       color: 0x1a1c22,
@@ -566,6 +589,9 @@ export function PowerCable() {
     const onLeave = () => {
       mouse.active = false
     }
+
+    await nextFrame()
+    if (bailIfCancelled()) return
 
     measure()
     draw()
