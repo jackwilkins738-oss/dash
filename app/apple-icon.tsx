@@ -20,7 +20,11 @@ export default function AppleIcon() {
           background: 'linear-gradient(155deg, #4d84c4, #1f3a5c)',
         }}
       >
-        <div style={{ color: 'white', fontSize: 84, fontWeight: 800, letterSpacing: -2 }}>SD</div>
+        <div style={{ display: 'flex', alignItems: 'center', color: 'white', fontSize: 84, fontWeight: 800 }}>
+          <span>S</span>
+          <span style={{ color: '#8fc4ee', margin: '0 2px' }}>·</span>
+          <span>D</span>
+        </div>
       </div>
     ),
     { ...size }
