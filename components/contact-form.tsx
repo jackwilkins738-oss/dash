@@ -17,7 +17,7 @@ const TRADES = [
   'Other',
 ]
 
-const BUDGETS = ['£2,500 – £4,000', '£4,000 – £6,000', '£6,000 – £8,000', 'Not sure yet']
+const BUDGETS = ['£750 – £1,500', '£1,500 – £2,500', '£2,500 – £4,000', '£4,000+', 'Not sure yet']
 
 const fieldClass =
   'w-full rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none transition-colors focus:border-blueprint focus:ring-1 focus:ring-blueprint'

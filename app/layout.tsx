@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://www.scalardigital.co.uk'),
   title: 'Scalar Digital — Pure-code websites for high-end UK trades',
   description:
-    'We build fast, hand-coded websites for driveways, landscaping, loft conversions, extensions and roofing firms. No WordPress bloat. Full ownership. From £2,500.',
+    'We build fast, hand-coded websites for driveways, landscaping, loft conversions, extensions and roofing firms. No WordPress bloat. Full ownership. From £750.',
   keywords: [
     'web design for tradesmen',
     'driveway website design',
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Scalar Digital — Pure-code websites for high-end UK trades',
     description:
-      'Websites that look more expensive than the jobs you quote. Fast, hand-coded, fully owned. From £2,500.',
+      'Websites that look more expensive than the jobs you quote. Fast, hand-coded, fully owned. From £750.',
     type: 'website',
     url: '/',
     siteName: 'Scalar Digital',
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Scalar Digital — Pure-code websites for high-end UK trades',
-    description: 'Websites that look more expensive than the jobs you quote. From £2,500.',
+    description: 'Websites that look more expensive than the jobs you quote. From £750.',
   },
 }
 
@@ -69,7 +69,7 @@ const jsonLd = {
   email: 'hello@scalardigital.co.uk',
   telephone: '+447000000000',
   areaServed: 'GB',
-  priceRange: '£2,500+',
+  priceRange: '£750+',
   address: { '@type': 'PostalAddress', addressCountry: 'GB' },
 }
 

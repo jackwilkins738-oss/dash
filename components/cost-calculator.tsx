@@ -5,8 +5,13 @@ import { useMemo, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 
-const BASE_PRICE = 2500
-const BASE_PAGES = 5
+const TIERS = {
+  landing: { label: 'Landing page', price: 750, pages: 1 },
+  build: { label: 'Full build', price: 2500, pages: 5 },
+} as const
+
+type TierKey = keyof typeof TIERS
+
 const PRICE_PER_EXTRA_PAGE = 150
 const PRICE_PER_SERVICE_AREA = 120
 
@@ -21,6 +26,7 @@ type FeatureKey = (typeof FEATURES)[number]['key']
 const gbp = (n: number) => `£${n.toLocaleString('en-GB')}`
 
 export function CostCalculator() {
+  const [tier, setTier] = useState<TierKey>('build')
   const [extraPages, setExtraPages] = useState(0)
   const [serviceAreas, setServiceAreas] = useState(0)
   const [features, setFeatures] = useState<Record<FeatureKey, boolean>>({
@@ -29,15 +35,18 @@ export function CostCalculator() {
     blog: false,
   })
 
+  const basePrice = TIERS[tier].price
+  const basePages = TIERS[tier].pages
+
   const total = useMemo(() => {
-    let sum = BASE_PRICE
+    let sum = basePrice
     sum += extraPages * PRICE_PER_EXTRA_PAGE
     sum += serviceAreas * PRICE_PER_SERVICE_AREA
     FEATURES.forEach((f) => {
       if (features[f.key]) sum += f.price
     })
     return sum
-  }, [extraPages, serviceAreas, features])
+  }, [basePrice, extraPages, serviceAreas, features])
 
   const contactHref = `/contact?budget=${encodeURIComponent(nearestBand(total))}&estimate=${total}`
 
@@ -50,15 +59,43 @@ export function CostCalculator() {
             What would your site actually cost?
           </h2>
           <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
-            A rough guide, not a quote — the real number is agreed and fixed before a line of code is written. Every
-            build starts from {gbp(BASE_PRICE)} for {BASE_PAGES} hand-coded pages.
+            A rough guide, not a quote — the real number is agreed and fixed before a line of code is written.
           </p>
         </Reveal>
 
         <div className="mt-12 grid gap-8 lg:grid-cols-[1.2fr_1fr] lg:gap-12">
           <Reveal className="space-y-8">
+            <div>
+              <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                Starting point
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {(Object.keys(TIERS) as TierKey[]).map((key) => {
+                  const t = TIERS[key]
+                  const active = tier === key
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setTier(key)}
+                      className={`rounded-lg border px-4 py-3.5 text-left transition-colors ${
+                        active
+                          ? 'border-blueprint bg-blueprint/[0.08]'
+                          : 'border-border bg-card/40 hover:border-blueprint/40'
+                      }`}
+                    >
+                      <div className="text-sm font-medium text-foreground">{t.label}</div>
+                      <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+                        {gbp(t.price)} · {t.pages} page{t.pages > 1 ? 's' : ''}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             <Stepper
-              label="Extra pages beyond the first 5"
+              label={`Extra pages beyond the first ${basePages}`}
               hint={`${gbp(PRICE_PER_EXTRA_PAGE)} each`}
               value={extraPages}
               onChange={setExtraPages}
@@ -111,7 +148,7 @@ export function CostCalculator() {
               </p>
               <div className="my-6 h-px w-full bg-border" />
               <dl className="space-y-2 text-sm">
-                <Row label={`${BASE_PAGES} pages, hand-coded`} value={gbp(BASE_PRICE)} />
+                <Row label={`${TIERS[tier].label} — ${basePages} page${basePages > 1 ? 's' : ''}`} value={gbp(basePrice)} />
                 {extraPages > 0 && (
                   <Row label={`${extraPages} extra page${extraPages > 1 ? 's' : ''}`} value={`+${gbp(extraPages * PRICE_PER_EXTRA_PAGE)}`} />
                 )}
@@ -141,10 +178,10 @@ export function CostCalculator() {
 }
 
 function nearestBand(total: number) {
+  if (total < 1500) return '£750 – £1,500'
+  if (total < 2500) return '£1,500 – £2,500'
   if (total < 4000) return '£2,500 – £4,000'
-  if (total < 6000) return '£4,000 – £6,000'
-  if (total < 8000) return '£6,000 – £8,000'
-  return 'Not sure yet'
+  return '£4,000+'
 }
 
 function Row({ label, value }: { label: string; value: string }) {

@@ -49,7 +49,7 @@ export default function OpengraphImage() {
           {[
             ['0.4s', 'Average load time'],
             ['100', 'Lighthouse target'],
-            ['£2,500', 'Fixed from'],
+            ['£750', 'Fixed from'],
           ].map(([value, label]) => (
             <div key={label} style={{ display: 'flex', flexDirection: 'column' }}>
               <div style={{ color: '#4d84c4', fontSize: 40, fontWeight: 800 }}>{value}</div>

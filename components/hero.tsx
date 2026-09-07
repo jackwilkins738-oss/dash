@@ -81,7 +81,7 @@ export function Hero() {
             {[
               { k: '0.4s', v: 'Average load time' },
               { k: '100', v: 'Lighthouse target' },
-              { k: '£2,500', v: 'Fixed from' },
+              { k: '£750', v: 'Fixed from' },
             ].map((s) => (
               <div key={s.v}>
                 <dt className="font-mono text-2xl font-bold text-blueprint sm:text-3xl">{s.k}</dt>
