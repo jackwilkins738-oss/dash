@@ -5,17 +5,17 @@ const SERVICES = [
   {
     icon: Zap,
     title: 'Genuinely fast',
-    body: 'Hand-coded and lightweight, so your site loads before a customer even thinks about hitting back. Speed wins the click and keeps Google happy.',
+    body: 'Hand-coded and lightweight, so your site loads before a customer even thinks about hitting back. Amazon found every extra 0.1 seconds of load time cost them 1% in sales — yours won’t have that problem.',
   },
   {
     icon: Smartphone,
     title: 'Mobile-first, always',
-    body: 'Most of your customers are on a phone in a driveway or a garden. Every site is built for that thumb first, then scaled up to desktop.',
+    body: 'Most of your customers are on a phone in a driveway or a garden. A site that isn’t built for that loses visitors 5 times faster than one that is — yours is built for the thumb first, not squeezed to fit it after.',
   },
   {
     icon: Feather,
     title: 'No WordPress bloat',
-    body: 'No themes, no 30 plugins, no security holes. Just clean code that does one job: turn visitors into enquiries. Nothing to slow it down or break.',
+    body: 'No themes, no 30 plugins, no security holes. 9 in 10 hacked business websites run WordPress — almost always through a plugin, not WordPress itself. Yours has none to break in through.',
   },
   {
     icon: KeyRound,

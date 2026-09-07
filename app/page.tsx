@@ -6,7 +6,7 @@ import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 
 const SPECS = [
-  { k: 'Time to dead lead', v: 'Under 24 hours, unanswered' },
+  { k: 'Average business reply time', v: '42 hours' },
   { k: 'Time to reply here', v: 'Under 2 hours, every time' },
   { k: 'What that’s worth', v: 'The job that would’ve gone elsewhere' },
 ]
@@ -85,9 +85,9 @@ export default function HomePage() {
               Cut the wire and it&apos;s dead in seconds. Same with an enquiry.
             </h2>
             <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
-              A lead that sits unanswered for a day is a lead that&apos;s already gone cold. Every site I build gets
-              your enquiries to you the second they land — because the difference between a live wire and a dead one
-              is exactly how fast someone gets to it.
+              The average business takes 42 hours to reply to a website enquiry. Most customers don&apos;t wait that
+              long — 78% hire whichever company gets back to them first, not whoever&apos;s better. Every site I
+              build gets your enquiries to you the second they land, so that&apos;s never the job you lose.
             </p>
 
             <dl className="mx-auto mt-10 flex max-w-lg flex-col gap-4 border-t border-border pt-8 text-left">

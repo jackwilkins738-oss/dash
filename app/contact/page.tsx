@@ -40,7 +40,7 @@ export default function ContactPage() {
       <PageHeader
         eyebrow="Contact"
         title="Start your build."
-        body="Tell me about your trade and the jobs you want more of. I'll come back with a plan and a fixed price — usually within a couple of hours."
+        body="Tell me about your trade and the jobs you want more of. I'll come back with a plan and a fixed price — within 2 hours, not whenever I get around to it."
       />
 
       <section className="py-20 sm:py-24">

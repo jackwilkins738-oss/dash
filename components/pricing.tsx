@@ -18,7 +18,7 @@ const BUILD_INCLUDED = [
   'Mobile-first, sub-second load times',
   'Local SEO built into the site structure, not just a meta tag',
   'WhatsApp, call and enquiry form',
-  'Google Business & reviews wired in',
+  'Google Business & reviews wired in — listings with photos get 42% more direction requests',
   'You own the code and domain outright',
   '30 days of tweaks after launch',
 ]
