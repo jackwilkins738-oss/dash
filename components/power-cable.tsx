@@ -2,6 +2,9 @@
 
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 
 type Node = { baseX: number; x: number; y: number; vx: number }
 type Anchor = { x: number; y: number }
@@ -34,6 +37,9 @@ export function PowerCable() {
     if (!mount) return
 
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // Fresh layout every visit - fixed seeds get memorised and stop reading
+    // as "electric," they start reading as "the same decoration."
+    const sessionSeed = (Date.now() ^ Math.floor(Math.random() * 2147483647)) >>> 0
 
     let vw = window.innerWidth
     let vh = window.innerHeight
@@ -62,6 +68,13 @@ export function PowerCable() {
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-vw / 2, vw / 2, vh / 2, -vh / 2, -1000, 1000)
     camera.position.z = 500
+
+    // Real bloom, not a color trick - this is what makes a spark or a
+    // moving highlight actually look like it's emitting light.
+    const composer = new EffectComposer(renderer)
+    composer.addPass(new RenderPass(scene, camera))
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(vw, vh), 0.95, 0.55, 0.68)
+    composer.addPass(bloomPass)
 
     const toScene = (px: number, pyViewport: number, z = 0) =>
       new THREE.Vector3(px - vw / 2, -(pyViewport - vh / 2), z)
@@ -116,6 +129,14 @@ export function PowerCable() {
       emissive: 0x3a1f0a,
       emissiveIntensity: 0.4,
     })
+    const coreGlowMat = new THREE.MeshBasicMaterial({ color: 0x7fc4ff, transparent: true, opacity: 0.22 })
+    const copperGlowMat = new THREE.MeshStandardMaterial({
+      color: 0xd98a3d,
+      roughness: 0.3,
+      metalness: 0.65,
+      emissive: 0xff8a2a,
+      emissiveIntensity: 0.5,
+    })
 
     const runGroup = new THREE.Group()
     scene.add(runGroup)
@@ -141,19 +162,22 @@ export function PowerCable() {
         ? footer.getBoundingClientRect().top + window.scrollY
         : document.documentElement.scrollHeight
 
-      // Randomised zig-zag - variable leg length and edge jitter so no two
-      // bends read as the same shape, instead of a metronomic left-right.
-      const rand = mulberry32(0xc0ffee)
+      // Randomised zig-zag, reshuffled fresh each page load - variable leg
+      // length, heavy edge jitter, and the occasional repeated-side leg so
+      // the placement of every bend genuinely differs, not just its size.
+      const rand = mulberry32(sessionSeed)
       anchors = [{ x: startX, y: 0 }]
       let side: 1 | -1 = 1
       let y = 0
       const span = endX - startX
-      while (y < docHeight - LEG_HEIGHT * 0.4) {
-        y += LEG_HEIGHT * (0.62 + rand() * 0.85)
-        const edge = side === 1 ? endX : startX
-        const jitter = (rand() - 0.5) * span * 0.3
-        anchors.push({ x: Math.max(startX, Math.min(endX, edge - side * Math.abs(jitter))), y: Math.min(y, docHeight) })
-        side = side === 1 ? -1 : 1
+      while (y < docHeight - LEG_HEIGHT * 0.35) {
+        y += LEG_HEIGHT * (0.4 + rand() * 1.7)
+        const repeatSide = rand() < 0.16
+        const edge = (repeatSide ? side : side === 1 ? -1 : 1) === 1 ? endX : startX
+        const jitter = (rand() - 0.5) * span * 0.55
+        const x = Math.max(startX, Math.min(endX, edge + jitter))
+        anchors.push({ x, y: Math.min(y, docHeight) })
+        side = repeatSide ? side : side === 1 ? -1 : 1
       }
       anchors.push({ x: endX, y: docHeight })
       legCount = anchors.length - 1
@@ -194,6 +218,8 @@ export function PowerCable() {
       camera.bottom = -vh / 2
       camera.updateProjectionMatrix()
       renderer.setSize(vw, vh)
+      composer.setSize(vw, vh)
+      bloomPass.resolution.set(vw, vh)
     }
 
     const updateWirePulse = () => {
@@ -291,14 +317,55 @@ export function PowerCable() {
         runGroup.add(ring)
       }
 
-      // Emissive core glow inside the jacket
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: 0x7fc4ff,
-        transparent: true,
-        opacity: 0.22 + wirePulse * 0.16,
-      })
+      // Emissive core glow inside the jacket (shared material, mutated
+      // once per frame in draw() - never allocate a material per call)
       const glowGeo = new THREE.TubeGeometry(curve, segments, RADIUS * 0.45, 8, false)
-      runGroup.add(new THREE.Mesh(glowGeo, glowMat))
+      runGroup.add(new THREE.Mesh(glowGeo, coreGlowMat))
+    }
+
+    // A proper lightning bolt: fractal midpoint displacement for a jagged
+    // path, then built as real glowing geometry (a bright core tube inside
+    // a soft additive halo tube) so bloom picks it up - a THREE.Line is
+    // a 1px hairline on almost every GPU and will never read as a shock.
+    const boltCore = new THREE.MeshBasicMaterial({
+      color: 0xf3fbff,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    const boltHalo = new THREE.MeshBasicMaterial({
+      color: 0x6fc2ff,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    const buildBolt = (origin: THREE.Vector3, target: THREE.Vector3, strength: number) => {
+      let pts = [origin.clone(), target.clone()]
+      for (let iter = 0; iter < 4; iter++) {
+        const scale = (target.distanceTo(origin) || 20) * 0.22 * Math.pow(0.52, iter)
+        const next: THREE.Vector3[] = [pts[0]]
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p0 = pts[i]
+          const p1 = pts[i + 1]
+          const dir = p1.clone().sub(p0)
+          const len = dir.length() || 1
+          const perp = new THREE.Vector3(-dir.y, dir.x, 0).normalize()
+          const mid = p0
+            .clone()
+            .lerp(p1, 0.5)
+            .add(perp.multiplyScalar((Math.random() - 0.5) * 2 * scale))
+            .add(new THREE.Vector3(0, 0, (Math.random() - 0.5) * scale * 0.7))
+          next.push(mid, p1)
+        }
+        pts = next
+      }
+      if (pts.length < 2) return
+      const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.05)
+      const segs = Math.max(8, pts.length * 2)
+      boltCore.opacity = 0.75 + strength * 0.25
+      boltHalo.opacity = 0.3 + strength * 0.45
+      runGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, segs, 0.9 + strength * 0.5, 5, false), boltCore))
+      runGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, segs, 3.2 + strength * 2.2, 6, false), boltHalo))
     }
 
     const buildFrayed = (i: number, forward: 1 | -1, scrollY: number) => {
@@ -331,47 +398,40 @@ export function PowerCable() {
       const tangent = pb.clone().sub(pa).normalize()
       const front = base.clone().add(new THREE.Vector3(0, 0, RADIUS * 0.92))
 
-      // Diagonal cut across the jacket surface
-      const gash = new THREE.Mesh(new THREE.BoxGeometry(RADIUS * 1.5, 3.5, 2), tieMat)
+      // Diagonal cut across the jacket surface - bigger, unmissable
+      const gash = new THREE.Mesh(new THREE.BoxGeometry(RADIUS * 2.4, 5, 2.4), tieMat)
       gash.position.copy(front)
       const gashQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), tangent)
       gash.quaternion.copy(gashQuat)
       gash.rotateZ(Math.PI / 2.6)
       runGroup.add(gash)
 
-      // A sliver of exposed copper conductor in the wound
-      const copper = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, RADIUS * 1.1, 8), copperMat)
-      copper.position.copy(front).add(new THREE.Vector3(0, 0, 0.6))
+      // Exposed copper conductor in the wound - glows faintly even between
+      // discharges, so the damage still reads when it isn't actively arcing
+      copperGlowMat.emissiveIntensity = 0.5 + Math.max(0, Math.sin(t * 5 + i)) * 0.6
+      const copper = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, RADIUS * 1.6, 10), copperGlowMat)
+      copper.position.copy(front).add(new THREE.Vector3(0, 0, 0.8))
       copper.quaternion.copy(gashQuat)
       copper.rotateZ(Math.PI / 2.6)
       runGroup.add(copper)
 
-      // Irregular arcing - phase seeded per slash so they never fire in sync
-      const phase = (t * (1.4 + (i % 5) * 0.23) + i * 3.1) % 4
-      if (phase > 3.35) {
-        const flicker = (phase - 3.35) / 0.65
-        for (let s = 0; s < 3; s++) {
-          const ang = (i * 1.7 + s * 2.4 + t * 6) % (Math.PI * 2)
+      // Irregular arcing - phase seeded per slash so they never fire in
+      // sync, but frequent enough that scrolling past one, you'll see it.
+      const phase = (t * (1.1 + (i % 5) * 0.22) + i * 3.1) % 4
+      if (phase > 2.55) {
+        const burst = Math.min(1, (phase - 2.55) / 0.25)
+        const strength = burst < 1 ? burst : Math.max(0, 1 - (phase - 2.8) / 1.2)
+        const boltCount = 2 + (i % 3)
+        for (let s = 0; s < boltCount; s++) {
+          const ang = (i * 1.7 + s * 2.4) % (Math.PI * 2)
           const tilt = Math.sin(i + s) * 0.6
-          const len = 16 + flicker * 14
-          const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang) * 0.5 + tilt, 0.6 + Math.sin(ang * 2))
+          const len = 20 + strength * 22
+          const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang) * 0.5 + tilt, 0.5 + Math.sin(ang * 2) * 0.5)
             .normalize()
             .multiplyScalar(len)
-          const bolt = front.clone().add(dir)
-          const kink = new THREE.Vector3(Math.sin(t * 40 + s), Math.cos(t * 33 + s), 0)
-          const boltGeo = new THREE.BufferGeometry().setFromPoints([
-            front,
-            front.clone().lerp(bolt, 0.5).add(kink),
-            bolt,
-          ])
-          const boltMat = new THREE.LineBasicMaterial({
-            color: 0xcfe9ff,
-            transparent: true,
-            opacity: 0.35 + flicker * 0.65,
-          })
-          runGroup.add(new THREE.Line(boltGeo, boltMat))
+          buildBolt(front, front.clone().add(dir), strength)
         }
-        const flash = new THREE.PointLight(0x8fd0ff, flicker * 3.2, 160, 2)
+        const flash = new THREE.PointLight(0x8fd0ff, strength * 5.5, 220, 2)
         flash.position.copy(front)
         runGroup.add(flash)
       }
@@ -385,25 +445,13 @@ export function PowerCable() {
       buildFrayed(be + 1, -1, scrollY)
 
       const cycle = (t * 1.1 + bs) % 3
-      if (cycle > 2.5) {
-        const flicker = (cycle - 2.5) / 0.5
+      if (cycle > 1.7) {
+        const strength = Math.min(1, (cycle - 1.7) / 0.5)
         const p0 = toScene(a.x, a.y - scrollY, 4)
-        const mid = toScene(
-          (a.x + b.x) / 2 + Math.sin(t * 30) * 10,
-          (a.y + b.y) / 2 - scrollY + Math.cos(t * 26) * 4,
-          10,
-        )
         const p1 = toScene(b.x, b.y - scrollY, 4)
-        const sparkGeo = new THREE.BufferGeometry().setFromPoints([p0, mid, p1])
-        const sparkMat = new THREE.LineBasicMaterial({
-          color: 0xeaf4ff,
-          transparent: true,
-          opacity: 0.5 + flicker * 0.5,
-        })
-        runGroup.add(new THREE.Line(sparkGeo, sparkMat))
-
-        const flashLight = new THREE.PointLight(0x9fd6ff, flicker * 2.2, 140, 2)
-        flashLight.position.copy(mid)
+        buildBolt(p0, p1, strength)
+        const flashLight = new THREE.PointLight(0x9fd6ff, strength * 4.5, 200, 2)
+        flashLight.position.copy(p0.clone().lerp(p1, 0.5))
         runGroup.add(flashLight)
       }
     }
@@ -416,6 +464,7 @@ export function PowerCable() {
       updateWirePulse()
       simulate()
       clearRunGroup()
+      coreGlowMat.opacity = 0.22 + wirePulse * 0.16
 
       const scrollY = window.scrollY
       const lo = Math.max(0, Math.floor((scrollY - RENDER_BUFFER) / SPACING) - 2)
@@ -451,7 +500,7 @@ export function PowerCable() {
       lightAt(phase1, travelLight)
       lightAt(phase2, travelLight2)
 
-      renderer.render(scene, camera)
+      composer.render()
       if (!prefersReduced) t += 1 / 60
       raf = requestAnimationFrame(draw)
     }
@@ -503,7 +552,12 @@ export function PowerCable() {
       tracerMat.dispose()
       tieMat.dispose()
       copperMat.dispose()
+      coreGlowMat.dispose()
+      copperGlowMat.dispose()
+      boltCore.dispose()
+      boltHalo.dispose()
       grainTex.dispose()
+      composer.dispose()
       renderer.dispose()
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement)
     }
