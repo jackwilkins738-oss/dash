@@ -53,6 +53,13 @@ export function PowerCable() {
 
     async function runInit() {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // Phones are pushing the same bloom-postprocessed WebGL scene, rebuilt
+    // 30x/sec, on GPUs a fraction as capable as a desktop's - that's the
+    // sitewide "lag," not just the resize glitch. Coarse pointer is a more
+    // reliable signal than viewport width (a resized desktop window is
+    // still a desktop GPU), so drop resolution/geometry detail and rebuild
+    // less often there instead of paying full desktop quality everywhere.
+    const isMobile = window.matchMedia('(pointer: coarse)').matches
     // Fresh layout every visit - fixed seeds get memorised and stop reading
     // as "electric," they start reading as "the same decoration."
     const sessionSeed = (Date.now() ^ Math.floor(Math.random() * 2147483647)) >>> 0
@@ -73,12 +80,12 @@ export function PowerCable() {
     let visible = true
 
     // ---- renderer / scene ---------------------------------------------
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' })
+    const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, alpha: true, powerPreference: 'low-power' })
     renderer.setClearColor(0x000000, 0)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2))
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.2
-    mount.appendChild(renderer.domElement)
+    mount!.appendChild(renderer.domElement)
 
     // If unmounted mid-init (fast route change right after landing), at
     // minimum tear down the WebGL context and its canvas - that's the
@@ -87,7 +94,7 @@ export function PowerCable() {
     const bailIfCancelled = () => {
       if (!cancelled) return false
       renderer.dispose()
-      if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement)
+      if (renderer.domElement.parentElement === mount) mount!.removeChild(renderer.domElement)
       return true
     }
 
@@ -99,7 +106,11 @@ export function PowerCable() {
     // moving highlight actually look like it's emitting light.
     const composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(vw, vh), 0.95, 0.55, 0.68)
+    // UnrealBloomPass sizes its internal mip chain off this resolution -
+    // halving it on mobile is the single biggest lever on its GPU cost,
+    // and the blur already hides the drop in sharpness.
+    const bloomRes = isMobile ? new THREE.Vector2(vw / 2, vh / 2) : new THREE.Vector2(vw, vh)
+    const bloomPass = new UnrealBloomPass(bloomRes, 0.95, 0.55, 0.68)
     composer.addPass(bloomPass)
 
     const toScene = (px: number, pyViewport: number, z = 0) =>
@@ -284,7 +295,7 @@ export function PowerCable() {
       camera.updateProjectionMatrix()
       renderer.setSize(vw, vh)
       composer.setSize(vw, vh)
-      bloomPass.resolution.set(vw, vh)
+      bloomPass.resolution.set(isMobile ? vw / 2 : vw, isMobile ? vh / 2 : vh)
     }
 
     const updateWirePulse = () => {
@@ -340,17 +351,21 @@ export function PowerCable() {
         pts.push(toScene(n.x, n.y, z))
       }
       const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.15)
-      const segments = Math.max(4, (hi - lo) * 2)
+      // Rebuilt from scratch ~30x/sec (see draw()) - on mobile that's real
+      // vertex-generation and GC cost per rebuild, so both the longitudinal
+      // segment count and every tube's radial segment count get thinner.
+      const segments = Math.max(4, (hi - lo) * (isMobile ? 1 : 2))
+      const radial = (n: number) => (isMobile ? Math.max(5, Math.round(n * 0.6)) : n)
 
       // Contact shadow - darkens the page behind/below the cable so it
       // reads as sitting in front of something instead of floating on
       // nothing. Offset opposite the key light, drawn further from camera.
       const shadowPts = pts.map((p) => p.clone().add(new THREE.Vector3(6, -8, -18)))
       const shadowCurve = new THREE.CatmullRomCurve3(shadowPts, false, 'catmullrom', 0.15)
-      const shadowGeo = new THREE.TubeGeometry(shadowCurve, segments, RADIUS * 1.1, 8, false)
+      const shadowGeo = new THREE.TubeGeometry(shadowCurve, segments, RADIUS * 1.1, radial(8), false)
       runGroup.add(new THREE.Mesh(shadowGeo, shadowMat))
 
-      const geo = new THREE.TubeGeometry(curve, segments, RADIUS, 10, false)
+      const geo = new THREE.TubeGeometry(curve, segments, RADIUS, radial(10), false)
       const mesh = new THREE.Mesh(geo, jacketMat)
       runGroup.add(mesh)
 
@@ -367,25 +382,29 @@ export function PowerCable() {
         return p.clone().add(new THREE.Vector3(Math.cos(nrmAngle) * off, Math.sin(nrmAngle) * off, RADIUS * 0.6))
       })
       const tracerCurve = new THREE.CatmullRomCurve3(tracerPts, false, 'catmullrom', 0.15)
-      const tracerGeo = new THREE.TubeGeometry(tracerCurve, segments, 1.5, 6, false)
+      const tracerGeo = new THREE.TubeGeometry(tracerCurve, segments, 1.5, radial(6), false)
       runGroup.add(new THREE.Mesh(tracerGeo, tracerMat))
 
-      // Cable ties - small rings around the tube
-      for (let i = lo + 4; i < hi - 4; i += 9) {
-        const idx = i - lo
-        if (idx < 0 || idx >= pts.length) continue
-        const p = pts[idx]
-        const tangent = curve.getTangentAt(Math.min(0.999, Math.max(0.001, idx / (pts.length - 1))))
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(RADIUS * 1.15, 1.6, 8, 20), tieMat)
-        ring.position.copy(p)
-        const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent)
-        ring.setRotationFromQuaternion(quat)
-        runGroup.add(ring)
+      // Cable ties - small rings around the tube. Purely decorative detail
+      // that's easy to lose on a small screen, so skip building them on
+      // mobile entirely rather than just thinning them out.
+      if (!isMobile) {
+        for (let i = lo + 4; i < hi - 4; i += 9) {
+          const idx = i - lo
+          if (idx < 0 || idx >= pts.length) continue
+          const p = pts[idx]
+          const tangent = curve.getTangentAt(Math.min(0.999, Math.max(0.001, idx / (pts.length - 1))))
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(RADIUS * 1.15, 1.6, 8, 20), tieMat)
+          ring.position.copy(p)
+          const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent)
+          ring.setRotationFromQuaternion(quat)
+          runGroup.add(ring)
+        }
       }
 
       // Emissive core glow inside the jacket (shared material, mutated
       // once per frame in draw() - never allocate a material per call)
-      const glowGeo = new THREE.TubeGeometry(curve, segments, RADIUS * 0.45, 8, false)
+      const glowGeo = new THREE.TubeGeometry(curve, segments, RADIUS * 0.45, radial(8), false)
       runGroup.add(new THREE.Mesh(glowGeo, coreGlowMat))
     }
 
@@ -533,7 +552,7 @@ export function PowerCable() {
     // frame via a single cheap group transform, so scroll-tracking stays
     // smooth at 60fps regardless of how often the geometry itself rebuilds.
     let lastFrameTime = 0
-    const FRAME_INTERVAL = 1000 / 30
+    const FRAME_INTERVAL = 1000 / (isMobile ? 20 : 30)
 
     const draw = () => {
       raf = requestAnimationFrame(draw)
@@ -594,8 +613,18 @@ export function PowerCable() {
     measure()
     draw()
 
+    // Mobile browsers fire `resize` on their own scroll-driven address-bar
+    // show/hide - purely a viewport *height* change, dozens of times over
+    // the course of a scroll. Rerunning measure() on every one of those
+    // rebuilds the whole node/anchor array and touches the bloom pass's
+    // render targets, which is exactly the kind of work that shows up as
+    // visible stutter/glitching on a phone. Only a genuine width change
+    // (rotate, actual resize) warrants that; height-only churn is ignored.
     let resizeTimer = 0
+    let lastWidth = window.innerWidth
     const onResize = () => {
+      if (window.innerWidth === lastWidth) return
+      lastWidth = window.innerWidth
       window.clearTimeout(resizeTimer)
       resizeTimer = window.setTimeout(measure, 120)
     }
@@ -608,7 +637,7 @@ export function PowerCable() {
     const io = new IntersectionObserver(([entry]) => {
       visible = entry.isIntersecting
     })
-    io.observe(mount)
+    io.observe(mount!)
 
     const settleTimers = [200, 800, 1800].map((ms) => window.setTimeout(measure, ms))
 
@@ -634,7 +663,7 @@ export function PowerCable() {
       grainTex.dispose()
       composer.dispose()
       renderer.dispose()
-      if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement)
+      if (renderer.domElement.parentElement === mount) mount!.removeChild(renderer.domElement)
     }
     }
 
