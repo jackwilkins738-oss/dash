@@ -4,7 +4,7 @@ const BASE_URL = 'https://www.scalardigital.co.uk'
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const pages = ['', '/work', '/process', '/contact']
-  const entries = pages.map((path) => ({
+  const entries: MetadataRoute.Sitemap = pages.map((path) => ({
     url: `${BASE_URL}${path}`,
     lastModified: new Date(),
     changeFrequency: 'monthly' as const,

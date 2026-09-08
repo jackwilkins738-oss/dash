@@ -23,7 +23,10 @@ const nextConfig = {
               // product's tracking snippet used on this site itself.
               "script-src 'self' 'unsafe-inline' https://admin.scalardigital.co.uk",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
+              // Storage public URLs for the "currently on site" project
+              // photos (gallery.js) are served from this same Supabase
+              // project.
+              "img-src 'self' data: blob: https://wfyzsnyfliohevpjpuib.supabase.co",
               "font-src 'self' data:",
               // track.js posts page views straight to Supabase, and leads
               // through admin.scalardigital.co.uk/api/leads - both need to

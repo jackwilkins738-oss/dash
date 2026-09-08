@@ -55,7 +55,6 @@ export function Reveal({
   }, [stagger, delay])
 
   return (
-    // @ts-expect-error dynamic tag with ref
     <Tag ref={ref} className={cn(className)}>
       {children}
     </Tag>
