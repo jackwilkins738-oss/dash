@@ -60,6 +60,13 @@ export function PowerCable() {
     // still a desktop GPU), so drop resolution/geometry detail and rebuild
     // less often there instead of paying full desktop quality everywhere.
     const isMobile = window.matchMedia('(pointer: coarse)').matches
+    // Geometry only rebuilds (and the visible node range recomputes) at
+    // FRAME_INTERVAL below - 20fps on mobile vs 30fps on desktop, so
+    // there's ~1.5x longer between rebuilds for a fast touch-flick to
+    // outrun the buffered range before it catches up again. Wider buffer
+    // on mobile keeps segments from visibly popping in/out at the edges
+    // during a fast scroll, which read as part of the same "shakiness."
+    const renderBuffer = isMobile ? RENDER_BUFFER * 2 : RENDER_BUFFER
     // Fresh layout every visit - fixed seeds get memorised and stop reading
     // as "electric," they start reading as "the same decoration."
     const sessionSeed = (Date.now() ^ Math.floor(Math.random() * 2147483647)) >>> 0
@@ -314,8 +321,8 @@ export function PowerCable() {
     const simulate = () => {
       if (prefersReduced || nodes.length < 2) return
       const scrollY = window.scrollY
-      const lo = Math.max(0, Math.floor((scrollY - RENDER_BUFFER) / SPACING) - 2)
-      const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + RENDER_BUFFER) / SPACING) + 2)
+      const lo = Math.max(0, Math.floor((scrollY - renderBuffer) / SPACING) - 2)
+      const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + renderBuffer) / SPACING) + 2)
 
       nodes[0].x += (nodes[0].baseX - nodes[0].x) * 0.18
       for (let i = Math.max(1, lo); i <= hi; i++) {
@@ -558,7 +565,16 @@ export function PowerCable() {
       raf = requestAnimationFrame(draw)
       if (!visible) return
 
-      const scrollY = window.scrollY
+      // Mobile browsers rubber-band/overscroll at the top and bottom of
+      // the page - window.scrollY genuinely goes negative or past the max
+      // scrollable distance for the duration of that bounce. Applying that
+      // raw value directly to the whole group's position every frame made
+      // the entire wire visibly judder in sync with the bounce - that's
+      // the mobile-specific "shakiness", not a rendering-rate issue.
+      // Desktop wheel/trackpad scrolling doesn't overshoot this way, so
+      // clamping is a no-op there.
+      const maxScroll = Math.max(0, docHeight - vh)
+      const scrollY = Math.max(0, Math.min(window.scrollY, maxScroll))
       runGroup.position.y = scrollY
 
       const now = performance.now()
@@ -569,8 +585,8 @@ export function PowerCable() {
         clearRunGroup()
         coreGlowMat.opacity = 0.22 + wirePulse * 0.16
 
-        const lo = Math.max(0, Math.floor((scrollY - RENDER_BUFFER) / SPACING) - 2)
-        const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + RENDER_BUFFER) / SPACING) + 2)
+        const lo = Math.max(0, Math.floor((scrollY - renderBuffer) / SPACING) - 2)
+        const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + renderBuffer) / SPACING) + 2)
 
         for (const [lo2, hi2] of runsInRange(lo, hi)) buildTubeForRun(lo2, hi2)
         for (const [bs, be] of breaks) {
@@ -629,7 +645,14 @@ export function PowerCable() {
       resizeTimer = window.setTimeout(measure, 120)
     }
     window.addEventListener('resize', onResize)
-    window.addEventListener('scroll', updateWirePulse, { passive: true })
+    // Not also calling updateWirePulse from a scroll listener on purpose -
+    // it already runs every throttled draw() cycle below. Scroll events
+    // fire far more often than that during touch/momentum scrolling, and
+    // since the smoothing step (wirePulse += (proximity - wirePulse) *
+    // 0.06) compounds per call rather than per unit time, calling it from
+    // both meant the glow's convergence rate became scroll-frequency-
+    // dependent - fast on a mobile flick, slower on a mouse wheel tick.
+    // That rate inconsistency was part of what read as "shaky."
 
     const ro = new ResizeObserver(onResize)
     ro.observe(document.body)
@@ -646,7 +669,6 @@ export function PowerCable() {
       window.clearTimeout(resizeTimer)
       settleTimers.forEach(window.clearTimeout)
       window.removeEventListener('resize', onResize)
-      window.removeEventListener('scroll', updateWirePulse)
       ro.disconnect()
       io.disconnect()
       clearRunGroup()
