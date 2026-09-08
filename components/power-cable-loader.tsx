@@ -26,7 +26,22 @@ export function PowerCable() {
       cancelled = true
       removeListeners()
       window.clearTimeout(fallback)
-      setReady(true)
+      // Defer the actual mount - and the ~1.3s of synchronous WebGL/shader
+      // work that follows inside power-cable.tsx - to the next idle
+      // moment instead of firing it inside this handler directly. scroll
+      // is one of the trigger events, and starting that work synchronously
+      // mid-scroll competed with the very scroll frame the user was on
+      // for the main thread, which is what read as jumpiness rather than
+      // just lateness. requestIdleCallback (short timeout fallback for
+      // Safari, which doesn't implement it) lets the current frame paint
+      // and the gesture settle first.
+      const mount = () => setReady(true)
+      const idle = typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback : null
+      if (idle) {
+        idle(mount, { timeout: 300 })
+      } else {
+        window.setTimeout(mount, 50)
+      }
     }
     // A pointermove can fire within the first frame in real browsers (the
     // cursor is often already resting over the page) - arming these
