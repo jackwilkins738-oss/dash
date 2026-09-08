@@ -87,6 +87,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en-GB" className={`${bricolage.variable} ${instrumentSans.variable} ${plexMono.variable}`}>
+      <head>
+        {/* Both are talked to on every page load (track.js itself, then
+            its own pageview/lead calls to Supabase) - preconnecting gets
+            the DNS+TLS handshake done ahead of when those requests
+            actually fire, instead of paying that latency inline. */}
+        <link rel="preconnect" href="https://admin.scalardigital.co.uk" />
+        <link rel="preconnect" href="https://wfyzsnyfliohevpjpuib.supabase.co" />
+      </head>
       <body className="antialiased font-sans">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <Preloader />
