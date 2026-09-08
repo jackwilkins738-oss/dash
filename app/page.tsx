@@ -6,6 +6,8 @@ import { ExampleBuild } from '@/components/example-build'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { JumpStat } from '@/components/jump-stat'
+import { TradesGrid } from '@/components/trades-grid'
+import { Comparison } from '@/components/comparison'
 
 const PRINCIPLES = [
   {
@@ -31,6 +33,7 @@ export default function HomePage() {
       <PowerCable />
       <Hero />
       <TrustMarquee />
+      <TradesGrid />
 
       <section className="py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
@@ -113,6 +116,7 @@ export default function HomePage() {
           </Reveal>
         </div>
       </section>
+      <Comparison />
       <Transformation />
       <ExampleBuild />
       <CtaBand />
