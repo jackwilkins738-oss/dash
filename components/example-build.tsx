@@ -55,6 +55,25 @@ const EXAMPLES: Example[] = [
     ctaBg: '#2fbf71',
     ctaColor: '#06170d',
   },
+  {
+    slug: 'aldermere',
+    label: 'aldermere — house extensions, Oxfordshire',
+    url: 'https://aldermere.pages.dev/',
+    eyebrow: 'Bespoke Extensions — Oxfordshire & the Cotswolds',
+    headline: (
+      <>
+        Where the house
+        <br />
+        <span style={{ color: '#e3ab95', fontStyle: 'italic' }}>should have always ended.</span>
+      </>
+    ),
+    cta: 'Request a Consultation →',
+    bg: 'radial-gradient(120% 90% at 85% 15%, rgba(201,138,114,0.18), transparent 60%), #170b12',
+    eyebrowColor: '#e3ab95',
+    headlineColor: '#f3ece2',
+    ctaBg: '#c98a72',
+    ctaColor: '#170b12',
+  },
 ]
 
 export function ExampleBuild() {
@@ -67,13 +86,13 @@ export function ExampleBuild() {
             Not mockups. Real, working sites.
           </h2>
           <p className="mt-5 max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-            Two full loft-conversion company builds — same trade, same lead-capture flow underneath, two entirely
-            different designs. That's deliberate: every build starts from a blank page, not a theme, so no two
-            client sites end up looking related.
+            Three full trade-business builds — the same lead-capture flow underneath each one, three entirely
+            different designs and price points. That&apos;s deliberate: every build starts from a blank page, not
+            a theme, so no two client sites end up looking related.
           </p>
         </Reveal>
 
-        <div className="mt-12 grid gap-8 sm:grid-cols-2">
+        <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {EXAMPLES.map((ex, i) => (
             <Reveal key={ex.slug} delay={i * 0.1}>
               <a
