@@ -45,15 +45,15 @@ const EXAMPLES: Example[] = [
       <>
         Your loft has been
         <br />
-        <span style={{ color: '#1f6f7a' }}>wasted long enough.</span>
+        <span style={{ color: '#1c7a48' }}>wasted long enough.</span>
       </>
     ),
     cta: 'Get a price range →',
-    bg: 'radial-gradient(120% 90% at 20% 15%, rgba(31,111,122,0.14), transparent 60%), #eef1ef',
-    eyebrowColor: '#1f6f7a',
-    headlineColor: '#132420',
-    ctaBg: '#1f6f7a',
-    ctaColor: '#ffffff',
+    bg: 'linear-gradient(#d7ded9 1px, transparent 1px) 0 0/20px 20px, linear-gradient(90deg, #d7ded9 1px, transparent 1px) 0 0/20px 20px, #f4f6f5',
+    eyebrowColor: '#1c7a48',
+    headlineColor: '#0d1310',
+    ctaBg: '#2fbf71',
+    ctaColor: '#06170d',
   },
 ]
 
