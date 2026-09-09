@@ -1,7 +1,34 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import * as THREE from 'three'
+import {
+  ACESFilmicToneMapping,
+  AdditiveBlending,
+  BackSide,
+  BoxGeometry,
+  CanvasTexture,
+  CatmullRomCurve3,
+  CylinderGeometry,
+  DirectionalLight,
+  Group,
+  HemisphereLight,
+  Mesh,
+  MeshBasicMaterial,
+  MeshPhysicalMaterial,
+  MeshStandardMaterial,
+  OrthographicCamera,
+  PMREMGenerator,
+  PointLight,
+  Quaternion,
+  RepeatWrapping,
+  Scene,
+  SphereGeometry,
+  TorusGeometry,
+  TubeGeometry,
+  Vector2,
+  Vector3,
+  WebGLRenderer,
+} from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
@@ -87,10 +114,10 @@ export function PowerCable() {
     let visible = true
 
     // ---- renderer / scene ---------------------------------------------
-    const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, alpha: true, powerPreference: 'low-power' })
+    const renderer = new WebGLRenderer({ antialias: !isMobile, alpha: true, powerPreference: 'low-power' })
     renderer.setClearColor(0x000000, 0)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2))
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMapping = ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.2
     mount!.appendChild(renderer.domElement)
 
@@ -105,8 +132,8 @@ export function PowerCable() {
       return true
     }
 
-    const scene = new THREE.Scene()
-    const camera = new THREE.OrthographicCamera(-vw / 2, vw / 2, vh / 2, -vh / 2, -1000, 1000)
+    const scene = new Scene()
+    const camera = new OrthographicCamera(-vw / 2, vw / 2, vh / 2, -vh / 2, -1000, 1000)
     camera.position.z = 500
 
     // Real bloom, not a color trick - this is what makes a spark or a
@@ -116,25 +143,25 @@ export function PowerCable() {
     // UnrealBloomPass sizes its internal mip chain off this resolution -
     // halving it on mobile is the single biggest lever on its GPU cost,
     // and the blur already hides the drop in sharpness.
-    const bloomRes = isMobile ? new THREE.Vector2(vw / 2, vh / 2) : new THREE.Vector2(vw, vh)
+    const bloomRes = isMobile ? new Vector2(vw / 2, vh / 2) : new Vector2(vw, vh)
     const bloomPass = new UnrealBloomPass(bloomRes, 0.95, 0.55, 0.68)
     composer.addPass(bloomPass)
 
     const toScene = (px: number, pyViewport: number, z = 0) =>
-      new THREE.Vector3(px - vw / 2, -(pyViewport - vh / 2), z)
+      new Vector3(px - vw / 2, -(pyViewport - vh / 2), z)
 
-    const key = new THREE.DirectionalLight(0xe4edff, 4.2)
+    const key = new DirectionalLight(0xe4edff, 4.2)
     key.position.set(-120, 170, 260)
     scene.add(key)
-    const fill = new THREE.HemisphereLight(0x6c86a8, 0x030405, 0.55)
+    const fill = new HemisphereLight(0x6c86a8, 0x030405, 0.55)
     scene.add(fill)
-    const rim = new THREE.DirectionalLight(0x5fa8e8, 1.4)
+    const rim = new DirectionalLight(0x5fa8e8, 1.4)
     rim.position.set(160, -100, 140)
     scene.add(rim)
 
-    const travelLight = new THREE.PointLight(0x7fc4ff, 0, 260, 2)
+    const travelLight = new PointLight(0x7fc4ff, 0, 260, 2)
     scene.add(travelLight)
-    const travelLight2 = new THREE.PointLight(0x7fc4ff, 0, 200, 2)
+    const travelLight2 = new PointLight(0x7fc4ff, 0, 200, 2)
     scene.add(travelLight2)
 
     if (bailIfCancelled()) return
@@ -158,9 +185,9 @@ export function PowerCable() {
       nctx.arc(Math.random() * 128, Math.random() * 128, 0.6 + Math.random() * 1.8, 0, Math.PI * 2)
       nctx.fill()
     }
-    const grainTex = new THREE.CanvasTexture(noiseCanvas)
-    grainTex.wrapS = THREE.RepeatWrapping
-    grainTex.wrapT = THREE.RepeatWrapping
+    const grainTex = new CanvasTexture(noiseCanvas)
+    grainTex.wrapS = RepeatWrapping
+    grainTex.wrapT = RepeatWrapping
     // A TubeGeometry's V coordinate always spans 0-1 along its own length
     // regardless of how many world-units long that particular run is - the
     // texture needs an explicit repeat or it stretches into invisibility.
@@ -172,16 +199,16 @@ export function PowerCable() {
     // A simple procedural "room" the clearcoat can actually reflect -
     // without this, glossy/clearcoat properties have nothing to show and
     // the jacket reads flat no matter how it's lit directly.
-    const pmrem = new THREE.PMREMGenerator(renderer)
-    const envScene = new THREE.Scene()
-    const envGeo = new THREE.SphereGeometry(50, 16, 16)
-    const envMatTop = new THREE.MeshBasicMaterial({ color: 0x3a4a63, side: THREE.BackSide })
-    const envSphere = new THREE.Mesh(envGeo, envMatTop)
+    const pmrem = new PMREMGenerator(renderer)
+    const envScene = new Scene()
+    const envGeo = new SphereGeometry(50, 16, 16)
+    const envMatTop = new MeshBasicMaterial({ color: 0x3a4a63, side: BackSide })
+    const envSphere = new Mesh(envGeo, envMatTop)
     envScene.add(envSphere)
-    const envLight1 = new THREE.PointLight(0xbcd6ff, 6, 90)
+    const envLight1 = new PointLight(0xbcd6ff, 6, 90)
     envLight1.position.set(-20, 25, 10)
     envScene.add(envLight1)
-    const envLight2 = new THREE.PointLight(0x2a3550, 4, 90)
+    const envLight2 = new PointLight(0x2a3550, 4, 90)
     envLight2.position.set(15, -20, -10)
     envScene.add(envLight2)
     const envTarget = pmrem.fromScene(envScene, 0.06)
@@ -193,7 +220,7 @@ export function PowerCable() {
     await nextFrame()
     if (bailIfCancelled()) return
 
-    const jacketMat = new THREE.MeshPhysicalMaterial({
+    const jacketMat = new MeshPhysicalMaterial({
       color: 0x1a1c22,
       roughness: 0.38,
       metalness: 0.02,
@@ -203,18 +230,18 @@ export function PowerCable() {
       bumpMap: grainTex,
       bumpScale: 0.5,
     })
-    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false })
-    const tracerMat = new THREE.MeshStandardMaterial({ color: 0xc9a15a, roughness: 0.4, metalness: 0.3 })
-    const tieMat = new THREE.MeshStandardMaterial({ color: 0x2c3038, roughness: 0.45, metalness: 0.5 })
-    const copperMat = new THREE.MeshStandardMaterial({
+    const shadowMat = new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false })
+    const tracerMat = new MeshStandardMaterial({ color: 0xc9a15a, roughness: 0.4, metalness: 0.3 })
+    const tieMat = new MeshStandardMaterial({ color: 0x2c3038, roughness: 0.45, metalness: 0.5 })
+    const copperMat = new MeshStandardMaterial({
       color: 0xd98a3d,
       roughness: 0.35,
       metalness: 0.6,
       emissive: 0x3a1f0a,
       emissiveIntensity: 0.4,
     })
-    const coreGlowMat = new THREE.MeshBasicMaterial({ color: 0x7fc4ff, transparent: true, opacity: 0.22 })
-    const copperGlowMat = new THREE.MeshStandardMaterial({
+    const coreGlowMat = new MeshBasicMaterial({ color: 0x7fc4ff, transparent: true, opacity: 0.22 })
+    const copperGlowMat = new MeshStandardMaterial({
       color: 0xd98a3d,
       roughness: 0.3,
       metalness: 0.65,
@@ -222,12 +249,12 @@ export function PowerCable() {
       emissiveIntensity: 0.5,
     })
 
-    const runGroup = new THREE.Group()
+    const runGroup = new Group()
     scene.add(runGroup)
     const clearRunGroup = () => {
       for (const child of runGroup.children.slice()) {
         runGroup.remove(child)
-        const mesh = child as THREE.Mesh
+        const mesh = child as Mesh
         mesh.geometry?.dispose()
       }
     }
@@ -348,7 +375,7 @@ export function PowerCable() {
     }
 
     const buildTubeForRun = (lo: number, hi: number) => {
-      const pts: THREE.Vector3[] = []
+      const pts: Vector3[] = []
       for (let i = lo; i <= hi; i++) {
         const n = nodes[i]
         const z = Math.sin(i * 0.22) * 5
@@ -357,7 +384,7 @@ export function PowerCable() {
         // instead of being baked into every rebuilt vertex (see draw()).
         pts.push(toScene(n.x, n.y, z))
       }
-      const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.15)
+      const curve = new CatmullRomCurve3(pts, false, 'catmullrom', 0.15)
       // Rebuilt from scratch ~30x/sec (see draw()) - on mobile that's real
       // vertex-generation and GC cost per rebuild, so both the longitudinal
       // segment count and every tube's radial segment count get thinner.
@@ -367,13 +394,13 @@ export function PowerCable() {
       // Contact shadow - darkens the page behind/below the cable so it
       // reads as sitting in front of something instead of floating on
       // nothing. Offset opposite the key light, drawn further from camera.
-      const shadowPts = pts.map((p) => p.clone().add(new THREE.Vector3(6, -8, -18)))
-      const shadowCurve = new THREE.CatmullRomCurve3(shadowPts, false, 'catmullrom', 0.15)
-      const shadowGeo = new THREE.TubeGeometry(shadowCurve, segments, RADIUS * 1.1, radial(8), false)
-      runGroup.add(new THREE.Mesh(shadowGeo, shadowMat))
+      const shadowPts = pts.map((p) => p.clone().add(new Vector3(6, -8, -18)))
+      const shadowCurve = new CatmullRomCurve3(shadowPts, false, 'catmullrom', 0.15)
+      const shadowGeo = new TubeGeometry(shadowCurve, segments, RADIUS * 1.1, radial(8), false)
+      runGroup.add(new Mesh(shadowGeo, shadowMat))
 
-      const geo = new THREE.TubeGeometry(curve, segments, RADIUS, radial(10), false)
-      const mesh = new THREE.Mesh(geo, jacketMat)
+      const geo = new TubeGeometry(curve, segments, RADIUS, radial(10), false)
+      const mesh = new Mesh(geo, jacketMat)
       runGroup.add(mesh)
 
       // Helical brass tracer as a thin secondary tube offset from centre
@@ -386,11 +413,11 @@ export function PowerCable() {
           (nodes[Math.min(nodes.length - 1, i + 1)].x - nodes[Math.max(0, i - 1)].x),
           SPACING * 2,
         )
-        return p.clone().add(new THREE.Vector3(Math.cos(nrmAngle) * off, Math.sin(nrmAngle) * off, RADIUS * 0.6))
+        return p.clone().add(new Vector3(Math.cos(nrmAngle) * off, Math.sin(nrmAngle) * off, RADIUS * 0.6))
       })
-      const tracerCurve = new THREE.CatmullRomCurve3(tracerPts, false, 'catmullrom', 0.15)
-      const tracerGeo = new THREE.TubeGeometry(tracerCurve, segments, 1.5, radial(6), false)
-      runGroup.add(new THREE.Mesh(tracerGeo, tracerMat))
+      const tracerCurve = new CatmullRomCurve3(tracerPts, false, 'catmullrom', 0.15)
+      const tracerGeo = new TubeGeometry(tracerCurve, segments, 1.5, radial(6), false)
+      runGroup.add(new Mesh(tracerGeo, tracerMat))
 
       // Cable ties - small rings around the tube. Purely decorative detail
       // that's easy to lose on a small screen, so skip building them on
@@ -401,9 +428,9 @@ export function PowerCable() {
           if (idx < 0 || idx >= pts.length) continue
           const p = pts[idx]
           const tangent = curve.getTangentAt(Math.min(0.999, Math.max(0.001, idx / (pts.length - 1))))
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(RADIUS * 1.15, 1.6, 8, 20), tieMat)
+          const ring = new Mesh(new TorusGeometry(RADIUS * 1.15, 1.6, 8, 20), tieMat)
           ring.position.copy(p)
-          const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent)
+          const quat = new Quaternion().setFromUnitVectors(new Vector3(0, 0, 1), tangent)
           ring.setRotationFromQuaternion(quat)
           runGroup.add(ring)
         }
@@ -411,53 +438,53 @@ export function PowerCable() {
 
       // Emissive core glow inside the jacket (shared material, mutated
       // once per frame in draw() - never allocate a material per call)
-      const glowGeo = new THREE.TubeGeometry(curve, segments, RADIUS * 0.45, radial(8), false)
-      runGroup.add(new THREE.Mesh(glowGeo, coreGlowMat))
+      const glowGeo = new TubeGeometry(curve, segments, RADIUS * 0.45, radial(8), false)
+      runGroup.add(new Mesh(glowGeo, coreGlowMat))
     }
 
     // A proper lightning bolt: fractal midpoint displacement for a jagged
     // path, then built as real glowing geometry (a bright core tube inside
     // a soft additive halo tube) so bloom picks it up - a THREE.Line is
     // a 1px hairline on almost every GPU and will never read as a shock.
-    const boltCore = new THREE.MeshBasicMaterial({
+    const boltCore = new MeshBasicMaterial({
       color: 0xf3fbff,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: AdditiveBlending,
       depthWrite: false,
     })
-    const boltHalo = new THREE.MeshBasicMaterial({
+    const boltHalo = new MeshBasicMaterial({
       color: 0x6fc2ff,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: AdditiveBlending,
       depthWrite: false,
     })
-    const buildBolt = (origin: THREE.Vector3, target: THREE.Vector3, strength: number) => {
+    const buildBolt = (origin: Vector3, target: Vector3, strength: number) => {
       let pts = [origin.clone(), target.clone()]
       for (let iter = 0; iter < 4; iter++) {
         const scale = (target.distanceTo(origin) || 20) * 0.22 * Math.pow(0.52, iter)
-        const next: THREE.Vector3[] = [pts[0]]
+        const next: Vector3[] = [pts[0]]
         for (let i = 0; i < pts.length - 1; i++) {
           const p0 = pts[i]
           const p1 = pts[i + 1]
           const dir = p1.clone().sub(p0)
           const len = dir.length() || 1
-          const perp = new THREE.Vector3(-dir.y, dir.x, 0).normalize()
+          const perp = new Vector3(-dir.y, dir.x, 0).normalize()
           const mid = p0
             .clone()
             .lerp(p1, 0.5)
             .add(perp.multiplyScalar((Math.random() - 0.5) * 2 * scale))
-            .add(new THREE.Vector3(0, 0, (Math.random() - 0.5) * scale * 0.7))
+            .add(new Vector3(0, 0, (Math.random() - 0.5) * scale * 0.7))
           next.push(mid, p1)
         }
         pts = next
       }
       if (pts.length < 2) return
-      const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.05)
+      const curve = new CatmullRomCurve3(pts, false, 'catmullrom', 0.05)
       const segs = Math.max(8, pts.length * 2)
       boltCore.opacity = 0.75 + strength * 0.25
       boltHalo.opacity = 0.3 + strength * 0.45
-      runGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, segs, 0.9 + strength * 0.5, 5, false), boltCore))
-      runGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, segs, 3.2 + strength * 2.2, 6, false), boltHalo))
+      runGroup.add(new Mesh(new TubeGeometry(curve, segs, 0.9 + strength * 0.5, 5, false), boltCore))
+      runGroup.add(new Mesh(new TubeGeometry(curve, segs, 3.2 + strength * 2.2, 6, false), boltHalo))
     }
 
     const buildFrayed = (i: number, forward: 1 | -1) => {
@@ -467,12 +494,12 @@ export function PowerCable() {
       for (let s = 0; s < 5; s++) {
         const spread = (s / 4 - 0.5) * 1.4
         const len = 14 + Math.sin(t * 3 + s) * 4
-        const dir = new THREE.Vector3(Math.sin(spread), -forward * Math.cos(spread) * 0.4, Math.cos(spread) * 0.6)
+        const dir = new Vector3(Math.sin(spread), -forward * Math.cos(spread) * 0.4, Math.cos(spread) * 0.6)
           .normalize()
           .multiplyScalar(len)
-        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.15, len, 5), copperMat)
+        const cyl = new Mesh(new CylinderGeometry(0.6, 0.15, len, 5), copperMat)
         cyl.position.copy(base).add(dir.clone().multiplyScalar(0.5))
-        cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize())
+        cyl.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), dir.clone().normalize())
         runGroup.add(cyl)
       }
     }
@@ -488,12 +515,12 @@ export function PowerCable() {
       const pb = toScene(b.x, b.y, 0)
       const base = toScene(n.x, n.y, 0)
       const tangent = pb.clone().sub(pa).normalize()
-      const front = base.clone().add(new THREE.Vector3(0, 0, RADIUS * 0.92))
+      const front = base.clone().add(new Vector3(0, 0, RADIUS * 0.92))
 
       // Diagonal cut across the jacket surface - bigger, unmissable
-      const gash = new THREE.Mesh(new THREE.BoxGeometry(RADIUS * 2.4, 5, 2.4), tieMat)
+      const gash = new Mesh(new BoxGeometry(RADIUS * 2.4, 5, 2.4), tieMat)
       gash.position.copy(front)
-      const gashQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), tangent)
+      const gashQuat = new Quaternion().setFromUnitVectors(new Vector3(1, 0, 0), tangent)
       gash.quaternion.copy(gashQuat)
       gash.rotateZ(Math.PI / 2.6)
       runGroup.add(gash)
@@ -501,8 +528,8 @@ export function PowerCable() {
       // Exposed copper conductor in the wound - glows faintly even between
       // discharges, so the damage still reads when it isn't actively arcing
       copperGlowMat.emissiveIntensity = 0.5 + Math.max(0, Math.sin(t * 5 + i)) * 0.6
-      const copper = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, RADIUS * 1.6, 10), copperGlowMat)
-      copper.position.copy(front).add(new THREE.Vector3(0, 0, 0.8))
+      const copper = new Mesh(new CylinderGeometry(2, 2, RADIUS * 1.6, 10), copperGlowMat)
+      copper.position.copy(front).add(new Vector3(0, 0, 0.8))
       copper.quaternion.copy(gashQuat)
       copper.rotateZ(Math.PI / 2.6)
       runGroup.add(copper)
@@ -518,12 +545,12 @@ export function PowerCable() {
           const ang = (i * 1.7 + s * 2.4) % (Math.PI * 2)
           const tilt = Math.sin(i + s) * 0.6
           const len = 20 + strength * 22
-          const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang) * 0.5 + tilt, 0.5 + Math.sin(ang * 2) * 0.5)
+          const dir = new Vector3(Math.cos(ang), Math.sin(ang) * 0.5 + tilt, 0.5 + Math.sin(ang * 2) * 0.5)
             .normalize()
             .multiplyScalar(len)
           buildBolt(front, front.clone().add(dir), strength)
         }
-        const flash = new THREE.PointLight(0x8fd0ff, strength * 5.5, 220, 2)
+        const flash = new PointLight(0x8fd0ff, strength * 5.5, 220, 2)
         flash.position.copy(front)
         runGroup.add(flash)
       }
@@ -542,7 +569,7 @@ export function PowerCable() {
         const p0 = toScene(a.x, a.y, 4)
         const p1 = toScene(b.x, b.y, 4)
         buildBolt(p0, p1, strength)
-        const flashLight = new THREE.PointLight(0x9fd6ff, strength * 4.5, 200, 2)
+        const flashLight = new PointLight(0x9fd6ff, strength * 4.5, 200, 2)
         flashLight.position.copy(p0.clone().lerp(p1, 0.5))
         runGroup.add(flashLight)
       }
@@ -612,7 +639,7 @@ export function PowerCable() {
         const eased = u * u * (3 - 2 * u)
         return a.x + (b.x - a.x) * eased
       }
-      const lightAt = (docY: number, light: THREE.PointLight) => {
+      const lightAt = (docY: number, light: PointLight) => {
         light.position.copy(toScene(xAtY(docY), docY - scrollY, RADIUS + 4))
         light.intensity = prefersReduced ? 1 : 3.4 + wirePulse * 4.5
       }
