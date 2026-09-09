@@ -88,7 +88,30 @@ const EXAMPLES: Example[] = [
     ctaBg: '#c98a72',
     ctaColor: '#170b12',
     dotColors: ['#c98a72', '#935f4a', '#e3ab95'],
-    offset: 'lg:mt-24',
+    offset: 'lg:mt-0',
+  },
+  {
+    slug: 'forgeandslate',
+    label: 'forge & slate — kitchen fitting, Bristol',
+    url: 'https://forgeandslate.pages.dev/',
+    eyebrow: 'Bespoke Kitchen Fitting — Bristol & Bath',
+    headline: (
+      <>
+        Built around
+        <br />
+        <span style={{ color: '#e07f5c' }}>how you actually cook.</span>
+      </>
+    ),
+    cta: 'Book a Design Visit',
+    bg: 'radial-gradient(90% 70% at 80% 100%, rgba(193,80,47,0.16), transparent 55%), linear-gradient(135deg, transparent 60%, rgba(240,239,236,0.03) 60%, rgba(240,239,236,0.03) 62%, transparent 62%), #141312',
+    border: 'rgba(193,80,47,0.32)',
+    glow: 'rgba(193,80,47,0.35)',
+    eyebrowColor: '#e07f5c',
+    headlineColor: '#f0efec',
+    ctaBg: '#c1502f',
+    ctaColor: '#150907',
+    dotColors: ['#c1502f', '#9aa5a8', '#8a3820'],
+    offset: 'lg:mt-14',
   },
 ]
 
@@ -102,13 +125,13 @@ export function ExampleBuild() {
             Not mockups. Real, working sites.
           </h2>
           <p className="mt-5 max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-            Three full trade-business builds — the same lead-capture flow underneath each one, three entirely
-            different designs and price points. That&apos;s deliberate: every build starts from a blank page, not
-            a theme, so no two client sites end up looking related.
+            Four full trade-business builds — the same lead-capture flow underneath each one, four entirely
+            different trades, price points and designs. That&apos;s deliberate: every build starts from a blank
+            page, not a theme, so no two client sites end up looking related.
           </p>
         </Reveal>
 
-        <div className="mt-12 grid gap-7 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid gap-7 sm:grid-cols-2">
           {EXAMPLES.map((ex, i) => (
             <Reveal key={ex.slug} delay={i * 0.1} className={ex.offset}>
               <a
