@@ -44,7 +44,13 @@ const SECTIONS = [
         <p>
           When you submit the form, its contents are sent directly to Scalar Digital via Telegram, a messaging
           service used here purely as a private notification channel — not for marketing or any other purpose.
-          Enquiries aren&apos;t stored in a separate marketing database or CRM.
+        </p>
+        <p className="mt-3">
+          Your name, email, phone number and message are also saved as a lead inside Scalar Digital&apos;s own
+          dashboard product — the same tool built for trade-business clients — so your enquiry can be tracked and
+          followed up on properly. This is an internal business tool operated by Scalar Digital, not a
+          third-party marketing platform: nothing in it is sold, shared outside Scalar Digital, or used to
+          contact you for anything beyond replying to what you sent.
         </p>
         <p className="mt-3">
           The site is hosted on Vercel, which processes standard web request data (like your IP address) as part
@@ -57,11 +63,19 @@ const SECTIONS = [
     title: 'Analytics',
     body: (
       <>
-        This site uses Vercel Analytics, a privacy-focused analytics tool that doesn&apos;t use cookies and
-        doesn&apos;t track you individually across sites. It reports aggregated, anonymous information — which
-        pages get visited, roughly how fast they load — and a small number of anonymous events (such as &quot;a
-        contact form was submitted&quot; along with the trade and budget range selected, with no name or contact
-        details attached). None of this can be traced back to you as an individual.
+        <p>
+          This site uses Vercel Analytics, a privacy-focused analytics tool that doesn&apos;t use cookies and
+          doesn&apos;t track you individually across sites. It reports aggregated, anonymous information — which
+          pages get visited, roughly how fast they load — and a small number of anonymous events (such as &quot;a
+          contact form was submitted&quot; along with the trade and budget range selected, with no name or
+          contact details attached). None of this can be traced back to you as an individual.
+        </p>
+        <p className="mt-3">
+          Separately, Scalar Digital&apos;s own dashboard product (mentioned above) also logs which pages you
+          visit against this site specifically, so Scalar Digital can see how its own site performs — the same
+          traffic reporting every client of that product gets for their own site. This isn&apos;t shared with
+          any third party.
+        </p>
       </>
     ),
   },
