@@ -17,7 +17,7 @@ export function ExampleBuild() {
               nothing borrowed from a theme.
             </p>
             <a
-              href="https://main.tester-1.pages.dev/"
+              href="https://northlight-5rq.pages.dev/"
               target="_blank"
               rel="noopener noreferrer"
               className="group mt-8 inline-flex items-center gap-2 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-blueprint transition-colors hover:text-brass"
@@ -29,7 +29,7 @@ export function ExampleBuild() {
 
           <Reveal delay={0.1}>
             <a
-              href="https://main.tester-1.pages.dev/"
+              href="https://northlight-5rq.pages.dev/"
               target="_blank"
               rel="noopener noreferrer"
               className="group block overflow-hidden rounded-2xl border border-border transition-colors hover:border-blueprint/40"
