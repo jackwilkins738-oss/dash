@@ -193,7 +193,13 @@ export function Preloader() {
           <span className="text-blueprint">{String(count).padStart(3, '0')}</span>
         </div>
         <div className="mt-3 h-px w-60 max-w-[76vw] overflow-hidden bg-line">
-          <div className="h-full bg-blueprint transition-[width] duration-100" style={{ width: `${count}%` }} />
+          {/* scaleX (compositor-only) instead of width (forces layout every
+              tick, ~36 times over the 1s count-up) - same fill visually,
+              cheaper to animate. */}
+          <div
+            className="h-full w-full origin-left bg-blueprint transition-transform duration-100"
+            style={{ transform: `scaleX(${count / 100})` }}
+          />
         </div>
       </div>
     </div>

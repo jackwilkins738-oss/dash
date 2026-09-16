@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react'
 import {
   ACESFilmicToneMapping,
   AdditiveBlending,
-  BackSide,
   BoxGeometry,
   CanvasTexture,
   CatmullRomCurve3,
@@ -14,15 +13,12 @@ import {
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
-  MeshPhysicalMaterial,
   MeshStandardMaterial,
   OrthographicCamera,
-  PMREMGenerator,
   PointLight,
   Quaternion,
   RepeatWrapping,
   Scene,
-  SphereGeometry,
   TorusGeometry,
   TubeGeometry,
   Vector2,
@@ -64,9 +60,9 @@ export function PowerCable() {
     let cancelled = false
     let cleanup: (() => void) | undefined
 
-    // This setup is genuinely ~1.3s of synchronous work (largely WebGL
-    // shader compilation + the PMREM environment bake), phase-split
-    // across frames so it yields instead of blocking one long task (see
+    // This setup is genuinely a chunk of synchronous work (largely WebGL
+    // shader compilation), phase-split across frames so it yields instead
+    // of blocking one long task (see
     // the repeated `await nextFrame()` calls below). The interaction
     // gating that used to live here - waiting for scroll/pointer/touch,
     // or a timed fallback - has moved up to power-cable-loader.tsx,
@@ -196,37 +192,16 @@ export function PowerCable() {
     await nextFrame()
     if (bailIfCancelled()) return
 
-    // A simple procedural "room" the clearcoat can actually reflect -
-    // without this, glossy/clearcoat properties have nothing to show and
-    // the jacket reads flat no matter how it's lit directly.
-    const pmrem = new PMREMGenerator(renderer)
-    const envScene = new Scene()
-    const envGeo = new SphereGeometry(50, 16, 16)
-    const envMatTop = new MeshBasicMaterial({ color: 0x3a4a63, side: BackSide })
-    const envSphere = new Mesh(envGeo, envMatTop)
-    envScene.add(envSphere)
-    const envLight1 = new PointLight(0xbcd6ff, 6, 90)
-    envLight1.position.set(-20, 25, 10)
-    envScene.add(envLight1)
-    const envLight2 = new PointLight(0x2a3550, 4, 90)
-    envLight2.position.set(15, -20, -10)
-    envScene.add(envLight2)
-    const envTarget = pmrem.fromScene(envScene, 0.06)
-    scene.environment = envTarget.texture
-    pmrem.dispose()
-    envGeo.dispose()
-    envMatTop.dispose()
-
-    await nextFrame()
-    if (bailIfCancelled()) return
-
-    const jacketMat = new MeshPhysicalMaterial({
+    // Plain PBR roughness/metalness rather than MeshPhysicalMaterial's
+    // clearcoat - clearcoat needed an environment map to reflect (the
+    // PMREM bake that used to sit here) to read as glossy at all, and
+    // pulls in three.js's largest, mostly-unused shader-permutation code
+    // for a subtle sheen on a decorative background element. Low
+    // roughness alone still reads as a glossy jacket surface.
+    const jacketMat = new MeshStandardMaterial({
       color: 0x1a1c22,
-      roughness: 0.38,
-      metalness: 0.02,
-      clearcoat: 0.7,
-      clearcoatRoughness: 0.14,
-      envMapIntensity: 0.9,
+      roughness: 0.3,
+      metalness: 0.15,
       bumpMap: grainTex,
       bumpScale: 0.5,
     })
@@ -767,7 +742,6 @@ export function PowerCable() {
       copperMat.dispose()
       coreGlowMat.dispose()
       shadowMat.dispose()
-      envTarget.dispose()
       copperGlowMat.dispose()
       boltCore.dispose()
       boltHalo.dispose()
