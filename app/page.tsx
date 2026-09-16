@@ -3,6 +3,7 @@ import { TrustMarquee } from '@/components/trust-marquee'
 import { PowerCable } from '@/components/power-cable-loader'
 import { Transformation } from '@/components/transformation'
 import { ExampleBuild } from '@/components/example-build'
+import { CaseStudy } from '@/components/case-study'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { JumpStat } from '@/components/jump-stat'
@@ -119,6 +120,7 @@ export default function HomePage() {
       <Comparison />
       <Transformation />
       <ExampleBuild />
+      <CaseStudy />
       <CtaBand />
     </main>
   )
