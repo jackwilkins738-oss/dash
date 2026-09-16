@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--", "-p", "3005"],
       "port": 3005
+    },
+    {
+      "name": "scalar-digital-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--", "-p", "3006"],
+      "port": 3006
     }
   ]
 }

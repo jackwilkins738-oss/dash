@@ -605,26 +605,36 @@ export function PowerCable() {
       runGroup.position.y = scrollY
 
       const now = performance.now()
-      if (now - lastFrameTime >= FRAME_INTERVAL) {
-        lastFrameTime = now
-        updateWirePulse()
-        simulate()
-        clearRunGroup()
-        coreGlowMat.opacity = 0.22 + wirePulse * 0.16
+      if (now - lastFrameTime < FRAME_INTERVAL) return
+      // The actual GPU submission - composer.render(), with its bloom
+      // passes - is the expensive part of every tick, not the geometry
+      // rebuild it was already gated behind. Rendering every real frame
+      // (60fps) regardless kept paying that cost roughly twice as often
+      // as the visuals it was drawing actually changed, which is exactly
+      // the kind of continuous main-thread work that piles up into a bad
+      // Total Blocking Time score - not a one-off init cost but an
+      // ongoing one. Folding it into the same throttle as the rest of the
+      // tick (30fps desktop / 20fps mobile) halves that ongoing cost; the
+      // travelling spark is the only thing marginally less smooth for it.
+      const elapsed = now - lastFrameTime
+      lastFrameTime = now
+      updateWirePulse()
+      simulate()
+      clearRunGroup()
+      coreGlowMat.opacity = 0.22 + wirePulse * 0.16
 
-        const lo = Math.max(0, Math.floor((scrollY - renderBuffer) / SPACING) - 2)
-        const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + renderBuffer) / SPACING) + 2)
+      const lo = Math.max(0, Math.floor((scrollY - renderBuffer) / SPACING) - 2)
+      const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + renderBuffer) / SPACING) + 2)
 
-        for (const [lo2, hi2] of runsInRange(lo, hi)) buildTubeForRun(lo2, hi2)
-        for (const [bs, be] of breaks) {
-          if (be >= lo && bs <= hi) buildSparkGap(bs, be)
-        }
-        for (const si of slashes) {
-          if (si >= lo && si <= hi) buildSlash(si)
-        }
+      for (const [lo2, hi2] of runsInRange(lo, hi)) buildTubeForRun(lo2, hi2)
+      for (const [bs, be] of breaks) {
+        if (be >= lo && bs <= hi) buildSparkGap(bs, be)
+      }
+      for (const si of slashes) {
+        if (si >= lo && si <= hi) buildSlash(si)
       }
 
-      // Travelling current - every real frame (cheap, no geometry rebuild)
+      // Travelling current
       const speed = 1 + wirePulse * 1.2
       const totalLen = Math.max(1, docHeight)
       const phase1 = (t * 620 * speed) % totalLen
@@ -647,13 +657,65 @@ export function PowerCable() {
       lightAt(phase2, travelLight2)
 
       composer.render()
-      if (!prefersReduced) t += 1 / 60
+      // Advance by however long actually elapsed (capped so a stalled tab
+      // resuming after a long gap doesn't jump the animation forward) now
+      // that this tick isn't a fixed 1/60th of a second anymore.
+      if (!prefersReduced) t += Math.min(elapsed, FRAME_INTERVAL * 2) / 1000
     }
 
     await nextFrame()
     if (bailIfCancelled()) return
 
     measure()
+
+    // Shader compilation is a synchronous, per-program cost inside three.js
+    // that would otherwise land inside draw()'s first tick - and that tick
+    // runs the instant the user's own scroll/pointer gesture mounts this
+    // component (see power-cable-loader.tsx), i.e. exactly when a blocking
+    // frame is most visible as jank. Spreading it as thin as possible: one
+    // renderer.compile() (which precompiles without drawing anything, so
+    // it never touches the visible canvas) per run instead of one for the
+    // whole visible range, each on its own yielded frame.
+    const scrollY0 = window.scrollY
+    const lo0 = Math.max(0, Math.floor((scrollY0 - renderBuffer) / SPACING) - 2)
+    const hi0 = Math.min(nodes.length - 1, Math.ceil((scrollY0 + vh + renderBuffer) / SPACING) + 2)
+    // Match draw()'s own scroll-offset transform so the eventual warm-up
+    // render (see below) doesn't flash the cable at document position 0.
+    runGroup.position.y = scrollY0
+
+    for (const [lo2, hi2] of runsInRange(lo0, hi0)) {
+      buildTubeForRun(lo2, hi2)
+      renderer.compile(scene, camera)
+      await nextFrame()
+      if (bailIfCancelled()) return
+    }
+
+    // Arcs, slashes and frayed ends use their own materials but only ever
+    // appear later, on their own independent timers - without this they'd
+    // compile for the first time mid-scroll, as an unexplained hitch with
+    // no correlation to a resize or mount. One throwaway instance of each,
+    // compiled (not rendered) here, then discarded before the real range
+    // is rebuilt below.
+    if (nodes.length > 4) {
+      buildSlash(Math.min(2, nodes.length - 3))
+      buildFrayed(0, 1)
+      buildBolt(toScene(nodes[0].x, nodes[0].y, 0), toScene(nodes[1].x, nodes[1].y, 4), 1)
+      renderer.compile(scene, camera)
+      await nextFrame()
+      if (bailIfCancelled()) return
+    }
+    clearRunGroup()
+    for (const [lo2, hi2] of runsInRange(lo0, hi0)) buildTubeForRun(lo2, hi2)
+
+    // Bloom pass materials live outside the THREE.Scene graph (managed
+    // internally by UnrealBloomPass), so compile() can't reach them - only
+    // an actual render warms them. The one visible frame that produces is
+    // the same content draw()'s first real tick would show a moment later.
+    composer.render()
+
+    await nextFrame()
+    if (bailIfCancelled()) return
+
     draw()
 
     // Mobile browsers fire `resize` on their own scroll-driven address-bar

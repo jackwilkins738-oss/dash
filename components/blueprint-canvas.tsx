@@ -30,6 +30,12 @@ export function BlueprintCanvas() {
     const mouse = { x: -9999, y: -9999 }
     let raf = 0
     let running = true
+    // Desktop-only decoration that lives in the hero - once the visitor's
+    // scrolled a screen or two further down, it's still running a canvas
+    // redraw and a per-node spring simulation 60x/sec for something no
+    // longer on screen. That's pure ongoing main-thread cost with nothing
+    // to show for it.
+    let visible = true
 
     const build = () => {
       const parent = canvas.parentElement
@@ -56,6 +62,9 @@ export function BlueprintCanvas() {
     }
 
     const draw = () => {
+      raf = requestAnimationFrame(draw)
+      if (!visible) return
+
       ctx.clearRect(0, 0, width, height)
       const radius = 150
 
@@ -114,8 +123,6 @@ export function BlueprintCanvas() {
         ctx.arc(n.x, n.y, size, 0, Math.PI * 2)
         ctx.fill()
       }
-
-      raf = requestAnimationFrame(draw)
     }
 
     const onMove = (e: PointerEvent) => {
@@ -150,8 +157,14 @@ export function BlueprintCanvas() {
     }
     window.addEventListener('resize', onResize)
 
+    const io = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting
+    })
+    io.observe(canvas)
+
     return () => {
       cancelAnimationFrame(raf)
+      io.disconnect()
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerleave', onLeave)
       window.removeEventListener('resize', onResize)
