@@ -570,16 +570,20 @@ export function PowerCable() {
 
     // Rebuilding real TubeGeometry objects (jacket, glow, shadow, tracer,
     // ties) for the whole visible range is genuinely heavy CPU/GPU work,
-    // so that part is throttled to ~30fps. But baking the scroll offset
-    // directly into those rebuilt vertices meant the cable's on-screen
-    // position only updated 30 times a second too - visible as a shake/
-    // judder while scrolling, since scroll position itself changes every
-    // real frame. Fixed by separating the two: geometry is now built in
-    // document space (no scroll baked in) and repositioned every real
-    // frame via a single cheap group transform, so scroll-tracking stays
-    // smooth at 60fps regardless of how often the geometry itself rebuilds.
+    // so that part is throttled to ~30fps/20fps. Actually painting the
+    // canvas (composer.render()) is comparatively cheap per call - it's
+    // just re-submitting whatever geometry already exists - so it stays
+    // outside that throttle and runs every real frame. Folding it into
+    // the same throttle as the rebuild (an earlier attempt to trim Total
+    // Blocking Time) meant the canvas itself only ever repainted at
+    // 20-30fps - on a real phone's native, compositor-driven momentum
+    // scroll (which moves the rest of the page at well over that), the
+    // wire visibly lagged and snapped to catch up each repaint, reading
+    // as a fast side-to-side judder. Same root cause as the comment
+    // below already describes; this is that fix, second time.
     let lastFrameTime = 0
     const FRAME_INTERVAL = 1000 / (isMobile ? 20 : 30)
+    let lastRenderTime = 0
 
     const draw = () => {
       raf = requestAnimationFrame(draw)
@@ -598,36 +602,29 @@ export function PowerCable() {
       runGroup.position.y = scrollY
 
       const now = performance.now()
-      if (now - lastFrameTime < FRAME_INTERVAL) return
-      // The actual GPU submission - composer.render(), with its bloom
-      // passes - is the expensive part of every tick, not the geometry
-      // rebuild it was already gated behind. Rendering every real frame
-      // (60fps) regardless kept paying that cost roughly twice as often
-      // as the visuals it was drawing actually changed, which is exactly
-      // the kind of continuous main-thread work that piles up into a bad
-      // Total Blocking Time score - not a one-off init cost but an
-      // ongoing one. Folding it into the same throttle as the rest of the
-      // tick (30fps desktop / 20fps mobile) halves that ongoing cost; the
-      // travelling spark is the only thing marginally less smooth for it.
-      const elapsed = now - lastFrameTime
-      lastFrameTime = now
-      updateWirePulse()
-      simulate()
-      clearRunGroup()
-      coreGlowMat.opacity = 0.22 + wirePulse * 0.16
+      if (now - lastFrameTime >= FRAME_INTERVAL) {
+        lastFrameTime = now
+        updateWirePulse()
+        simulate()
+        clearRunGroup()
+        coreGlowMat.opacity = 0.22 + wirePulse * 0.16
 
-      const lo = Math.max(0, Math.floor((scrollY - renderBuffer) / SPACING) - 2)
-      const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + renderBuffer) / SPACING) + 2)
+        const lo = Math.max(0, Math.floor((scrollY - renderBuffer) / SPACING) - 2)
+        const hi = Math.min(nodes.length - 1, Math.ceil((scrollY + vh + renderBuffer) / SPACING) + 2)
 
-      for (const [lo2, hi2] of runsInRange(lo, hi)) buildTubeForRun(lo2, hi2)
-      for (const [bs, be] of breaks) {
-        if (be >= lo && bs <= hi) buildSparkGap(bs, be)
-      }
-      for (const si of slashes) {
-        if (si >= lo && si <= hi) buildSlash(si)
+        for (const [lo2, hi2] of runsInRange(lo, hi)) buildTubeForRun(lo2, hi2)
+        for (const [bs, be] of breaks) {
+          if (be >= lo && bs <= hi) buildSparkGap(bs, be)
+        }
+        for (const si of slashes) {
+          if (si >= lo && si <= hi) buildSlash(si)
+        }
       }
 
-      // Travelling current
+      const elapsed = lastRenderTime ? now - lastRenderTime : 1000 / 60
+      lastRenderTime = now
+
+      // Travelling current - every real frame (cheap, no geometry rebuild)
       const speed = 1 + wirePulse * 1.2
       const totalLen = Math.max(1, docHeight)
       const phase1 = (t * 620 * speed) % totalLen
