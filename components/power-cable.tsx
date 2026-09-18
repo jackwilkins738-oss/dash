@@ -320,6 +320,17 @@ export function PowerCable() {
       wirePulse += (proximity - wirePulse) * 0.06
     }
 
+    // Nodes outside the visible+buffered range aren't simulated at all -
+    // cheap, but their vx is left exactly as it was the last time they
+    // were in range. A fast scroll (or flick, on mobile) can shift that
+    // range far enough that a node re-enters carrying a stale, possibly
+    // large velocity from long ago, which then kicks the spring hard for
+    // a frame or two - that sudden snap is the fast side-to-side judder.
+    // Tracking the previous range and zeroing vx for anything newly
+    // entering it removes the stale kick without affecting nodes that
+    // were already being simulated continuously.
+    let simLo = 0
+    let simHi = -1
     const simulate = () => {
       if (prefersReduced || nodes.length < 2) return
       const scrollY = window.scrollY
@@ -329,10 +340,17 @@ export function PowerCable() {
       nodes[0].x += (nodes[0].baseX - nodes[0].x) * 0.18
       for (let i = Math.max(1, lo); i <= hi; i++) {
         const n = nodes[i]
+        if (i < simLo || i > simHi) {
+          n.x = n.baseX
+          n.vx = 0
+          continue
+        }
         n.vx += (n.baseX - n.x) * 0.08
         n.vx *= 0.85
         n.x += n.vx
       }
+      simLo = lo
+      simHi = hi
       const last = nodes[nodes.length - 1]
       last.x += (last.baseX - last.x) * 0.18
     }
