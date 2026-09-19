@@ -144,7 +144,7 @@ export function CostCalculator() {
                 <span className="text-5xl font-bold tracking-tight">{gbp(total)}</span>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                One-off. No monthly rental, no hidden extras once we agree the number.
+                One-off. No monthly rental on your site, no hidden extras once we agree the number.
               </p>
               <div className="my-6 h-px w-full bg-border" />
               <dl className="space-y-2 text-sm">

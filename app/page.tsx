@@ -24,7 +24,7 @@ const PRINCIPLES = [
   {
     n: '03',
     title: 'Owned outright, forever',
-    body: 'You pay once. The code, the domain, the lot — it belongs to you. No monthly rental, no being held hostage when you want a change.',
+    body: 'You pay once. The code, the domain, the lot — it belongs to you. No monthly rental on your website, no being held hostage when you want a change.',
   },
 ]
 

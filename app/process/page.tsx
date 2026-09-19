@@ -35,7 +35,7 @@ const STEPS = [
   {
     n: '05',
     title: '30 days of aftercare, then it’s yours',
-    body: 'Free tweaks for a month after launch. After that the code and the domain are outright yours — no monthly retainer, no being locked to me to make a change.',
+    body: 'Free tweaks for a month after launch. After that the code and the domain are outright yours — no monthly retainer on the website, no being locked to me to make a change.',
   },
 ]
 

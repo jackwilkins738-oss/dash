@@ -39,7 +39,7 @@ const SERVICES = [
   {
     icon: KeyRound,
     title: 'Full ownership',
-    body: 'You pay once and own everything — code, domain, content. No monthly rental and no being locked out of your own website.',
+    body: 'You pay once and own everything — code, domain, content. No monthly rental on your site and no being locked out of your own website.',
   },
   {
     icon: MessageCircle,
