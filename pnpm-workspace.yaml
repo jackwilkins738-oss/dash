@@ -1,3 +1,4 @@
 minimumReleaseAgeExclude:
   - '@next/*'
   - next
+  - '@types/node@24.13.6'
