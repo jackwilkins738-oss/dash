@@ -17,7 +17,7 @@ const CHANNELS = [
     icon: MessageCircle,
     label: 'WhatsApp',
     value: 'Message me directly',
-    href: 'https://wa.me/447000000000',
+    href: 'https://wa.me/66638306449',
     external: true,
   },
   {

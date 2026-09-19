@@ -29,7 +29,7 @@ export function CtaBand() {
                 <span className="transition-transform group-hover:translate-x-1">&rarr;</span>
               </Link>
               <a
-                href="https://wa.me/447000000000"
+                href="https://wa.me/66638306449"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-chamfer inline-flex items-center justify-center gap-2 border border-border px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:border-blueprint hover:text-blueprint"
