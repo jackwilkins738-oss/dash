@@ -15,6 +15,10 @@ const LANDING_INCLUDED: ReactNode[] = [
 
 const BUILD_INCLUDED: ReactNode[] = [
   '5 hand-coded pages, including a Gallery and Service Areas page',
+  <>
+    <strong className="font-semibold text-blueprint">Your own private dashboard</strong> — enquiries, quotes, jobs,
+    invoices and a customer portal, in your business name and colours
+  </>,
   'Custom design — no templates',
   'Mobile-first, sub-second load times',
   'Local SEO built into the site structure, not just a meta tag',

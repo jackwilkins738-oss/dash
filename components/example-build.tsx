@@ -18,6 +18,11 @@ type Example = {
   ctaColor: string
   dotColors: [string, string, string]
   offset: string
+  /** Full-width card across the grid, with room for body copy, a sign-up field and a logo mark */
+  wide?: boolean
+  body?: string
+  mark?: string
+  signupPlaceholder?: string
 }
 
 const EXAMPLES: Example[] = [
@@ -45,29 +50,6 @@ const EXAMPLES: Example[] = [
     offset: 'lg:mt-0',
   },
   {
-    slug: 'skyline',
-    label: 'skyline — loft conversions in West Yorkshire',
-    url: 'https://skyline-8e1.pages.dev/',
-    eyebrow: 'Loft conversions — Leeds & West Yorkshire',
-    headline: (
-      <>
-        Your loft has been
-        <br />
-        <span style={{ color: '#1c7a48' }}>wasted long enough.</span>
-      </>
-    ),
-    cta: 'Get a price range',
-    bg: 'linear-gradient(rgba(13,19,16,0.09) 1px, transparent 1px) 0 0/22px 22px, linear-gradient(90deg, rgba(13,19,16,0.09) 1px, transparent 1px) 0 0/22px 22px, #f4f6f5',
-    border: 'rgba(47,191,113,0.35)',
-    glow: 'rgba(47,191,113,0.3)',
-    eyebrowColor: '#1c7a48',
-    headlineColor: '#0d1310',
-    ctaBg: '#2fbf71',
-    ctaColor: '#06170d',
-    dotColors: ['#2fbf71', '#1c7a48', '#0d1310'],
-    offset: 'lg:mt-10',
-  },
-  {
     slug: 'aldermere',
     label: 'aldermere — house extensions, Oxfordshire',
     url: 'https://aldermere.pages.dev/',
@@ -88,7 +70,7 @@ const EXAMPLES: Example[] = [
     ctaBg: '#c98a72',
     ctaColor: '#170b12',
     dotColors: ['#c98a72', '#935f4a', '#e3ab95'],
-    offset: 'lg:mt-0',
+    offset: 'lg:mt-10',
   },
   {
     slug: 'forgeandslate',
@@ -111,7 +93,57 @@ const EXAMPLES: Example[] = [
     ctaBg: '#c1502f',
     ctaColor: '#150907',
     dotColors: ['#c1502f', '#9aa5a8', '#8a3820'],
-    offset: 'lg:mt-14',
+    offset: 'lg:mt-0',
+  },
+  {
+    slug: 'upkeep',
+    label: 'upkeep — property care & maintenance',
+    url: 'https://upkeep-website.pages.dev/',
+    eyebrow: 'Property care & maintenance',
+    headline: (
+      <>
+        Complete property care.
+        <br />
+        <span style={{ color: '#F58220' }}>One trusted contact.</span>
+      </>
+    ),
+    cta: 'Get a Quote',
+    bg: 'radial-gradient(120% 90% at 85% 10%, rgba(245,130,32,0.18), transparent 60%), repeating-linear-gradient(rgba(245,130,32,0.04) 0 1px, transparent 1px 44px), #111111',
+    border: 'rgba(245,130,32,0.32)',
+    glow: 'rgba(245,130,32,0.35)',
+    eyebrowColor: '#F58220',
+    headlineColor: '#ffffff',
+    ctaBg: '#F58220',
+    ctaColor: '#111111',
+    dotColors: ['#F58220', '#d96f13', '#5B5B5B'],
+    offset: 'lg:mt-10',
+  },
+  {
+    slug: 'mike',
+    label: 'mike — wellbeing app, product site',
+    url: 'https://mike-website-c61.pages.dev/',
+    eyebrow: 'Wellbeing app — product site',
+    headline: (
+      <>
+        Your whole journey.
+        <br />
+        <span style={{ color: '#25D9EA' }}>One connected place.</span>
+      </>
+    ),
+    cta: 'Join the Waitlist',
+    bg: 'radial-gradient(120% 90% at 82% 8%, rgba(117,103,248,0.34), transparent 60%), radial-gradient(90% 70% at 8% 100%, rgba(37,217,234,0.18), transparent 55%), #061A2B',
+    border: 'rgba(37,217,234,0.32)',
+    glow: 'rgba(117,103,248,0.4)',
+    eyebrowColor: '#25D9EA',
+    headlineColor: '#ffffff',
+    ctaBg: 'linear-gradient(90deg, #25D9EA, #7567F8)',
+    ctaColor: '#061A2B',
+    dotColors: ['#25D9EA', '#7567F8', '#E779E8'],
+    offset: '',
+    wide: true,
+    body: 'MIKE helps you talk things through, understand what is affecting you and build better structure across mental wellbeing, physical health, nutrition, sleep, routine, community and life direction.',
+    mark: '/examples/mike-mark.png',
+    signupPlaceholder: 'you@example.com',
   },
 ]
 
@@ -125,15 +157,20 @@ export function ExampleBuild() {
             Not mockups. Real, working sites.
           </h2>
           <p className="mt-5 max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-            Four full trade-business builds — the same lead-capture flow underneath each one, four entirely
-            different trades, price points and designs. That&apos;s deliberate: every build starts from a blank
-            page, not a theme, so no two client sites end up looking related.
+            Five full builds — three trade businesses, a property-care company and a wellbeing app&apos;s product
+            site. Each one converts visitors into enquiries or sign-ups, and each has an entirely different
+            look, market and price point. That&apos;s deliberate: every build starts from a blank page, not a
+            theme, so no two client sites end up looking related.
           </p>
         </Reveal>
 
         <div className="mt-12 grid gap-7 sm:grid-cols-2">
           {EXAMPLES.map((ex, i) => (
-            <Reveal key={ex.slug} delay={i * 0.1} className={ex.offset}>
+            <Reveal
+              key={ex.slug}
+              delay={i * 0.1}
+              className={ex.wide ? 'sm:col-span-2' : ex.offset}
+            >
               <a
                 href={ex.url}
                 target="_blank"
@@ -150,28 +187,76 @@ export function ExampleBuild() {
                 </div>
                 {/* Stylised preview, evoking each live site's own palette and texture without claiming to be a screenshot */}
                 <div
-                  className="relative flex aspect-[4/3] flex-col justify-center gap-3 px-8 sm:aspect-[16/12]"
+                  className={
+                    ex.wide
+                      ? 'relative flex flex-col justify-center gap-8 px-8 py-12 sm:px-12 sm:py-14 lg:flex-row lg:items-center lg:justify-between lg:gap-12'
+                      : 'relative flex aspect-[4/3] flex-col justify-center gap-3 px-8 sm:aspect-[16/12]'
+                  }
                   style={{ background: ex.bg }}
                 >
-                  <span
-                    className="font-mono text-[10px] uppercase tracking-[0.3em]"
-                    style={{ color: ex.eyebrowColor }}
-                  >
-                    {ex.eyebrow}
-                  </span>
-                  <span
-                    className="font-display text-[1.7rem] font-bold leading-[1.08] sm:text-[2rem]"
-                    style={{ color: ex.headlineColor }}
-                  >
-                    {ex.headline}
-                  </span>
-                  <span
-                    className="mt-3 inline-flex w-fit items-center gap-2 rounded px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] transition-transform group-hover:translate-x-1"
-                    style={{ background: ex.ctaBg, color: ex.ctaColor }}
-                  >
-                    {ex.cta}
-                    <ArrowUpRight className="h-3 w-3" strokeWidth={2.5} />
-                  </span>
+                  <div className={ex.wide ? 'flex min-w-0 max-w-xl flex-col gap-3' : 'contents'}>
+                    <span
+                      className="font-mono text-[10px] uppercase tracking-[0.3em]"
+                      style={{ color: ex.eyebrowColor }}
+                    >
+                      {ex.eyebrow}
+                    </span>
+                    <span
+                      className={
+                        ex.wide
+                          ? 'font-display text-[2rem] font-bold leading-[1.08] sm:text-[2.6rem]'
+                          : 'font-display text-[1.7rem] font-bold leading-[1.08] sm:text-[2rem]'
+                      }
+                      style={{ color: ex.headlineColor }}
+                    >
+                      {ex.headline}
+                    </span>
+                    {ex.body && (
+                      <span className="mt-1 text-sm leading-relaxed sm:text-base" style={{ color: 'rgba(255,255,255,0.72)' }}>
+                        {ex.body}
+                      </span>
+                    )}
+                    {ex.signupPlaceholder ? (
+                      <span className="mt-3 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:items-center">
+                        <span
+                          className="min-w-0 flex-1 truncate rounded-lg border px-4 py-2.5 text-sm"
+                          style={{
+                            borderColor: 'rgba(255,255,255,0.14)',
+                            background: 'rgba(255,255,255,0.05)',
+                            color: 'rgba(255,255,255,0.5)',
+                          }}
+                        >
+                          {ex.signupPlaceholder}
+                        </span>
+                        <span
+                          className="inline-flex w-fit items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-transform group-hover:translate-x-1"
+                          style={{ background: ex.ctaBg, color: ex.ctaColor }}
+                        >
+                          {ex.cta}
+                          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+                        </span>
+                      </span>
+                    ) : (
+                      <span
+                        className="mt-3 inline-flex w-fit items-center gap-2 rounded px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] transition-transform group-hover:translate-x-1"
+                        style={{ background: ex.ctaBg, color: ex.ctaColor }}
+                      >
+                        {ex.cta}
+                        <ArrowUpRight className="h-3 w-3" strokeWidth={2.5} />
+                      </span>
+                    )}
+                  </div>
+                  {ex.mark && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={ex.mark}
+                      alt=""
+                      width={300}
+                      height={180}
+                      loading="lazy"
+                      className="order-first h-auto w-36 shrink-0 self-start drop-shadow-[0_12px_40px_rgba(117,103,248,0.45)] sm:w-44 lg:order-last lg:w-72 lg:self-center"
+                    />
+                  )}
                 </div>
               </a>
             </Reveal>
