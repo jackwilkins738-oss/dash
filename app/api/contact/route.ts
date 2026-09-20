@@ -103,9 +103,14 @@ export async function POST(request: Request) {
       console.error('[v0] Telegram request error:', error)
       return NextResponse.json({ error: 'Could not send right now. Please try WhatsApp.' }, { status: 502 })
     }
+  } else if (process.env.NODE_ENV === 'production') {
+    // Never tell a visitor their enquiry was sent when nothing is there to
+    // receive it: fail loudly (and log the message so it isn't lost).
+    console.error('[contact] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set - enquiry NOT delivered:\n' + lines)
+    return NextResponse.json({ error: 'Could not send right now. Please try WhatsApp.' }, { status: 503 })
   } else {
-    // No Telegram configured yet — log so the enquiry is never lost during setup.
-    console.log('[v0] Contact enquiry (Telegram not configured):\n' + lines)
+    // Local development: no bot configured, just log the enquiry.
+    console.log('[contact] Enquiry (Telegram not configured, dev only):\n' + lines)
   }
 
   return NextResponse.json({ ok: true })
