@@ -79,6 +79,17 @@ export function SiteFooter() {
                     +44 7401 696272
                   </a>
                 </li>
+                <li>
+                  <a
+                    href="https://www.linkedin.com/in/scalar-digital-868841438/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`${linkClass} inline-flex items-center gap-1.5`}
+                  >
+                    LinkedIn
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
