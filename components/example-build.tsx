@@ -157,10 +157,10 @@ export function ExampleBuild() {
             Not mockups. Real, working sites.
           </h2>
           <p className="mt-5 max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-            Five full builds — three trade businesses, a property-care company and a wellbeing app&apos;s product
-            site. Each one converts visitors into enquiries or sign-ups, and each has an entirely different
-            look, market and price point. That&apos;s deliberate: every build starts from a blank page, not a
-            theme, so no two client sites end up looking related.
+            Five full builds — three concept sites for trades, plus two built for real: a property-care company
+            and a wellbeing app&apos;s product site. Each is a working site designed to turn visitors into
+            enquiries or sign-ups, and each has an entirely different look and market. That&apos;s deliberate:
+            every build starts from a blank page, not a theme, so no two sites end up looking related.
           </p>
         </Reveal>
 
