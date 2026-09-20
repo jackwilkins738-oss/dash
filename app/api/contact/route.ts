@@ -29,6 +29,8 @@ type ContactPayload = {
   message?: string
   // Honeypot — real users never fill this
   company?: string
+  // Set when they arrive through a referral link
+  referredBy?: string
 }
 
 function isEmail(value: string) {
@@ -67,8 +69,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Tell me a little about the job.' }, { status: 422 })
   }
 
+  // Only letters, numbers, spaces and a few name marks; never trust the link.
+  const referredBy = (body.referredBy ?? '')
+    .replace(/[^\p{L}\p{N} .'&-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60)
+
   const lines = [
     'New enquiry — Scalar Digital',
+    referredBy ? `REFERRAL: referred by ${referredBy} (15% off their build - check with them, 10% off theirs later)` : null,
     '',
     `Name: ${name}`,
     `Email: ${email}`,

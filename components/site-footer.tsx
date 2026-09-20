@@ -18,6 +18,7 @@ const COMPANY = [
   { href: '/', label: 'Home' },
   { href: '/work', label: 'Services & Pricing' },
   { href: '/process', label: 'Process' },
+  { href: '/refer', label: 'Refer & save 15%' },
   { href: '/contact', label: 'Contact' },
   { href: '/privacy', label: 'Privacy Policy' },
 ]

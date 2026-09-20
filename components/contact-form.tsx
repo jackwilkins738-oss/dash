@@ -31,6 +31,12 @@ export function ContactForm() {
   const searchParams = useSearchParams()
   const prefillBudget = searchParams.get('budget')
   const prefillEstimate = searchParams.get('estimate')
+  // Referral link: /contact?ref=Name. Letters, numbers, spaces and a few name marks only.
+  const referredBy = (searchParams.get('ref') ?? '')
+    .replace(/[^\p{L}\p{N} .'&-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60)
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -94,6 +100,12 @@ export function ContactForm() {
       className="rounded-2xl border border-border bg-card/40 p-6 sm:p-8"
       noValidate
     >
+      {referredBy && (
+        <div className="mb-6 rounded-lg border border-blueprint/40 bg-blueprint/10 px-4 py-3 text-sm leading-relaxed text-foreground">
+          <span className="font-semibold">Referred by {referredBy}.</span> You&apos;ll get 15% off your build.
+        </div>
+      )}
+      <input type="hidden" name="referredBy" value={referredBy} />
       {/* Honeypot */}
       <input
         type="text"
