@@ -389,6 +389,43 @@ export function DashShowcase() {
           </p>
         </Reveal>
 
+        <Reveal stagger className="mt-10 grid gap-5 md:grid-cols-2">
+          <div className="rounded-2xl border border-border bg-card/40 p-7">
+            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
+              Most trades today
+            </span>
+            <ul className="mt-5 space-y-3.5 text-sm text-muted-foreground">
+              {[
+                'Enquiries scattered across WhatsApp, texts and voicemail',
+                'Quotes typed up in Word and emailed one by one',
+                'Invoices in a spreadsheet, chased by hand',
+                'Scope changes agreed on the phone, then disputed',
+              ].map((t) => (
+                <li key={t} className="flex items-start gap-3">
+                  <span className="mt-2 h-px w-3 flex-none bg-muted-foreground/60" aria-hidden="true" />
+                  {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-blueprint/40 bg-card p-7">
+            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">With the dash</span>
+            <ul className="mt-5 space-y-3.5 text-sm text-foreground/90">
+              {[
+                'Every enquiry in one list, and the ones nobody has followed up get flagged',
+                'Branded quotes your customer accepts online, with no login',
+                'Invoices, plus a clear view of who owes what',
+                'Variations approved in the customer’s portal, and logged',
+              ].map((t) => (
+                <li key={t} className="flex items-start gap-3">
+                  <Check className="mt-0.5 h-4 w-4 flex-none text-blueprint" strokeWidth={2.5} />
+                  {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Reveal>
+
         <Reveal className="mt-12">
           <div className="overflow-hidden rounded-2xl border border-border shadow-[0_30px_70px_-30px_rgba(232,147,94,0.35)]">
             {/* Browser chrome */}

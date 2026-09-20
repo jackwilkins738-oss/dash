@@ -82,6 +82,18 @@ export function Hero() {
             </Link>
           </div>
 
+          <Link
+            href="/#dash"
+            className="group mt-5 inline-flex max-w-xl items-start gap-3 text-sm leading-snug text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-brass" aria-hidden="true" />
+            <span>
+              <span className="font-semibold text-foreground">Every build includes your own private dashboard</span>
+              {' '}for enquiries, quotes, jobs and invoices.{' '}
+              <span className="text-blueprint underline-offset-4 group-hover:underline">See it in action &darr;</span>
+            </span>
+          </Link>
+
           <dl className="mt-14 grid max-w-lg grid-cols-3 gap-6 border-t border-border pt-8">
             {[
               { k: '<1s', v: 'Load time on desktop' },

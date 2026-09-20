@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Services } from '@/components/services'
+import { DashPitch } from '@/components/dash-pitch'
 import { Pricing } from '@/components/pricing'
 import { CostCalculator } from '@/components/cost-calculator'
 import { CtaBand } from '@/components/cta-band'
@@ -21,6 +22,7 @@ export default function WorkPage() {
         body="Every site does the same six things properly, at a price fixed before we start."
       />
       <Services />
+      <DashPitch />
       <Pricing />
       <CostCalculator />
       <CtaBand />
