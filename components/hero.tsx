@@ -84,7 +84,7 @@ export function Hero() {
 
           <dl className="mt-14 grid max-w-lg grid-cols-3 gap-6 border-t border-border pt-8">
             {[
-              { k: '0.4s', v: 'Average load time' },
+              { k: '<1s', v: 'Load time on desktop' },
               { k: '100', v: 'Lighthouse target' },
               { k: '£750', v: 'Fixed from' },
             ].map((s) => (

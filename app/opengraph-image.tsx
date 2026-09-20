@@ -63,7 +63,7 @@ export default async function OpengraphImage() {
           </div>
           <div style={{ display: 'flex', gap: 48, marginTop: 46 }}>
             {[
-              ['0.4s', 'Average load time'],
+              ['<1s', 'Load time on desktop'],
               ['100', 'Lighthouse target'],
               ['£750', 'Fixed from'],
             ].map(([value, label]) => (
