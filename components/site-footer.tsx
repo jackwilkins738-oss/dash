@@ -89,16 +89,16 @@ export function SiteFooter() {
             <div className="flex items-center gap-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/brand/crest-88.png"
+                src="/brand/mark.png"
                 alt=""
-                width={56}
-                height={56}
+                width={195}
+                height={191}
                 loading="lazy"
-                className="h-14 w-14 rounded-full"
+                className="h-12 w-auto"
               />
               <div>
-                <div className="font-mono text-lg font-bold tracking-tight">
-                  S<span className="text-blueprint">·</span>D
+                <div className="font-sans text-sm font-semibold uppercase tracking-[0.3em] text-foreground">
+                  Scalar
                 </div>
                 <div className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
                   Scalar Digital

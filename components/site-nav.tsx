@@ -38,10 +38,11 @@ export function SiteNav() {
       )}
     >
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
-        <Link href="/" className="font-mono text-lg font-bold tracking-tight" aria-label="Scalar Digital home">
-          S<span className="text-blueprint">·</span>D
-          <span className="ml-2 hidden align-middle font-sans text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground sm:inline">
-            Scalar
+        <Link href="/" className="flex items-center" aria-label="Scalar Digital home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/mark.png" alt="" width={195} height={191} className="h-7 w-auto" />
+          <span className="ml-3 hidden font-sans text-xs font-medium uppercase tracking-[0.3em] text-foreground/80 sm:inline">
+            Scalar Digital
           </span>
         </Link>
 
