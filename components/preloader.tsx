@@ -2,22 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
-
-// Shown once per browser tab. The build sequence is a first-impression
-// piece; replaying it on every refresh and every return visit just taxes
-// someone who already watched it, on a site whose whole argument is that
-// it loads before you think to hit back.
-const SEEN_KEY = 'scalar-preloaded'
-
-function alreadySeen() {
-  // Throws in a private window with site data blocked - treat that as
-  // "not seen" and play it, rather than taking the page down.
-  try {
-    return window.sessionStorage.getItem(SEEN_KEY) === '1'
-  } catch {
-    return false
-  }
-}
+import { markPreloaderSeen, preloaderAlreadySeen } from '@/lib/intro'
 
 export function Preloader() {
   const root = useRef<HTMLDivElement>(null)
@@ -30,12 +15,7 @@ export function Preloader() {
 
     const finish = () => {
       document.body.style.overflow = ''
-      try {
-        window.sessionStorage.setItem(SEEN_KEY, '1')
-      } catch {
-        // Preference just won't carry to the next page - it replays, which
-        // is the current behaviour anyway.
-      }
+      markPreloaderSeen()
       setDone(true)
     }
 
@@ -44,7 +24,7 @@ export function Preloader() {
     // starts false so the server and client agree on the first render -
     // deriving it from sessionStorage during render would be a hydration
     // mismatch - so there is a single frame of overlay before it goes.
-    if (alreadySeen()) {
+    if (preloaderAlreadySeen()) {
       finish()
       return
     }
