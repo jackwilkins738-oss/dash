@@ -10,7 +10,13 @@ const nextConfig = {
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Strict-Transport-Security', value: 'max-age=63072000' },
+          // includeSubDomains covers admin.scalardigital.co.uk (the dashboard
+          // product) as well as the apex; preload makes browsers enforce
+          // HTTPS on a first-ever visit, before any response is seen.
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+          // frame-ancestors in the CSP below is the modern equivalent, but
+          // this is still what older browsers honour.
+          { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           {
             key: 'Content-Security-Policy',
@@ -18,18 +24,28 @@ const nextConfig = {
               "default-src 'self'",
               // admin.scalardigital.co.uk serves track.js - the dashboard
               // product's tracking snippet used on this site itself.
-              "script-src 'self' 'unsafe-inline' https://admin.scalardigital.co.uk",
+              // googletagmanager.com serves the GA4 tag. Without it the
+              // consent banner, the analytics and the privacy-policy section
+              // describing them were all live while the script itself was
+              // blocked by this very header - the site collected nothing.
+              "script-src 'self' 'unsafe-inline' https://admin.scalardigital.co.uk https://www.googletagmanager.com",
               "style-src 'self' 'unsafe-inline'",
               // Storage public URLs for the "currently on site" project
               // photos (gallery.js) are served from this same Supabase
               // project.
-              "img-src 'self' data: blob: https://wfyzsnyfliohevpjpuib.supabase.co",
+              // GA4 falls back to a tracking pixel when fetch/beacon isn't
+              // available, so it needs img-src as well as connect-src.
+              "img-src 'self' data: blob: https://wfyzsnyfliohevpjpuib.supabase.co https://*.google-analytics.com https://www.googletagmanager.com",
               "font-src 'self' data:",
               // track.js posts page views straight to Supabase, and leads
               // through admin.scalardigital.co.uk/api/leads - both need to
               // be reachable or the script loads but every fetch it makes
               // gets silently blocked too.
-              "connect-src 'self' https://admin.scalardigital.co.uk https://wfyzsnyfliohevpjpuib.supabase.co",
+              // GA4 posts hits to google-analytics.com, and to a regional
+              // endpoint (region1, region2...) depending on where the
+              // visitor is - allowing only the bare domain drops EU traffic,
+              // which is essentially all of it for a UK trades site.
+              "connect-src 'self' https://admin.scalardigital.co.uk https://wfyzsnyfliohevpjpuib.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
               "frame-ancestors 'none'",
               "object-src 'none'",
               "base-uri 'self'",
