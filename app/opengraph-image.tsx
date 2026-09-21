@@ -11,7 +11,7 @@ const BLUE = '#4d9be0'
 export default async function OpengraphImage() {
   // The brand mark, embedded so the preview matches it wherever the link is shared.
   const mark = await readFile(join(process.cwd(), 'public', 'brand', 'mark.png'))
-  const crestSrc = `data:image/png;base64,${mark.toString('base64')}`
+  const markSrc = `data:image/png;base64,${mark.toString('base64')}`
 
   return new ImageResponse(
     (
@@ -75,7 +75,7 @@ export default async function OpengraphImage() {
         </div>
 
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={crestSrc} width={340} height={333} alt="" style={{ marginRight: 30 }} />
+        <img src={markSrc} width={340} height={333} alt="" style={{ marginRight: 30 }} />
       </div>
     ),
     { ...size },
