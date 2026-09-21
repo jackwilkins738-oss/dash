@@ -89,7 +89,7 @@ export function SiteFooter() {
             <div className="flex items-center gap-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/brand/mark.png"
+                src="/brand/mark-96.webp"
                 alt=""
                 width={195}
                 height={191}

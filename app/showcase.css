@@ -250,16 +250,18 @@
 }
 
 /* Content swap when the trade changes */
+/* Opacity and translate only. It used to blur as well, but filter is not
+   compositor-friendly: Lighthouse flagged it as a non-composited animation,
+   and the trace showed it re-styling the ~96-element site subtree on every
+   frame of the swap - main-thread work for what is only a fade. */
 @keyframes sc-swap {
   from {
     opacity: 0;
     translate: 0 10px;
-    filter: blur(6px);
   }
   to {
     opacity: 1;
     translate: 0 0;
-    filter: blur(0);
   }
 }
 .sc-swap {

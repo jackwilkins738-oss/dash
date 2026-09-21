@@ -66,17 +66,20 @@ export function PowerCable() {
     }, 1450)
 
     // Warm the ~500KB Three.js chunk so it is already cached by the time
-    // something triggers the mount - but only AFTER the page has finished
-    // loading, plus a few seconds' grace. It used to start fetching at 1.45s,
-    // squarely inside the window where the page is trying to paint its
-    // content, and a phone's connection is one shared pipe: those ~130KB were
-    // taken directly out of the content's share. import() is deduped by the
-    // module system, so dynamic()'s own call resolves from this same fetch.
+    // something triggers the mount - but only well AFTER the page has finished
+    // loading. It used to start fetching at 1.45s, squarely inside the window
+    // where the page is trying to paint its content, and a phone's connection
+    // is one shared pipe: those ~130KB were taken directly out of the
+    // content's share. And import() doesn't just download, it evaluates: a
+    // 54ms task that, under a phone's throttled CPU, is a ~170ms block - so it
+    // has to land after the page has stopped being busy, not merely after
+    // load. import() is deduped by the module system, so dynamic()'s own call
+    // resolves from this same fetch.
     let prefetchTimer: number | undefined
     const prefetch = () => {
       prefetchTimer = window.setTimeout(() => {
         if (!cancelled) idle(() => void import('@/components/power-cable'), 4000)
-      }, 3000)
+      }, 6500)
     }
     if (document.readyState === 'complete') prefetch()
     else window.addEventListener('load', prefetch, { once: true })

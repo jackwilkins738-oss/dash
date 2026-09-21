@@ -62,6 +62,15 @@ export function BlueprintCanvas() {
     }
 
     const draw = () => {
+      // On a phone this canvas's parent is display:none, so it measures 0x0
+      // and there is nothing to draw. Stop the loop rather than waking sixty
+      // times a second for nothing - that is battery and main-thread time on
+      // exactly the devices that have least of both. onResize restarts it if
+      // the layout ever gains a real size (a tablet rotating to landscape).
+      if (width === 0 || height === 0) {
+        raf = 0
+        return
+      }
       raf = requestAnimationFrame(draw)
       if (!visible) return
 
@@ -153,6 +162,10 @@ export function BlueprintCanvas() {
         cancelAnimationFrame(raf)
         draw()
         cancelAnimationFrame(raf)
+      } else if (width > 0 && !raf) {
+        // The loop stops itself when the canvas has no size (see draw); pick it
+        // back up once the layout gives it one.
+        raf = requestAnimationFrame(draw)
       }
     }
     window.addEventListener('resize', onResize)

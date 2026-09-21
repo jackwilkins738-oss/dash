@@ -111,7 +111,7 @@ export function Preloader() {
 
         <div className="pl-word mt-6 flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/mark.png" alt="" width={195} height={191} className="h-9 w-auto" />
+          <img src="/brand/mark-96.webp" alt="" width={195} height={191} className="h-9 w-auto" />
           <span className="h-4 w-px bg-line" />
           <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
             Scalar Digital

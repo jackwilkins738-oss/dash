@@ -38,9 +38,12 @@ export function SiteNav() {
       )}
     >
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
-        <Link href="/" className="flex items-center" aria-label="Scalar Digital home">
+        {/* prefetch off: on the home page this link points at the page you are
+            already on, and Next was fetching a 24KB copy of it in the
+            background right after load, competing with the content. */}
+        <Link href="/" prefetch={false} className="flex items-center" aria-label="Scalar Digital home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/mark.png" alt="" width={195} height={191} className="h-7 w-auto" />
+          <img src="/brand/mark-96.webp" alt="" width={195} height={191} className="h-7 w-auto" />
           <span className="ml-3 hidden font-sans text-xs font-medium uppercase tracking-[0.3em] text-foreground/80 sm:inline">
             Scalar Digital
           </span>

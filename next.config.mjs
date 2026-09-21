@@ -17,15 +17,14 @@ const scriptSrc = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    // Puts the CSS in the HTML instead of a separate render-blocking request
-    // (Lighthouse measured that request at ~316ms on a mobile connection, and
-    // nothing can paint until it arrives). The trade-off in the Next docs is
-    // that inlined CSS can't be cached between visits - which barely matters
-    // here: the stylesheet is small (Tailwind), and most visitors are new
-    // arrivals from cold email rather than people returning to the site.
-    inlineCss: true,
-  },
+  // experimental.inlineCss was tried and removed. The Next docs recommend it for
+  // small Tailwind CSS with mostly first-time visitors, which describes this
+  // site, so it was enabled - and then measured properly (Lighthouse mobile,
+  // median of 3, one variable changed): it made things WORSE. Inlining
+  // duplicates the styles in the page payload, tripling the HTML from 33KB to
+  // 84KB, and first paint slipped from 1.10s to 1.43s. The render-blocking
+  // request it saves costs less than the bytes it adds. Worth re-testing if
+  // the CSS ever gets much smaller, but not before.
   async headers() {
     return [
       {
@@ -72,6 +71,19 @@ const nextConfig = {
             ].join('; '),
           },
         ],
+      },
+      // Images in public/ are served by Next with `max-age=0`, so every visit
+      // re-checks them (Lighthouse: "Use efficient cache lifetimes"). They are
+      // not content-hashed, so they cannot be marked immutable - but a day of
+      // freshness plus a week of stale-while-revalidate stops the re-check on
+      // every page view, while a changed logo still shows up within a day.
+      {
+        source: '/brand/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }],
+      },
+      {
+        source: '/examples/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }],
       },
     ]
   },
