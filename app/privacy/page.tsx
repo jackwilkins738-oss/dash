@@ -64,7 +64,8 @@ const SECTIONS = [
     body: (
       <>
         <p>
-          This site uses Vercel Analytics, a privacy-focused analytics tool that doesn&apos;t use cookies and
+          This site uses Vercel Analytics (plus Google Analytics if you accept it; see Cookies below). Vercel
+          Analytics is a privacy-focused analytics tool that doesn&apos;t use cookies and
           doesn&apos;t track you individually across sites. It reports aggregated, anonymous information — which
           pages get visited, roughly how fast they load — and a small number of anonymous events (such as &quot;a
           contact form was submitted&quot; along with the trade and budget range selected, with no name or
@@ -83,8 +84,15 @@ const SECTIONS = [
     title: 'Cookies',
     body: (
       <>
-        This site doesn&apos;t use marketing or advertising cookies, and doesn&apos;t run any third-party
-        tracking pixels. It has no cookie consent banner because it has nothing that needs your consent to run.
+        <p>
+          This site doesn&apos;t use marketing or advertising cookies and doesn&apos;t run any tracking pixels.
+        </p>
+        <p className="mt-3">
+          If you choose to accept, it uses Google Analytics (Google LLC), which sets cookies to measure how the
+          site is used, such as which pages are visited and how visitors arrive. Nothing is set unless you accept,
+          you can decline with one click, and the site works the same either way. Your choice is stored only in
+          your browser; clear your site data to be asked again.
+        </p>
       </>
     ),
   },
@@ -133,7 +141,7 @@ const SECTIONS = [
     body: (
       <>
         If what this site collects or how it&apos;s used changes, this page will be updated to reflect it. Last
-        updated: September 2026.
+        updated: 21 September 2026.
       </>
     ),
   },
@@ -153,7 +161,9 @@ export default function PrivacyPage() {
           <div className="space-y-12">
             {SECTIONS.map((s, i) => (
               <Reveal key={s.title} delay={i * 0.03}>
-                <h2 className="font-display text-xl font-semibold sm:text-2xl">{s.title}</h2>
+                <h2 id={s.title.toLowerCase()} className="scroll-mt-28 font-display text-xl font-semibold sm:text-2xl">
+                  {s.title}
+                </h2>
                 <div className="mt-3 text-pretty leading-relaxed text-muted-foreground">{s.body}</div>
               </Reveal>
             ))}

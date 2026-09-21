@@ -20,6 +20,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     at('/process', UPDATED, 0.6),
     at('/contact', UPDATED, 0.7),
     at('/refer', UPDATED, 0.4),
-    at('/privacy', '2026-09-10', 0.2),
+    at('/privacy', '2026-09-21', 0.2),
   ]
 }

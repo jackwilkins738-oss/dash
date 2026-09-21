@@ -8,6 +8,7 @@ import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
 import { WhatsAppButton } from '@/components/whatsapp-button'
 import { JsonLd } from '@/components/json-ld'
+import { GoogleAnalytics } from '@/components/google-analytics'
 import { PRICES, SITE } from '@/lib/site'
 
 // Bricolage/Instrument/Plex Mono instead of Space Grotesk + Geist Mono -
@@ -155,6 +156,7 @@ export default function RootLayout({
         <SiteFooter />
         <WhatsAppButton />
         {process.env.NODE_ENV === 'production' && <Analytics />}
+        {process.env.NODE_ENV === 'production' && <GoogleAnalytics />}
         {/* Scalar Digital's own dashboard product, tracking this site as a
             real test tenant - page views and leads (via the contact
             form's data-lead-form attribute) flow into /admin's dashboard,
