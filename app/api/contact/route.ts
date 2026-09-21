@@ -106,11 +106,11 @@ export async function POST(request: Request) {
         body: JSON.stringify({ chat_id: chatId, text: lines, disable_web_page_preview: true }),
       })
       if (!res.ok) {
-        console.error('[v0] Telegram send failed:', res.status, await res.text())
+        console.error('[contact] Telegram send failed:', res.status, await res.text())
         return NextResponse.json({ error: 'Could not send right now. Please try WhatsApp.' }, { status: 502 })
       }
     } catch (error) {
-      console.error('[v0] Telegram request error:', error)
+      console.error('[contact] Telegram request error:', error)
       return NextResponse.json({ error: 'Could not send right now. Please try WhatsApp.' }, { status: 502 })
     }
   } else if (process.env.NODE_ENV === 'production') {
