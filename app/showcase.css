@@ -1,0 +1,592 @@
+/* ---------------------------------------------------------------------
+   Hero preview (components/site-showcase.tsx)
+
+   A light website window sitting in a 3D scene that turns to face the
+   cursor. Sized in container-query units (cqw), so the whole thing scales
+   from a phone to a wide desktop without any JS measuring.
+   --------------------------------------------------------------------- */
+
+/* Registered so the brand colour glides between trades instead of snapping. */
+@property --accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: oklch(0.52 0.14 244);
+}
+@property --accent-ui {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: oklch(0.72 0.13 244);
+}
+
+.sc-root {
+  width: 100%;
+  transition:
+    --accent 0.8s ease,
+    --accent-ui 0.8s ease;
+}
+.sc-stage {
+  position: relative;
+  perspective: 1500px;
+  /* The bottom edge leaves room for the phone, which hangs below the window,
+     and the callout under it - without it they land on the switcher tabs. */
+  padding: 34px 14px 78px;
+}
+.sc-tilt {
+  position: relative;
+  transform-style: preserve-3d;
+  --rx0: 0deg;
+  --ry0: 0deg;
+  transform: rotateX(calc(var(--rx0) + var(--rx, 0deg))) rotateY(calc(var(--ry0) + var(--ry, 0deg)));
+  will-change: transform;
+}
+/* Turned slightly toward the copy at rest, only where there is room. */
+@media (min-width: 1280px) {
+  .sc-stage {
+    padding: 40px 28px 88px;
+  }
+  .sc-tilt {
+    --rx0: 4deg;
+    --ry0: -11deg;
+  }
+}
+.sc-layer {
+  transform: translateZ(var(--z, 0px));
+}
+
+/* The window */
+.sc-window {
+  container-type: inline-size;
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #f7f5f0;
+  color: #14181f;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.09),
+    0 44px 90px -34px rgb(0 0 0 / 0.85),
+    0 0 70px -26px color-mix(in oklch, var(--accent-ui) 55%, transparent);
+}
+.sc-chrome {
+  display: flex;
+  align-items: center;
+  gap: 1.6cqw;
+  padding: 1.7cqw 2.4cqw;
+  background: #ece9e1;
+  border-bottom: 1px solid rgb(0 0 0 / 0.08);
+}
+.sc-dot {
+  width: 1.5cqw;
+  height: 1.5cqw;
+  border-radius: 99px;
+  background: rgb(0 0 0 / 0.18);
+}
+.sc-url {
+  flex: 1;
+  margin-left: 1cqw;
+  text-align: center;
+  border-radius: 99px;
+  background: #fff;
+  padding: 0.8cqw 2cqw;
+  font: 500 1.6cqw/1 var(--font-mono);
+  color: rgb(0 0 0 / 0.45);
+}
+.sc-site {
+  background: #f7f5f0;
+}
+.sc-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2.2cqw 3.4cqw;
+}
+.sc-brand {
+  display: flex;
+  align-items: center;
+  gap: 1.6cqw;
+}
+.sc-brand-mark {
+  display: block;
+  flex: none;
+  width: 3.6cqw;
+  height: 3.6cqw;
+  border-radius: 0.7cqw;
+  background: var(--accent);
+}
+.sc-brand-name {
+  display: block;
+  font: 700 2.1cqw/1 var(--font-display);
+  letter-spacing: 0.06em;
+}
+.sc-brand-sub {
+  display: block;
+  margin-top: 0.6cqw;
+  font: 500 1.25cqw/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(0 0 0 / 0.45);
+}
+.sc-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2.4cqw;
+  font: 500 1.7cqw/1 var(--font-sans);
+  color: rgb(0 0 0 / 0.55);
+}
+.sc-nav-cta {
+  background: var(--accent);
+  color: #fff;
+  padding: 1.1cqw 2.2cqw;
+  border-radius: 0.7cqw;
+  font-weight: 600;
+}
+.sc-hero {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 3cqw;
+  padding: 1cqw 3.4cqw 3cqw;
+}
+.sc-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.sc-eyebrow {
+  font: 600 1.5cqw/1 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.sc-headline {
+  margin: 1.6cqw 0 0;
+  font: 700 5.2cqw/1.03 var(--font-display);
+  letter-spacing: -0.02em;
+  color: #14181f;
+  text-wrap: balance;
+}
+.sc-sub {
+  margin: 1.6cqw 0 0;
+  font: 400 1.9cqw/1.4 var(--font-sans);
+  color: rgb(0 0 0 / 0.6);
+}
+.sc-actions {
+  display: flex;
+  gap: 1.4cqw;
+  margin-top: 2.6cqw;
+}
+.sc-btn {
+  font: 600 1.55cqw/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1.5cqw 2.6cqw;
+  border-radius: 0.7cqw;
+  white-space: nowrap;
+}
+.sc-btn-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 1.4cqw 2.8cqw -1.2cqw var(--accent);
+}
+.sc-btn-ghost {
+  border: 1px solid rgb(0 0 0 / 0.18);
+  color: #14181f;
+}
+.sc-art {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.2cqw;
+  min-height: 34cqw;
+  background: #fff;
+}
+.sc-art-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sc-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.6cqw;
+  padding: 0 3.4cqw 3.4cqw;
+}
+.sc-tile {
+  background: #fff;
+  border: 1px solid rgb(0 0 0 / 0.07);
+  border-radius: 0.9cqw;
+  padding: 1.2cqw;
+}
+.sc-tile-swatch {
+  display: block;
+  height: 6.4cqw;
+  border-radius: 0.6cqw;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--accent) calc(16% + var(--i) * 14%), #fff),
+    color-mix(in oklch, var(--accent) calc(40% + var(--i) * 12%), #fff)
+  );
+}
+.sc-tile-label {
+  display: block;
+  margin-top: 1cqw;
+  font: 500 1.5cqw/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(0 0 0 / 0.6);
+}
+/* A light source that follows the cursor: the edges away from it darken. */
+.sc-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at var(--gx, 30%) var(--gy, 20%), transparent 28%, rgb(8 12 20 / 0.2) 100%);
+}
+.sc-shadow {
+  position: absolute;
+  inset: 10% 6% -4%;
+  border-radius: 24px;
+  background: radial-gradient(60% 60% at 50% 50%, color-mix(in oklch, var(--accent-ui) 60%, transparent), transparent 70%);
+  filter: blur(30px);
+  opacity: 0.5;
+}
+
+/* Content swap when the trade changes */
+@keyframes sc-swap {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    filter: blur(0);
+  }
+}
+.sc-swap {
+  animation: sc-swap 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Drafting annotations */
+.sc-dim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent-ui);
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.sc-dim-line {
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.45;
+}
+.sc-dim-tick {
+  width: 1px;
+  height: 10px;
+  background: currentColor;
+  opacity: 0.8;
+}
+.sc-dim-label {
+  white-space: nowrap;
+  opacity: 0.85;
+}
+.sc-callout {
+  position: absolute;
+  left: 7%;
+  top: 106%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--accent-ui);
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.sc-callout-dot {
+  margin-left: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in oklch, currentColor 25%, transparent);
+}
+.sc-callout-line {
+  margin-left: 12px;
+  height: 14px;
+  width: 0;
+  border-left: 1px dashed currentColor;
+}
+.sc-callout-label {
+  white-space: nowrap;
+  padding: 5px 8px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  background: rgb(9 13 22 / 0.88);
+}
+
+/* Floating layers */
+.sc-chip {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 99px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(11 16 26 / 0.88);
+  backdrop-filter: blur(8px);
+  color: #e9eef7;
+  font: 600 11px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 14px 30px -12px rgb(0 0 0 / 0.8);
+  white-space: nowrap;
+}
+.sc-chip-speed {
+  top: -3%;
+  right: -2%;
+}
+.sc-chip-dot {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--accent-ui);
+  box-shadow: 0 0 10px var(--accent-ui);
+}
+.sc-toast {
+  position: absolute;
+  right: -3%;
+  bottom: 13%;
+  width: 40%;
+  min-width: 130px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  background: rgb(11 16 26 / 0.92);
+  backdrop-filter: blur(8px);
+  color: #e9eef7;
+  box-shadow: 0 22px 44px -16px rgb(0 0 0 / 0.85);
+}
+.sc-toast-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 9.5px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-ui);
+}
+.sc-toast-title {
+  font: 600 13px/1.2 var(--font-sans);
+}
+.sc-toast-meta {
+  font: 400 10px/1.2 var(--font-mono);
+  letter-spacing: 0.05em;
+  color: rgb(233 238 247 / 0.55);
+}
+@keyframes sc-pop {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+    scale: 0.94;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+.sc-pop {
+  animation: sc-pop 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both;
+}
+
+/* The phone in front */
+.sc-phone {
+  position: absolute;
+  left: -4%;
+  bottom: -7%;
+  width: 23%;
+  min-width: 84px;
+  container-type: inline-size;
+  animation: sc-bob 6.5s ease-in-out infinite;
+}
+@keyframes sc-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -7px;
+  }
+}
+.sc-phone-body {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16cqw;
+  border: 2.2cqw solid #0b0f16;
+  background: #f7f5f0;
+  padding-bottom: 9cqw;
+  color: #14181f;
+  box-shadow:
+    0 34px 56px -18px rgb(0 0 0 / 0.9),
+    0 0 0 1px rgb(255 255 255 / 0.12);
+}
+.sc-phone-notch {
+  display: block;
+  margin: 3cqw auto 0;
+  width: 28cqw;
+  height: 4.4cqw;
+  border-radius: 99px;
+  background: #0b0f16;
+}
+.sc-phone-brand {
+  display: flex;
+  align-items: center;
+  gap: 3cqw;
+  padding: 7cqw 8cqw 0;
+}
+.sc-phone-brand .sc-brand-mark {
+  width: 8cqw;
+  height: 8cqw;
+  border-radius: 2cqw;
+}
+.sc-phone-name {
+  font: 700 6.2cqw/1 var(--font-display);
+  letter-spacing: 0.06em;
+}
+.sc-phone-headline {
+  padding: 6cqw 8cqw 0;
+  font: 700 11cqw/1.02 var(--font-display);
+  letter-spacing: -0.02em;
+}
+.sc-phone-call {
+  position: relative;
+  margin: 8cqw 8cqw 0;
+  border-radius: 4cqw;
+  background: var(--accent);
+  color: #fff;
+  text-align: center;
+  padding: 6cqw 0;
+  font: 700 7cqw/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sc-phone-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1.2cqw solid var(--accent);
+  animation: sc-ring 2.3s ease-out infinite;
+}
+@keyframes sc-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(1.32, 1.7);
+    opacity: 0;
+  }
+}
+
+/* The switcher */
+.sc-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+@media (min-width: 640px) {
+  .sc-tabs {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.sc-tab {
+  position: relative;
+  overflow: hidden;
+  padding: 11px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--card) 60%, transparent);
+  color: var(--muted-foreground);
+  font: 600 10.5px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition:
+    color 0.25s ease,
+    border-color 0.25s ease,
+    background 0.25s ease;
+}
+.sc-tab:hover {
+  color: var(--foreground);
+  border-color: color-mix(in oklch, var(--accent-ui) 50%, var(--border));
+}
+.sc-tab[aria-selected='true'] {
+  color: var(--accent-ui);
+  border-color: color-mix(in oklch, var(--accent-ui) 65%, transparent);
+  background: color-mix(in oklch, var(--accent-ui) 10%, var(--card));
+}
+.sc-tab-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--accent-ui);
+  transform-origin: 0 50%;
+  animation: sc-fill 5.6s linear forwards;
+}
+@keyframes sc-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.sc-root[data-paused] .sc-tab-progress {
+  animation-play-state: paused;
+}
+
+/* Entrance: only ever applied when the preloader curtain is going to lift
+   (see site-showcase.tsx). `backwards` rather than `forwards` so that once
+   it ends the element falls back to its normal, cursor-driven transform. */
+@keyframes sc-intro {
+  from {
+    opacity: 0;
+    transform: translateY(46px) rotateX(calc(var(--rx0) + 20deg)) rotateY(calc(var(--ry0) - 28deg)) scale(0.93);
+  }
+}
+.sc-stage[data-intro] .sc-tilt {
+  animation: sc-intro 1.5s cubic-bezier(0.16, 1, 0.3, 1) 1.05s backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-swap,
+  .sc-pop,
+  .sc-phone,
+  .sc-phone-ring {
+    animation: none;
+  }
+  .sc-tab-progress {
+    display: none;
+  }
+  .sc-stage[data-intro] .sc-tilt {
+    animation: none;
+  }
+  .sc-root {
+    transition: none;
+  }
+}

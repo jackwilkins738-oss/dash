@@ -32,6 +32,7 @@ export function TradesGrid() {
             <Link
               key={trade.label}
               href={trade.href}
+              data-spotlight
               className="group flex items-center justify-between bg-background px-6 py-6 font-mono text-sm text-foreground/90 transition-colors hover:bg-card hover:text-blueprint sm:py-7"
             >
               {trade.label}

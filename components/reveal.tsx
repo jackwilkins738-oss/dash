@@ -10,6 +10,8 @@ type RevealProps = {
   /** Stagger children direct descendants instead of the element itself */
   stagger?: boolean
   delay?: number
+  /** Opt the element in to the cursor-lit glow (see interaction-layer.tsx) */
+  spotlight?: boolean
 }
 
 // Every one of these (~25 across the site) used to be its own GSAP
@@ -28,6 +30,7 @@ export function Reveal({
   as: Tag = 'div',
   stagger = false,
   delay = 0,
+  spotlight = false,
 }: RevealProps) {
   const ref = useRef<HTMLElement>(null)
 
@@ -74,7 +77,7 @@ export function Reveal({
   }, [stagger, delay])
 
   return (
-    <Tag ref={ref} className={cn(className)}>
+    <Tag ref={ref} className={cn(className)} data-spotlight={spotlight ? '' : undefined}>
       {children}
     </Tag>
   )

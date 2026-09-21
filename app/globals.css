@@ -159,3 +159,132 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------------------------------------------------------------------
+   Interaction layer (components/interaction-layer.tsx)
+   --------------------------------------------------------------------- */
+
+/* Cursor-lit surfaces. Any element with data-spotlight picks up a soft
+   blueprint glow and a lit 1px edge that follow the pointer. The offsets
+   (--mx/--my) are written by one delegated listener, so the cards
+   themselves stay plain server-rendered markup. */
+[data-spotlight] {
+  position: relative;
+  isolation: isolate;
+}
+[data-spotlight]::before,
+[data-spotlight]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+[data-spotlight]::before {
+  z-index: -1;
+  background: radial-gradient(
+    280px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in oklch, var(--blueprint) 20%, transparent),
+    transparent 72%
+  );
+}
+[data-spotlight]::after {
+  padding: 1px;
+  background: radial-gradient(
+    210px circle at var(--mx, 50%) var(--my, 50%),
+    var(--blueprint),
+    transparent 72%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+[data-spotlight][data-lit]::before,
+[data-spotlight][data-lit]::after {
+  opacity: 1;
+}
+
+/* Magnetic buttons: they lean toward the pointer while it is over them.
+   `translate` (not `transform`) so it never fights the hover/scale effects
+   already on these elements. */
+[data-magnetic] {
+  transition: translate 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The drafting crosshair. It never replaces the native cursor - it trails
+   it - so nothing about pointing or clicking changes. */
+.bp-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 95;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  will-change: transform;
+  color: var(--blueprint);
+}
+.bp-cursor[data-on] {
+  opacity: 1;
+}
+.bp-cursor[data-hidden] {
+  opacity: 0;
+}
+.bp-cursor-ring {
+  display: block;
+  margin: -20px 0 0 -20px;
+  transition:
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.2s ease;
+}
+.bp-cursor[data-link] .bp-cursor-ring {
+  transform: scale(1.55) rotate(45deg);
+  color: var(--brass);
+}
+.bp-cursor[data-down] .bp-cursor-ring {
+  transform: scale(0.75);
+}
+.bp-cursor[data-link][data-down] .bp-cursor-ring {
+  transform: scale(1.2) rotate(45deg);
+}
+.bp-cursor-label {
+  position: absolute;
+  left: 22px;
+  top: 16px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--muted-foreground);
+  text-shadow: 0 0 6px var(--background);
+}
+.bp-cursor[data-link] .bp-cursor-label {
+  color: var(--brass);
+}
+
+/* Scroll progress: a single hairline along the top edge. */
+.bp-progress {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 96;
+  height: 2px;
+  width: 100%;
+  transform: scaleX(var(--p, 0));
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, var(--blueprint), var(--brass));
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-magnetic] {
+    transition: none;
+  }
+  .bp-cursor-ring {
+    transition: none;
+  }
+}

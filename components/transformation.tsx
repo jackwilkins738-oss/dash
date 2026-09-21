@@ -35,7 +35,7 @@ export function Transformation() {
         </Reveal>
 
         <div className="mt-14 grid gap-5 lg:grid-cols-2">
-          <Reveal className="relative overflow-hidden rounded-xl border border-border bg-card/40 p-7 sm:p-9">
+          <Reveal spotlight className="relative overflow-hidden rounded-xl border border-border bg-card/40 p-7 sm:p-9">
             <div className="flex items-center justify-between">
               <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
                 Typical WordPress site
@@ -55,6 +55,7 @@ export function Transformation() {
           </Reveal>
 
           <Reveal
+            spotlight
             delay={0.12}
             className="relative overflow-hidden rounded-xl border border-blueprint/40 bg-card p-7 sm:p-9"
           >

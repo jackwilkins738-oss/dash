@@ -9,6 +9,7 @@ import { Reveal } from '@/components/reveal'
 import { JumpStat } from '@/components/jump-stat'
 import { TradesGrid } from '@/components/trades-grid'
 import { Comparison } from '@/components/comparison'
+import { SpeedRace } from '@/components/speed-race'
 
 const PRINCIPLES = [
   {
@@ -54,7 +55,7 @@ export default function HomePage() {
           {/* Asymmetric - the founding principle gets real weight, not
               equal billing with a uniform 3-up card grid. */}
           <Reveal stagger className="mt-14 grid gap-5 md:grid-cols-2">
-            <div className="group rounded-xl border border-border bg-card/40 p-8 transition-colors hover:border-blueprint/40 md:p-10">
+            <div data-spotlight className="group rounded-xl border border-border bg-card/40 p-8 transition-colors hover:border-blueprint/40 md:p-10">
               <span className="font-mono text-sm text-blueprint">{PRINCIPLES[0].n}</span>
               <h3 className="mt-5 font-display text-2xl font-semibold sm:text-3xl">{PRINCIPLES[0].title}</h3>
               <p className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground">{PRINCIPLES[0].body}</p>
@@ -63,6 +64,7 @@ export default function HomePage() {
               {PRINCIPLES.slice(1).map((p) => (
                 <div
                   key={p.n}
+                  data-spotlight
                   className="group rounded-xl border border-border bg-card/40 p-6 transition-colors hover:border-blueprint/40"
                 >
                   <span className="font-mono text-sm text-blueprint">{p.n}</span>
@@ -118,6 +120,7 @@ export default function HomePage() {
         </div>
       </section>
       <Comparison />
+      <SpeedRace />
       <Transformation />
       <ExampleBuild />
       <DashShowcase />

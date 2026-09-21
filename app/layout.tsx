@@ -2,11 +2,14 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Bricolage_Grotesque, Instrument_Sans, IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
+import './showcase.css'
+import './race.css'
 import { SmoothScroll } from '@/components/smooth-scroll'
 import { Preloader } from '@/components/preloader'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
 import { WhatsAppButton } from '@/components/whatsapp-button'
+import { InteractionLayer } from '@/components/interaction-layer'
 import { JsonLd } from '@/components/json-ld'
 import { GoogleAnalytics } from '@/components/google-analytics'
 import { PRICES, SITE } from '@/lib/site'
@@ -151,6 +154,7 @@ export default function RootLayout({
         <JsonLd data={structuredData} />
         <Preloader />
         <SmoothScroll />
+        <InteractionLayer />
         <SiteNav />
         {children}
         <SiteFooter />

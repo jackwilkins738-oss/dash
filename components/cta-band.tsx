@@ -5,7 +5,7 @@ export function CtaBand() {
   return (
     <section className="border-t border-border">
       <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8 sm:py-32">
-        <Reveal className="relative overflow-hidden rounded-2xl border border-border bg-card p-8 sm:p-14">
+        <Reveal spotlight className="relative overflow-hidden rounded-2xl border border-border bg-card p-8 sm:p-14">
           <div className="blueprint-grid pointer-events-none absolute inset-0 opacity-30" aria-hidden="true" />
           <div
             className="pointer-events-none absolute inset-0"
@@ -23,6 +23,7 @@ export function CtaBand() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/contact"
+                data-magnetic
                 className="btn-chamfer group inline-flex items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
               >
                 Start your build

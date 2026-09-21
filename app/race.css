@@ -1,0 +1,340 @@
+/* ---------------------------------------------------------------------
+   Speed race (components/speed-race.tsx)
+
+   The two phones share one structure and differ only in how they load, so
+   the comparison is like for like. Each piece appears when its `data-on`
+   flips; the slow side is deliberately abrupt (it pops in and shoves the
+   page around), the fast side is settled.
+   --------------------------------------------------------------------- */
+
+.race-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 44px;
+  justify-items: center;
+}
+@media (min-width: 768px) {
+  .race-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+}
+.race-vs {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  z-index: 2;
+  display: none;
+  transform: translate(-50%, -50%);
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  font: 600 11px/1 var(--font-mono);
+  letter-spacing: 0.2em;
+}
+@media (min-width: 768px) {
+  .race-vs {
+    display: block;
+  }
+}
+
+.race-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  --race-tone: var(--muted-foreground);
+}
+.race-col[data-kind='fast'] {
+  --race-tone: var(--blueprint);
+}
+.race-col[data-kind='slow'] {
+  --race-tone: var(--destructive);
+}
+
+/* The phone */
+.race-phone {
+  position: relative;
+  width: min(100%, 250px);
+  aspect-ratio: 9 / 18;
+  overflow: hidden;
+  border: 8px solid #0b0f16;
+  border-radius: 36px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.12),
+    0 40px 70px -30px rgb(0 0 0 / 0.85),
+    0 0 60px -28px color-mix(in oklch, var(--race-tone) 55%, transparent);
+}
+/* The browser's own loading bar */
+.race-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  height: 3px;
+  width: 100%;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: var(--race-tone);
+  transition: transform 0.06s linear;
+}
+.race-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #fff;
+  color: #14181f;
+}
+
+/* Blank screen, then a spinner, before anything has arrived */
+.race-spinner {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border: 3px solid rgb(0 0 0 / 0.1);
+  border-top-color: rgb(0 0 0 / 0.4);
+  border-radius: 99px;
+  opacity: 0;
+  animation: race-spin 0.8s linear infinite;
+}
+.race-spinner[data-on='true'] {
+  opacity: 1;
+}
+@keyframes race-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The late banner */
+.race-banner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  background: #1d2733;
+  color: #fff;
+  font: 500 9.5px/1.2 var(--font-sans);
+  transform: translateY(-100%);
+}
+.race-banner[data-on='true'] {
+  transform: translateY(0);
+}
+.race-banner-btn {
+  flex: none;
+  padding: 5px 8px;
+  border-radius: 3px;
+  background: #f0a500;
+  color: #1d2733;
+  font-weight: 700;
+}
+
+/* The page */
+.race-content {
+  padding: 0 0 12px;
+}
+.race-content[data-shifted='true'] {
+  transform: translateY(38px);
+}
+
+.race-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgb(0 0 0 / 0.07);
+  opacity: 0;
+}
+.race-head[data-on='true'] {
+  opacity: 1;
+}
+.race-mark {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--blueprint);
+}
+.race-name {
+  flex: 1;
+  font: 700 10.5px/1 var(--font-display);
+  letter-spacing: 0.06em;
+}
+.race-burger {
+  width: 14px;
+  height: 9px;
+  border-top: 2px solid #14181f;
+  border-bottom: 2px solid #14181f;
+  position: relative;
+}
+.race-burger::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2.5px;
+  height: 2px;
+  background: #14181f;
+}
+
+.race-hero {
+  position: relative;
+  min-height: 116px;
+  padding: 18px 14px 0;
+}
+.race-skeleton {
+  display: grid;
+  gap: 9px;
+}
+.race-skeleton span {
+  display: block;
+  height: 10px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.07);
+}
+.race-skeleton span:nth-child(1) {
+  width: 78%;
+}
+.race-skeleton span:nth-child(2) {
+  width: 92%;
+}
+.race-skeleton span:nth-child(3) {
+  width: 54%;
+}
+.race-skeleton[data-off='true'] {
+  display: none;
+}
+.race-copy {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 18px;
+  display: none;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.race-copy[data-on='true'] {
+  display: flex;
+}
+.race-eyebrow {
+  font: 600 8px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--blueprint);
+}
+.race-h {
+  margin-top: 8px;
+  font: 700 19px/1.06 var(--font-display);
+  letter-spacing: -0.02em;
+}
+.race-cta {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--blueprint);
+  color: #fff;
+  font: 600 8.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* The image. The slow page reserves no space for it, so when it arrives it
+   pushes everything below it down: a layout shift. The hand-built page holds
+   the space from the start and only fades the picture in. */
+.race-image {
+  margin: 4px 14px 0;
+  border-radius: 8px;
+  background: linear-gradient(150deg, color-mix(in oklch, var(--blueprint) 40%, #fff), color-mix(in oklch, var(--blueprint) 80%, #fff));
+}
+.race-col[data-kind='slow'] .race-image {
+  height: 0;
+}
+.race-col[data-kind='slow'] .race-image[data-on='true'] {
+  height: 92px;
+}
+.race-col[data-kind='fast'] .race-image {
+  height: 92px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.race-col[data-kind='fast'] .race-image[data-on='true'] {
+  opacity: 1;
+}
+.race-rows {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+.race-rows span {
+  display: block;
+  height: 26px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.06);
+}
+.race-col[data-kind='slow'] .race-rows {
+  display: none;
+}
+.race-col[data-kind='slow'] .race-rows[data-on='true'] {
+  display: grid;
+}
+.race-col[data-kind='fast'] .race-rows {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.race-col[data-kind='fast'] .race-rows[data-on='true'] {
+  opacity: 1;
+}
+
+/* The readout under each phone */
+.race-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 22px;
+}
+.race-label {
+  font: 500 11px/1 var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.race-time {
+  font: 700 44px/1 var(--font-mono);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--race-tone);
+}
+.race-status {
+  min-height: 12px;
+  font: 600 10px/1 var(--font-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.race-status[data-done='true'] {
+  color: var(--race-tone);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .race-spinner {
+    animation: none;
+  }
+  .race-bar,
+  .race-col[data-kind='fast'] .race-image,
+  .race-col[data-kind='fast'] .race-rows {
+    transition: none;
+  }
+}
