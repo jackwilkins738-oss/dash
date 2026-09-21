@@ -10,10 +10,31 @@ const PowerCableImpl = dynamic(() => import('@/components/power-cable').then((m)
   ssr: false,
 })
 
+// The cable is decoration. On a device that is short of CPU, memory or data it
+// is a poor trade: ~130KB to download and over a second of synchronous WebGL
+// shader compilation to draw a glowing wire. So it is simply not started on
+// those, rather than started and left to struggle.
+type NavigatorHints = Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } }
+function deviceCanAffordIt(): boolean {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false
+  const nav = navigator as NavigatorHints
+  if (nav.connection?.saveData) return false
+  if (typeof nav.deviceMemory === 'number' && nav.deviceMemory <= 2) return false
+  if (typeof nav.hardwareConcurrency === 'number' && nav.hardwareConcurrency <= 2) return false
+  return true
+}
+
+const idle = (fn: () => void, timeout: number) =>
+  typeof window.requestIdleCallback === 'function'
+    ? window.requestIdleCallback(fn, { timeout })
+    : window.setTimeout(fn, 50)
+
 export function PowerCable() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    if (!deviceCanAffordIt()) return
+
     let cancelled = false
 
     const removeListeners = () => {
@@ -27,71 +48,61 @@ export function PowerCable() {
       removeListeners()
       window.clearTimeout(fallback)
       // Defer the actual mount - and the ~1.3s of synchronous WebGL/shader
-      // work that follows inside power-cable.tsx - to the next idle
-      // moment instead of firing it inside this handler directly. scroll
-      // is one of the trigger events, and starting that work synchronously
-      // mid-scroll competed with the very scroll frame the user was on
-      // for the main thread, which is what read as jumpiness rather than
-      // just lateness. requestIdleCallback (short timeout fallback for
-      // Safari, which doesn't implement it) lets the current frame paint
-      // and the gesture settle first.
-      const mount = () => setReady(true)
-      const idle = typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback : null
-      if (idle) {
-        idle(mount, { timeout: 300 })
-      } else {
-        window.setTimeout(mount, 50)
-      }
+      // work that follows inside power-cable.tsx - to the next idle moment
+      // instead of firing it inside this handler directly. scroll is one of
+      // the trigger events, and starting that work synchronously mid-scroll
+      // competed with the very scroll frame the user was on for the main
+      // thread, which read as jumpiness rather than just lateness.
+      idle(() => setReady(true), 300)
     }
-    // A pointermove can fire within the first frame in real browsers (the
-    // cursor is often already resting over the page) - arming these
-    // immediately meant mounting the cable while the preloader's own
-    // GSAP timeline (~1.3s) was still mid-animation, both fighting for
-    // the main thread. Arm the listeners only once the preloader has had
-    // time to finish, so the two never overlap.
+
+    // Arm the interaction listeners once the opening sequence has had time to
+    // play, so the two never fight for the main thread.
     const armTimer = window.setTimeout(() => {
       if (cancelled) return
-      // Start fetching the ~500KB Three.js chunk right as the listeners
-      // arm - after the preloader (so it's not competing with the hero's
-      // own paint), but well before mounting, so it's already warm by
-      // the time something actually triggers the mount below. import()
-      // is deduped by the module system: this and dynamic()'s own call
-      // resolve from the same cached fetch, so nothing downloads twice.
-      import('@/components/power-cable')
       window.addEventListener('scroll', start, { once: true, passive: true })
       window.addEventListener('pointermove', start, { once: true, passive: true })
       window.addEventListener('touchstart', start, { once: true, passive: true })
     }, 1450)
+
+    // Warm the ~500KB Three.js chunk so it is already cached by the time
+    // something triggers the mount - but only AFTER the page has finished
+    // loading, plus a few seconds' grace. It used to start fetching at 1.45s,
+    // squarely inside the window where the page is trying to paint its
+    // content, and a phone's connection is one shared pipe: those ~130KB were
+    // taken directly out of the content's share. import() is deduped by the
+    // module system, so dynamic()'s own call resolves from this same fetch.
+    let prefetchTimer: number | undefined
+    const prefetch = () => {
+      prefetchTimer = window.setTimeout(() => {
+        if (!cancelled) idle(() => void import('@/components/power-cable'), 4000)
+      }, 3000)
+    }
+    if (document.readyState === 'complete') prefetch()
+    else window.addEventListener('load', prefetch, { once: true })
+
     // Worst-case wait for anyone who doesn't scroll or move the pointer at
-    // all. The real cost this exists to defer isn't the mount itself -
-    // it's the WebGL shader compilation inside it, which is expensive
-    // enough (measured: a single >500ms main-thread task under a
-    // software-rendered GPU, the same conditions Lighthouse and PageSpeed
-    // Insights lab data run under) that firing it at 2s landed squarely
-    // inside the page's Time to Interactive window and inflated Total
-    // Blocking Time - for a synthetic crawler that never scrolls or moves
-    // the pointer, same as for a real visitor who genuinely never
-    // interacts. Nearly everyone who's actually reading the page scrolls
-    // or moves the mouse well before this fires anyway (see the listeners
-    // above), so pushing it out this far costs real disengaged visitors a
-    // few extra seconds before a purely decorative effect appears, not
-    // any missing functionality.
+    // all. The real cost this defers isn't the mount itself but the WebGL
+    // shader compilation inside it - a single >500ms main-thread task under a
+    // software-rendered GPU, the conditions lab tools run under. Nearly
+    // everyone reading the page scrolls or moves the mouse well before this
+    // fires, so it costs a genuinely idle visitor a few extra seconds before
+    // a purely decorative effect appears, and nothing else.
     const fallback = window.setTimeout(start, 7000)
 
     return () => {
       cancelled = true
       window.clearTimeout(armTimer)
       window.clearTimeout(fallback)
+      window.clearTimeout(prefetchTimer)
+      window.removeEventListener('load', prefetch)
       removeListeners()
     }
   }, [])
 
   // Mounting (not just running the heavy WebGL init) waits for the signal
-  // above, so a synthetic Lighthouse audit - which never scrolls or moves
-  // the pointer - never renders this during the trace at all. The chunk
-  // itself is fetched slightly earlier (see armTimer) so a real visitor
-  // isn't also waiting on the network on top of the ~1.3s init once it
-  // does mount.
+  // above, so a synthetic audit - which never scrolls or moves the pointer -
+  // never renders this during the trace at all.
   if (!ready) return null
   return <PowerCableImpl />
 }

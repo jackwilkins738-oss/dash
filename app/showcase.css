@@ -560,17 +560,19 @@
   animation-play-state: paused;
 }
 
-/* Entrance: only ever applied when the preloader curtain is going to lift
-   (see site-showcase.tsx). `backwards` rather than `forwards` so that once
-   it ends the element falls back to its normal, cursor-driven transform. */
+/* Entrance, timed to arrive as the preloader curtain lifts (app/intro.css).
+   Pure CSS, so it starts on the first paint. Returning visitors never see
+   it: intro.css turns .sc-tilt's animation off under .pl-seen. `backwards`
+   rather than `forwards` so that once it ends the element falls back to its
+   normal, cursor-driven transform. */
 @keyframes sc-intro {
   from {
     opacity: 0;
     transform: translateY(46px) rotateX(calc(var(--rx0) + 20deg)) rotateY(calc(var(--ry0) - 28deg)) scale(0.93);
   }
 }
-.sc-stage[data-intro] .sc-tilt {
-  animation: sc-intro 1.5s cubic-bezier(0.16, 1, 0.3, 1) 1.05s backwards;
+.sc-tilt {
+  animation: sc-intro calc(1.5s * var(--k, 0.7)) cubic-bezier(0.16, 1, 0.3, 1) calc(1.05s * var(--k, 0.7)) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -583,7 +585,7 @@
   .sc-tab-progress {
     display: none;
   }
-  .sc-stage[data-intro] .sc-tilt {
+  .sc-tilt {
     animation: none;
   }
   .sc-root {

@@ -1,56 +1,20 @@
-'use client'
-
 import Link from 'next/link'
-import { Fragment, useEffect, useRef } from 'react'
-import { gsap } from 'gsap'
+import { Fragment, type CSSProperties } from 'react'
 import { BlueprintCanvas } from '@/components/blueprint-canvas'
 import { SiteShowcase } from '@/components/site-showcase'
 import { TrustBadges } from '@/components/trust-badges'
-import { INTRO_DELAY_AFTER_PRELOADER, preloaderAlreadySeen } from '@/lib/intro'
 
 const HEADLINE = "Websites that look more expensive than the job you're quoting."
 const WORDS = HEADLINE.split(' ')
 
+// A server component. The reveal (the headline rising word by word, then the
+// rest settling in behind it) is CSS in app/intro.css, timed to start as the
+// preloader curtain lifts. It used to be a GSAP effect that waited for the JS
+// to arrive and hydrate, then waited again for the preloader to finish - a
+// chain that, on a phone, kept the copy invisible for several seconds.
 export function Hero() {
-  const root = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (prefersReduced) return
-
-    // The intro is the second half of a handoff with the preloader: the
-    // curtain lifts, then this plays. On a return visit within the same tab
-    // there is no curtain (see lib/intro.ts), so there is nothing to wait
-    // for and nothing to hide behind - and animating from hidden with no
-    // curtain would flash the content, hide it, then fade it back in.
-    // The content is already on screen, so leave it alone.
-    if (preloaderAlreadySeen()) return
-
-    const delay = INTRO_DELAY_AFTER_PRELOADER
-    const ctx = gsap.context(() => {
-      // The headline rises word by word out of a mask...
-      gsap.from('.hero-word', {
-        yPercent: 118,
-        duration: 1.1,
-        ease: 'power4.out',
-        stagger: 0.055,
-        delay,
-      })
-      // ...then everything else settles in behind it.
-      gsap.from('.hero-stagger > *:not(h1)', {
-        opacity: 0,
-        y: 34,
-        duration: 1,
-        ease: 'power3.out',
-        stagger: 0.12,
-        delay: delay + 0.3,
-      })
-    }, root)
-    return () => ctx.revert()
-  }, [])
-
   return (
-    <section ref={root} className="relative flex min-h-svh items-center overflow-hidden">
+    <section className="relative flex min-h-svh items-center overflow-hidden">
       {/* Interactive canvas: desktop only for performance */}
       <div className="pointer-events-none absolute inset-0 hidden md:block">
         <BlueprintCanvas />
@@ -86,7 +50,9 @@ export function Hero() {
                       negative margin stop the mask clipping descenders (the
                       y, j, q and g in this headline) without moving the lines. */}
                   <span className="inline-block overflow-hidden pb-[0.14em] -mb-[0.14em] align-bottom">
-                    <span className="hero-word inline-block">{word}</span>
+                    <span className="hero-word" style={{ ['--i' as string]: i } as CSSProperties}>
+                      {word}
+                    </span>
                   </span>
                   {i < WORDS.length - 1 ? ' ' : null}
                 </Fragment>

@@ -1,0 +1,277 @@
+/* ---------------------------------------------------------------------
+   The opening sequence: preloader curtain, then the hero reveal.
+
+   Pure CSS, so it starts on the first paint and never waits for JavaScript
+   (see lib/intro.ts for why that matters). Every duration and delay below is
+   the original GSAP timeline's, multiplied by --k. The original ran ~1.3s;
+   at k = 0.7 it runs ~0.9s. One number to retune the whole feel.
+
+   Returning visitors never see any of it: a script in <head> adds
+   .pl-seen to <html> before first paint, and the rules at the bottom turn
+   every animation here off.
+   --------------------------------------------------------------------- */
+
+:root {
+  --k: 0.7;
+  /* GSAP's named eases, as cubic-beziers */
+  --ease-io2: cubic-bezier(0.455, 0.03, 0.515, 0.955);
+  --ease-io3: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --ease-out3: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-out4: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out5: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-io5: cubic-bezier(0.86, 0, 0.07, 1);
+  --ease-back: cubic-bezier(0.2, 2.4, 0.5, 1);
+}
+
+/* An integer that CSS can animate, so the 000 -> 100 counter needs no JS. */
+@property --pl-n {
+  syntax: '<integer>';
+  inherits: true;
+  initial-value: 0;
+}
+
+/* ---- the preloader ------------------------------------------------- */
+
+.pl-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  /* Once the curtain has lifted the overlay stops being painted and stops
+     catching clicks, without any script having to remove it. */
+  animation: pl-out 0.001s linear calc(1.34s * var(--k)) forwards;
+}
+@keyframes pl-out {
+  to {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* The curtain: two panels lifting away */
+.pl-panel {
+  animation: pl-lift calc(0.288s * var(--k)) var(--ease-io5) calc((1.024s + var(--i, 0) * 0.019s) * var(--k)) forwards;
+}
+@keyframes pl-lift {
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+/* The drawing. Paths carry pathLength="1", so a dash of length 1 is the
+   whole path and animating the offset draws it. */
+.bp-draw {
+  stroke-dasharray: 1;
+  --ink: bp-ink calc(0.192s * var(--k)) var(--ease-io3) calc(0.736s * var(--k)) forwards;
+}
+@keyframes bp-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes bp-ink {
+  to {
+    stroke: var(--foreground);
+  }
+}
+
+.bp-ground {
+  animation:
+    bp-draw calc(0.16s * var(--k)) var(--ease-io3) calc(0.032s * var(--k)) backwards,
+    var(--ink);
+}
+.bp-wall {
+  animation:
+    bp-draw calc(0.224s * var(--k)) var(--ease-io3) calc((0.112s + var(--i, 0) * 0.038s) * var(--k)) backwards,
+    var(--ink);
+}
+.bp-roof {
+  animation:
+    bp-draw calc(0.192s * var(--k)) var(--ease-io3) calc(0.304s * var(--k)) backwards,
+    var(--ink);
+}
+.bp-detail {
+  animation:
+    bp-draw calc(0.192s * var(--k)) var(--ease-out3) calc((0.432s + var(--i, 0) * 0.026s) * var(--k)) backwards,
+    var(--ink);
+}
+
+/* Corner nodes snap in */
+.bp-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bp-pop calc(0.128s * var(--k)) var(--ease-back) calc((0.48s + var(--i, 0) * 0.016s) * var(--k)) backwards;
+}
+@keyframes bp-pop {
+  from {
+    transform: scale(0);
+  }
+}
+
+/* Dimension lines measure the plan */
+.bp-dim {
+  animation: bp-fade calc(0.16s * var(--k)) var(--ease-out3) calc((0.576s + var(--i, 0) * 0.032s) * var(--k)) backwards;
+}
+@keyframes bp-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The blueprint becomes a solid build */
+.bp-fill {
+  animation: bp-fill-in calc(0.224s * var(--k)) var(--ease-io3) calc((0.736s + var(--i, 0) * 0.019s) * var(--k)) both;
+}
+@keyframes bp-fill-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.bp-flash {
+  animation: bp-flash calc(0.128s * var(--k)) cubic-bezier(0.32, 0, 0.67, 0) calc(0.8s * var(--k)) backwards;
+}
+@keyframes bp-flash {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* The wordmark locks in */
+.pl-word {
+  animation: pl-rise calc(0.16s * var(--k)) var(--ease-out4) calc(0.832s * var(--k)) backwards;
+}
+@keyframes pl-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* Counter and bar. The count is an animated integer shown through a CSS
+   counter; the leading zero is a separate element that drops away at 100
+   so it reads 000 ... 099, 100. */
+.pl-count {
+  animation: pl-count calc(1s * var(--k)) var(--ease-io2) forwards;
+}
+@keyframes pl-count {
+  from {
+    --pl-n: 0;
+  }
+  to {
+    --pl-n: 100;
+  }
+}
+.pl-count::after {
+  counter-reset: pln var(--pl-n);
+  content: counter(pln, decimal-leading-zero);
+}
+.pl-pad {
+  animation: pl-pad-out calc(1s * var(--k)) steps(1, end) forwards;
+}
+@keyframes pl-pad-out {
+  to {
+    opacity: 0;
+  }
+}
+.pl-bar {
+  transform-origin: 0 50%;
+  animation: pl-bar calc(1s * var(--k)) var(--ease-io2) forwards;
+}
+@keyframes pl-bar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* ---- the hero reveal ----------------------------------------------- */
+
+/* The headline rises word by word out of a mask... */
+.hero-word {
+  display: inline-block;
+  animation: hero-rise calc(1.1s * var(--k)) var(--ease-out5) calc((1.1s + var(--i, 0) * 0.055s) * var(--k)) backwards;
+}
+@keyframes hero-rise {
+  from {
+    transform: translateY(118%);
+  }
+}
+
+/* ...then everything else settles in behind it. */
+.hero-stagger > :not(h1) {
+  animation: hero-up calc(1s * var(--k)) var(--ease-out4) calc((1.4s + var(--n, 0) * 0.12s) * var(--k)) backwards;
+}
+@keyframes hero-up {
+  from {
+    opacity: 0;
+    transform: translateY(34px);
+  }
+}
+/* Position in the stagger, skipping the h1 (which animates by word). */
+.hero-stagger > :nth-child(1) {
+  --n: 0;
+}
+.hero-stagger > :nth-child(3) {
+  --n: 1;
+}
+.hero-stagger > :nth-child(4) {
+  --n: 2;
+}
+.hero-stagger > :nth-child(5) {
+  --n: 3;
+}
+.hero-stagger > :nth-child(6) {
+  --n: 4;
+}
+.hero-stagger > :nth-child(7) {
+  --n: 5;
+}
+
+/* ---- off switches --------------------------------------------------- */
+
+/* A returning visitor, or someone who asked for reduced motion: no
+   preloader at all, and nothing hidden waiting to animate in. */
+.pl-seen .pl-root {
+  display: none;
+}
+.pl-seen .hero-word,
+.pl-seen .hero-stagger > :not(h1),
+.pl-seen .sc-tilt {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pl-root {
+    display: none;
+  }
+  .hero-word,
+  .hero-stagger > :not(h1) {
+    animation: none;
+  }
+}
+
+/* Phones and touch devices get the page, not the show.
+   The intro keeps the hero hidden for ~1.9s after the first paint. On a
+   desktop that is a flourish; on a mid-range phone, which is where a
+   cold-email visitor almost always lands, it is time the weakest CPU and the
+   slowest connection can least spare - and it puts a hard floor under the
+   Largest Contentful Paint no amount of trimming JavaScript can lower. So
+   below the desktop breakpoint, or on any coarse pointer, there is no curtain
+   and nothing waits to animate in: the content is simply there. To bring the
+   intro back on phones, delete this block. */
+@media (max-width: 767px), (pointer: coarse) {
+  .pl-root {
+    display: none;
+  }
+  .hero-word,
+  .hero-stagger > :not(h1),
+  .sc-tilt {
+    animation: none;
+  }
+}

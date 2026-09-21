@@ -17,6 +17,15 @@ const scriptSrc = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    // Puts the CSS in the HTML instead of a separate render-blocking request
+    // (Lighthouse measured that request at ~316ms on a mobile connection, and
+    // nothing can paint until it arrives). The trade-off in the Next docs is
+    // that inlined CSS can't be cached between visits - which barely matters
+    // here: the stylesheet is small (Tailwind), and most visitors are new
+    // arrivals from cold email rather than people returning to the site.
+    inlineCss: true,
+  },
   async headers() {
     return [
       {

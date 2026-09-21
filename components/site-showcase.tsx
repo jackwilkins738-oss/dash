@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex, type ShowcaseArt } from '@/lib/showcase'
-import { preloaderAlreadySeen } from '@/lib/intro'
 
 // The hero's centrepiece: a small, honest illustration of what the product
 // is. A real-looking website for a trade, set in a 3D scene that turns to
@@ -42,10 +41,6 @@ export function SiteShowcase() {
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches
-
-    // Entrance: only when the preloader is going to play. On a return visit
-    // there is no curtain to hide behind, so it simply appears.
-    if (!reduced && !preloaderAlreadySeen()) stage.setAttribute('data-intro', '')
 
     // Pause the auto-rotation while it can't be seen or is being looked at.
     let hovering = false

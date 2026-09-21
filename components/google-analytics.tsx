@@ -43,12 +43,24 @@ export function GoogleAnalytics() {
 
   return (
     <>
-      <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
-      <Script id="ga4-init" strategy="afterInteractive">
+      {/* lazyOnload, not afterInteractive: gtag.js is 172KB - the single
+          heaviest file on the site, a third of all its JavaScript - and
+          nothing about showing the page depends on it. afterInteractive
+          started fetching it the moment the page hydrated, in direct
+          competition with the content; lazyOnload waits for the window's
+          load event and an idle moment. */}
+      <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="lazyOnload" />
+      {/* A returning visitor's saved choice is applied here, inside the same
+          script that sets the default, rather than from a React effect. With
+          the script now loading late, an effect would run first, find no gtag
+          yet, and silently drop a stored "granted" - so their analytics would
+          stay denied for the whole visit. */}
+      <Script id="ga4-init" strategy="lazyOnload">
         {`window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 window.gtag = gtag;
 gtag('consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
+try { if (localStorage.getItem('${KEY}') === 'granted') gtag('consent', 'update', { analytics_storage: 'granted' }); } catch (e) {}
 gtag('js', new Date());
 gtag('config', '${GA_ID}');`}
       </Script>

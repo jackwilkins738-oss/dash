@@ -1,113 +1,37 @@
-'use client'
+import type { CSSProperties } from 'react'
 
-import { useEffect, useRef, useState } from 'react'
-import { gsap } from 'gsap'
-import { markPreloaderSeen, preloaderAlreadySeen } from '@/lib/intro'
+// The build-a-house curtain that opens the site on a first visit.
+//
+// A server component with no JavaScript at all. The whole sequence - the
+// drawing, the counter, the curtain lifting - is CSS in app/intro.css and
+// starts on the first paint. It used to be a client component driven by a GSAP
+// timeline that could only start once the JS had been downloaded and the page
+// hydrated, which on a phone meant the visitor stared at a static overlay for
+// seconds before the animation even began.
+//
+// Returning visitors never see it: a script in <head> (lib/intro.ts) marks
+// the document before first paint and the CSS hides this whole block.
+
+// Sets --i, the element's position within its staggered group.
+const at = (i: number): CSSProperties => ({ ['--i' as string]: i })
+
+const NODES: [number, number][] = [
+  [150, 178],
+  [237, 128],
+  [77, 136],
+  [150, 102],
+  [157, 10],
+]
 
 export function Preloader() {
-  const root = useRef<HTMLDivElement>(null)
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [count, setCount] = useState(0)
-  const [done, setDone] = useState(false)
-
-  useEffect(() => {
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-    const finish = () => {
-      document.body.style.overflow = ''
-      markPreloaderSeen()
-      setDone(true)
-    }
-
-    // Returning within the same tab: drop the overlay on the first effect
-    // tick without locking scroll or running the timeline. `done` still
-    // starts false so the server and client agree on the first render -
-    // deriving it from sessionStorage during render would be a hydration
-    // mismatch - so there is a single frame of overlay before it goes.
-    if (preloaderAlreadySeen()) {
-      finish()
-      return
-    }
-
-    document.body.style.overflow = 'hidden'
-
-    if (prefersReduced) {
-      setCount(100)
-      const t = setTimeout(finish, 300)
-      return () => clearTimeout(t)
-    }
-
-    const ctx = gsap.context(() => {
-      // Prime every drawable stroke as "empty"
-      const strokes = gsap.utils.toArray<SVGPathElement>('.bp-draw')
-      strokes.forEach((el) => {
-        el.style.strokeDasharray = '1'
-        el.style.strokeDashoffset = '1'
-      })
-      gsap.set('.bp-node', { scale: 0, transformOrigin: 'center' })
-      gsap.set('.bp-dim', { opacity: 0 })
-      gsap.set('.bp-fill', { opacity: 0 })
-
-      const state = { value: 0 }
-      const tl = gsap.timeline()
-
-      // Same choreography as before, rescaled to ~1.3s total (was ~4.1s) -
-      // snappier reads as precise/high-tech rather than as the old
-      // sequence just sped up crudely.
-      tl.to(
-        state,
-        {
-          value: 100,
-          duration: 1.0,
-          ease: 'power1.inOut',
-          onUpdate: () => setCount(Math.round(state.value)),
-        },
-        0,
-      )
-
-      // 1. Draw the structure, ground up
-      tl.to('.bp-ground', { strokeDashoffset: 0, duration: 0.16, ease: 'power2.inOut' }, 0.032)
-        .to('.bp-wall', { strokeDashoffset: 0, duration: 0.224, ease: 'power2.inOut', stagger: 0.038 }, 0.112)
-        .to('.bp-roof', { strokeDashoffset: 0, duration: 0.192, ease: 'power2.inOut' }, 0.304)
-        .to('.bp-detail', { strokeDashoffset: 0, duration: 0.192, ease: 'power2.out', stagger: 0.026 }, 0.432)
-        // 2. Snap corner nodes in
-        .to('.bp-node', { scale: 1, duration: 0.128, ease: 'back.out(3)', stagger: 0.016 }, 0.48)
-        // 3. Dimension lines measure the plan
-        .to('.bp-dim', { opacity: 1, duration: 0.16, ease: 'power2.out', stagger: 0.032 }, 0.576)
-        // 4. Materialize — blueprint becomes a solid build
-        .to('.bp-fill', { opacity: 1, duration: 0.224, ease: 'power2.inOut', stagger: 0.019 }, 0.736)
-        .to('.bp-draw', { stroke: 'var(--foreground)', duration: 0.192, ease: 'power2.inOut' }, 0.736)
-        .fromTo(
-          '.bp-flash',
-          { opacity: 0 },
-          { opacity: 0.6, duration: 0.064, yoyo: true, repeat: 1, ease: 'power2.in' },
-          0.8,
-        )
-        // 5. Wordmark locks
-        .from('.pl-word', { opacity: 0, y: 14, duration: 0.16, ease: 'power3.out' }, 0.832)
-        // 6. Curtain lifts to reveal the site
-        .to('.pl-panel', { yPercent: -100, duration: 0.288, ease: 'power4.inOut', stagger: 0.019, onComplete: finish }, 1.024)
-
-      return () => tl.kill()
-    }, root)
-
-    return () => {
-      ctx.revert()
-      document.body.style.overflow = ''
-    }
-  }, [])
-
-  if (done) return null
-
   return (
-    <div ref={root} className="fixed inset-0 z-[100]" aria-hidden="true">
+    <div className="pl-root" aria-hidden="true">
       {/* Split-panel curtain */}
-      <div className="pl-panel absolute inset-0 blueprint-grid bg-background" />
-      <div className="pl-panel absolute inset-0 bg-background/60" />
+      <div className="pl-panel absolute inset-0 blueprint-grid bg-background" style={at(0)} />
+      <div className="pl-panel absolute inset-0 bg-background/60" style={at(1)} />
 
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <svg
-          ref={svgRef}
           viewBox="0 0 300 230"
           className="w-[280px] max-w-[76vw] sm:w-[360px]"
           fill="none"
@@ -124,66 +48,60 @@ export function Preloader() {
 
           {/* Materialized fills (revealed at the end) - two hatched wall
               faces, two flat-tinted roof slopes, isometric */}
-          <g className="bp-fill" fill="url(#pl-hatch)" opacity="0.6" stroke="none">
+          <g className="bp-fill" style={at(0)} fill="url(#pl-hatch)" opacity="0.6" stroke="none">
             <path d="M150 178 L237 128 L237 52 L150 102 Z" />
           </g>
-          <g className="bp-fill" fill="url(#pl-hatch)" opacity="0.6" stroke="none">
+          <g className="bp-fill" style={at(1)} fill="url(#pl-hatch)" opacity="0.6" stroke="none">
             <path d="M150 178 L77 136 L77 60 L150 102 Z" />
           </g>
-          <g className="bp-fill" fill="var(--blueprint)" opacity="0.16" stroke="none">
+          <g className="bp-fill" style={at(2)} fill="var(--blueprint)" opacity="0.16" stroke="none">
             <path d="M150 102 L237 52 L157 10 Z" />
           </g>
-          <g className="bp-fill" fill="var(--blueprint)" opacity="0.24" stroke="none">
+          <g className="bp-fill" style={at(3)} fill="var(--blueprint)" opacity="0.24" stroke="none">
             <path d="M150 102 L77 60 L157 10 Z" />
           </g>
 
           {/* Ground line, isometric */}
-          <path className="bp-draw bp-ground" d="M53 137 L261 126" stroke="var(--blueprint)" strokeWidth="1.5" />
+          <path className="bp-draw bp-ground" pathLength={1} d="M53 137 L261 126" stroke="var(--blueprint)" strokeWidth="1.5" />
 
           {/* Walls: shared front edge, then each face's perimeter */}
-          <path className="bp-draw bp-wall" d="M150 178 L150 102" stroke="var(--blueprint)" strokeWidth="1.5" />
-          <path className="bp-draw bp-wall" d="M150 178 L237 128 L237 52 L150 102" stroke="var(--blueprint)" strokeWidth="1.5" />
-          <path className="bp-draw bp-wall" d="M150 178 L77 136 L77 60 L150 102" stroke="var(--blueprint)" strokeWidth="1.5" />
+          <path className="bp-draw bp-wall" style={at(0)} pathLength={1} d="M150 178 L150 102" stroke="var(--blueprint)" strokeWidth="1.5" />
+          <path className="bp-draw bp-wall" style={at(1)} pathLength={1} d="M150 178 L237 128 L237 52 L150 102" stroke="var(--blueprint)" strokeWidth="1.5" />
+          <path className="bp-draw bp-wall" style={at(2)} pathLength={1} d="M150 178 L77 136 L77 60 L150 102" stroke="var(--blueprint)" strokeWidth="1.5" />
 
           {/* Hip roof, isometric - two visible slopes to a single ridge apex */}
-          <path className="bp-draw bp-roof" d="M150 102 L157 10 L237 52 M157 10 L77 60" stroke="var(--blueprint)" strokeWidth="1.5" />
+          <path className="bp-draw bp-roof" pathLength={1} d="M150 102 L157 10 L237 52 M157 10 L77 60" stroke="var(--blueprint)" strokeWidth="1.5" />
 
           {/* Details: door + two windows, each a proper isometric parallelogram */}
-          <path className="bp-draw bp-detail" d="M155 175 L168 168 L168 132 L155 139 Z" stroke="var(--blueprint)" strokeWidth="1" />
-          <path className="bp-draw bp-detail" d="M183 142 L201 132 L201 109 L183 119 Z" stroke="var(--blueprint)" strokeWidth="1" />
-          <path className="bp-draw bp-detail" d="M117 142 L99 132 L99 109 L117 119 Z" stroke="var(--blueprint)" strokeWidth="1" />
+          <path className="bp-draw bp-detail" style={at(0)} pathLength={1} d="M155 175 L168 168 L168 132 L155 139 Z" stroke="var(--blueprint)" strokeWidth="1" />
+          <path className="bp-draw bp-detail" style={at(1)} pathLength={1} d="M183 142 L201 132 L201 109 L183 119 Z" stroke="var(--blueprint)" strokeWidth="1" />
+          <path className="bp-draw bp-detail" style={at(2)} pathLength={1} d="M117 142 L99 132 L99 109 L117 119 Z" stroke="var(--blueprint)" strokeWidth="1" />
 
           {/* Structural corner nodes */}
-          {[
-            [150, 178],
-            [237, 128],
-            [77, 136],
-            [150, 102],
-            [157, 10],
-          ].map(([cx, cy]) => (
-            <circle key={`${cx}-${cy}`} className="bp-node" cx={cx} cy={cy} r="2.75" fill="var(--blueprint)" />
+          {NODES.map(([cx, cy], i) => (
+            <circle key={`${cx}-${cy}`} className="bp-node" style={at(i)} cx={cx} cy={cy} r="2.75" fill="var(--blueprint)" />
           ))}
 
           {/* Dimension lines with real callouts - width along the ground
               edge, height along the front corner, drafting-style extension
               ticks off each measured edge */}
-          <g className="bp-dim" stroke="var(--muted-foreground)" strokeWidth="0.6">
+          <g className="bp-dim" style={at(0)} stroke="var(--muted-foreground)" strokeWidth="0.6">
             <path d="M150 178 L157 190" />
             <path d="M237 128 L244 140" />
             <path d="M157 190 L244 140" />
           </g>
-          <text className="bp-dim" x="188" y="172" textAnchor="middle" fill="var(--muted-foreground)" fontSize="7" fontFamily="var(--font-mono)">
+          <text className="bp-dim" style={at(1)} x="188" y="172" textAnchor="middle" fill="var(--muted-foreground)" fontSize="7" fontFamily="var(--font-mono)">
             3600
           </text>
-          <g className="bp-dim" stroke="var(--muted-foreground)" strokeWidth="0.6">
+          <g className="bp-dim" style={at(2)} stroke="var(--muted-foreground)" strokeWidth="0.6">
             <path d="M150 178 L136 178" />
             <path d="M150 102 L136 102" />
             <path d="M136 178 L136 102" />
           </g>
-          <text className="bp-dim" x="112" y="143" textAnchor="middle" fill="var(--muted-foreground)" fontSize="7" fontFamily="var(--font-mono)">
+          <text className="bp-dim" style={at(3)} x="112" y="143" textAnchor="middle" fill="var(--muted-foreground)" fontSize="7" fontFamily="var(--font-mono)">
             3200
           </text>
-          <text className="bp-dim" x="150" y="214" textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="var(--font-mono)">
+          <text className="bp-dim" style={at(4)} x="150" y="214" textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="var(--font-mono)">
             A-101
           </text>
 
@@ -202,16 +120,13 @@ export function Preloader() {
 
         <div className="mt-6 flex w-60 max-w-[76vw] items-center justify-between font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
           <span>Constructing</span>
-          <span className="text-blueprint">{String(count).padStart(3, '0')}</span>
+          <span className="text-blueprint">
+            <span className="pl-pad">0</span>
+            <span className="pl-count" />
+          </span>
         </div>
         <div className="mt-3 h-px w-60 max-w-[76vw] overflow-hidden bg-line">
-          {/* scaleX (compositor-only) instead of width (forces layout every
-              tick, ~36 times over the 1s count-up) - same fill visually,
-              cheaper to animate. */}
-          <div
-            className="h-full w-full origin-left bg-blueprint transition-transform duration-100"
-            style={{ transform: `scaleX(${count / 100})` }}
-          />
+          <div className="pl-bar h-full w-full bg-blueprint" />
         </div>
       </div>
     </div>

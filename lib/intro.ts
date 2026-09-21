@@ -1,33 +1,24 @@
-// The site's opening sequence is a two-part handoff: the preloader plays a
-// ~1.3s build animation, then its curtain lifts and the hero animates in.
-// Both halves have to agree on whether the preloader is going to run, or the
-// hero either waits on a curtain that never comes (a blank second) or
-// animates underneath one that is still up.
+// The opening sequence - the preloader curtain, then the hero reveal - is
+// pure CSS (app/intro.css). Nothing in it waits for JavaScript, which is the
+// point: it used to be a chain of JS steps (download, hydrate, THEN start the
+// preloader, THEN start the hero), so on a phone the page was blank for
+// seconds while the first link in that chain arrived. As CSS it starts on the
+// first paint and takes a fixed ~0.9s however slow the JS is.
 //
-// That agreement used to be an implicit constant - the hero's delay was
-// tuned to the preloader's runtime. Once the preloader began playing once
-// per tab instead of on every load, a returning visitor got no curtain but
-// the hero still waited for it. This module is the single place that knows.
+// The one thing CSS cannot know is whether this visitor has already seen it
+// this session. That is answered by a tiny script that runs in <head>, before
+// the first paint, and marks the document:
+//
+//   <html class="pl-seen">   returning visitor: the CSS hides the whole intro
+//                            immediately, so there is no flash and no wait
+//   (no class)               first visit: the intro plays
+//
+// The flag is set the moment the intro STARTS rather than when it finishes,
+// so a reload or a quick second page never replays it even if the first was
+// interrupted. sessionStorage throws in a private window with site data
+// blocked; that is treated as "not seen", so the intro plays, the safe default.
 
-const SEEN_KEY = 'scalar-preloaded'
+export const INTRO_SEEN_KEY = 'scalar-preloaded'
+export const INTRO_SEEN_CLASS = 'pl-seen'
 
-// Matches the preloader's curtain-lift, in seconds. See components/preloader.tsx.
-export const INTRO_DELAY_AFTER_PRELOADER = 1.1
-
-export function preloaderAlreadySeen(): boolean {
-  // sessionStorage throws in a private window with site data blocked. Treat
-  // that as "not seen": the preloader plays, which is the safe default.
-  try {
-    return window.sessionStorage.getItem(SEEN_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-export function markPreloaderSeen(): void {
-  try {
-    window.sessionStorage.setItem(SEEN_KEY, '1')
-  } catch {
-    // Not remembered: the preloader replays next load, as it always used to.
-  }
-}
+export const INTRO_HEAD_SCRIPT = `try{var d=document.documentElement,k="${INTRO_SEEN_KEY}";if(sessionStorage.getItem(k)==="1")d.classList.add("${INTRO_SEEN_CLASS}");else sessionStorage.setItem(k,"1")}catch(e){}`
