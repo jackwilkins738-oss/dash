@@ -238,7 +238,7 @@ export const TRADES: Trade[] = [
     audience: 'builders and house extension firms',
     metaTitle: 'Website Design for Builders and Extensions',
     metaDescription:
-      'Fast, fixed-price websites for builders and extension firms: real project case studies, clear process and enquiries that arrive with the detail you need. From £750.',
+      'Fast, fixed-price websites for builders and extension firms: real project case studies, clear process and enquiries with the detail you need. From £750.',
     eyebrow: 'Websites for builders and extension firms',
     h1: 'A website that gets you shortlisted for the extension, not just the quick fix.',
     lede: 'Extension customers want a firm they can trust with their home for months. Your site is their first look at how you work.',
