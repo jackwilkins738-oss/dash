@@ -1,3 +1,20 @@
+// React's development build uses eval() to rebuild stack traces across
+// environments, so `next dev` logs a CSP error and loses debugging features
+// unless 'unsafe-eval' is allowed. It is added for development only - the
+// production header is unchanged, and React never uses eval() in production.
+const isDev = process.env.NODE_ENV === 'development'
+const scriptSrc = [
+  "script-src 'self' 'unsafe-inline'",
+  isDev ? "'unsafe-eval'" : null,
+  'https://admin.scalardigital.co.uk',
+  // googletagmanager.com serves the GA4 tag. Without it the consent banner,
+  // the analytics and the privacy-policy section describing them were all
+  // live while the script itself was blocked by this very header.
+  'https://www.googletagmanager.com',
+]
+  .filter(Boolean)
+  .join(' ')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {
@@ -21,11 +38,7 @@ const nextConfig = {
               "default-src 'self'",
               // admin.scalardigital.co.uk serves track.js - the dashboard
               // product's tracking snippet used on this site itself.
-              // googletagmanager.com serves the GA4 tag. Without it the
-              // consent banner, the analytics and the privacy-policy section
-              // describing them were all live while the script itself was
-              // blocked by this very header - the site collected nothing.
-              "script-src 'self' 'unsafe-inline' https://admin.scalardigital.co.uk https://www.googletagmanager.com",
+              scriptSrc,
               "style-src 'self' 'unsafe-inline'",
               // Storage public URLs for the "currently on site" project
               // photos (gallery.js) are served from this same Supabase
