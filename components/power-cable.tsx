@@ -460,7 +460,6 @@ export function PowerCable() {
           const p0 = pts[i]
           const p1 = pts[i + 1]
           const dir = p1.clone().sub(p0)
-          const len = dir.length() || 1
           const perp = new Vector3(-dir.y, dir.x, 0).normalize()
           const mid = p0
             .clone()
