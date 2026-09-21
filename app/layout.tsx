@@ -12,6 +12,7 @@ import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
 import { WhatsAppButton } from '@/components/whatsapp-button'
 import { InteractionLayer } from '@/components/interaction-layer'
+import { RevealController } from '@/components/reveal-controller'
 import { JsonLd } from '@/components/json-ld'
 import { GoogleAnalytics } from '@/components/google-analytics'
 import { PRICES, SITE } from '@/lib/site'
@@ -170,6 +171,7 @@ export default function RootLayout({
         <Preloader />
         <SmoothScroll />
         <InteractionLayer />
+        <RevealController />
         <SiteNav />
         {children}
         <SiteFooter />

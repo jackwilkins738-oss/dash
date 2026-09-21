@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cx } from '@/lib/cx'
 
 const links = [
   { href: '/', label: 'Home' },
@@ -30,7 +30,7 @@ export function SiteNav() {
 
   return (
     <header
-      className={cn(
+      className={cx(
         'fixed inset-x-0 top-0 z-50 transition-colors duration-300',
         scrolled || open
           ? 'border-b border-border bg-background/80 backdrop-blur-xl'
@@ -54,7 +54,7 @@ export function SiteNav() {
             <Link
               key={l.href}
               href={l.href}
-              className={cn(
+              className={cx(
                 'font-mono text-xs uppercase tracking-[0.15em] transition-colors',
                 pathname === l.href ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
@@ -79,8 +79,8 @@ export function SiteNav() {
           aria-expanded={open}
         >
           <div className="flex flex-col gap-1.5">
-            <span className={cn('h-px w-5 bg-foreground transition-transform', open && 'translate-y-[3px] rotate-45')} />
-            <span className={cn('h-px w-5 bg-foreground transition-transform', open && '-translate-y-[3px] -rotate-45')} />
+            <span className={cx('h-px w-5 bg-foreground transition-transform', open && 'translate-y-[3px] rotate-45')} />
+            <span className={cx('h-px w-5 bg-foreground transition-transform', open && '-translate-y-[3px] -rotate-45')} />
           </div>
         </button>
       </nav>
@@ -92,7 +92,7 @@ export function SiteNav() {
               <Link
                 key={l.href}
                 href={l.href}
-                className={cn(
+                className={cx(
                   'rounded-md px-3 py-3 font-mono text-sm uppercase tracking-[0.15em]',
                   pathname === l.href ? 'bg-secondary text-foreground' : 'text-muted-foreground',
                 )}
