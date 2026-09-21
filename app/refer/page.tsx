@@ -6,7 +6,7 @@ import { ReferralLink } from '@/components/referral-link'
 import { Reveal } from '@/components/reveal'
 
 export const metadata: Metadata = {
-  title: 'Refer a business — Scalar Digital',
+  title: 'Refer a Business and Save',
   description:
     'Know a tradesperson who needs a better website? They get 15% off their build, and you get 10% off a future one.',
   alternates: { canonical: '/refer' },

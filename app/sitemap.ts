@@ -1,15 +1,25 @@
 import type { MetadataRoute } from 'next'
+import { TRADES } from '@/lib/trades'
+import { SITE, UPDATED } from '@/lib/site'
 
-const BASE_URL = 'https://www.scalardigital.co.uk'
-
+// `lastModified` is the date the page's content last really changed (see lib/site.ts), not the
+// build time. A date that changes on every deploy teaches Google to ignore the field.
 export default function sitemap(): MetadataRoute.Sitemap {
-  const pages = ['', '/work', '/process', '/contact', '/refer']
-  const entries: MetadataRoute.Sitemap = pages.map((path) => ({
-    url: `${BASE_URL}${path}`,
-    lastModified: new Date(),
-    changeFrequency: 'monthly' as const,
-    priority: path === '' ? 1 : 0.8,
-  }))
-  entries.push({ url: `${BASE_URL}/privacy`, lastModified: new Date(), changeFrequency: 'yearly' as const, priority: 0.3 })
-  return entries
+  const at = (path: string, lastModified: string, priority: number): MetadataRoute.Sitemap[number] => ({
+    url: `${SITE.url}${path}`,
+    lastModified,
+    priority,
+  })
+
+  return [
+    at('', UPDATED, 1),
+    at('/work', UPDATED, 0.9),
+    ...TRADES.map((t) => at(`/websites-for/${t.slug}`, UPDATED, 0.8)),
+    at('/guides', UPDATED, 0.6),
+    at('/guides/how-much-does-a-tradesman-website-cost', UPDATED, 0.8),
+    at('/process', UPDATED, 0.6),
+    at('/contact', UPDATED, 0.7),
+    at('/refer', UPDATED, 0.4),
+    at('/privacy', '2026-09-10', 0.2),
+  ]
 }

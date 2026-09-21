@@ -1,13 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { PageHeader } from '@/components/page-header'
+import { Breadcrumbs } from '@/components/breadcrumbs'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 
 export const metadata: Metadata = {
-  title: 'Process — Scalar Digital',
+  title: 'How a Trade Website Build Works',
   description:
-    'How a build actually runs, start to finish: fixed price agreed up front, hand-coded, no surprises, no retainer once it ships.',
+    'How a hand-coded trade website gets built, start to finish: fixed price agreed up front, real progress along the way, and no retainer once it ships.',
   alternates: { canonical: '/process' },
 }
 
@@ -42,7 +43,8 @@ const STEPS = [
 export default function ProcessPage() {
   return (
     <main>
-      <PageHeader
+      <Breadcrumbs items={[{ name: 'How a build works', href: '/process' }]} />
+      <PageHeader compact
         eyebrow="Process"
         title="How a build actually runs."
         body="No discovery workshops, no sign-off committees. One person, a fixed price, and a straight line from enquiry to a site that's yours outright."

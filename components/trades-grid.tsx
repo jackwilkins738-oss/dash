@@ -1,9 +1,17 @@
+import Link from 'next/link'
 import { Reveal } from '@/components/reveal'
 
 // Same trades already named in the hero's opening line and the site's
 // metadata keywords - this just makes it scannable instead of buried in
 // a sentence, rather than introducing a new claim.
-const TRADES = ['Resin driveways', 'Landscaping', 'Loft conversions', 'House extensions', 'Roofing', 'Renovation']
+const TRADES = [
+  { label: 'Resin driveways', href: '/websites-for/driveway-installers' },
+  { label: 'Landscaping', href: '/websites-for/landscapers' },
+  { label: 'Loft conversions', href: '/websites-for/loft-conversion-companies' },
+  { label: 'House extensions', href: '/websites-for/builders-and-extension-firms' },
+  { label: 'Roofing', href: '/websites-for/roofers' },
+  { label: 'Renovation', href: '/websites-for/builders-and-extension-firms' },
+]
 
 export function TradesGrid() {
   return (
@@ -21,9 +29,16 @@ export function TradesGrid() {
           className="mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3"
         >
           {TRADES.map((trade) => (
-            <div key={trade} className="bg-background px-6 py-6 font-mono text-sm text-foreground/90 sm:py-7">
-              {trade}
-            </div>
+            <Link
+              key={trade.label}
+              href={trade.href}
+              className="group flex items-center justify-between bg-background px-6 py-6 font-mono text-sm text-foreground/90 transition-colors hover:bg-card hover:text-blueprint sm:py-7"
+            >
+              {trade.label}
+              <span className="text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-blueprint" aria-hidden="true">
+                &rarr;
+              </span>
+            </Link>
           ))}
         </Reveal>
 

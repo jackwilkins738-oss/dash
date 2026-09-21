@@ -2,11 +2,12 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { MessageCircle, Phone, Mail, Clock } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
+import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ContactForm } from '@/components/contact-form'
 import { Reveal } from '@/components/reveal'
 
 export const metadata: Metadata = {
-  title: 'Contact — Scalar Digital',
+  title: 'Get a Quote for Your Trade Website',
   description:
     'Start your build. Send an enquiry, message on WhatsApp, or call directly. Reply within 2 hours, no sales call.',
   alternates: { canonical: '/contact' },
@@ -37,7 +38,8 @@ const CHANNELS = [
 export default function ContactPage() {
   return (
     <main>
-      <PageHeader
+      <Breadcrumbs items={[{ name: 'Contact', href: '/contact' }]} />
+      <PageHeader compact
         eyebrow="Contact"
         title="Start your build."
         body="Tell me about your trade and the jobs you want more of. I'll come back with a plan and a fixed price — within 2 hours, not whenever I get around to it."

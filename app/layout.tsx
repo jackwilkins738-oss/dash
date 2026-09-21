@@ -7,6 +7,8 @@ import { Preloader } from '@/components/preloader'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
 import { WhatsAppButton } from '@/components/whatsapp-button'
+import { JsonLd } from '@/components/json-ld'
+import { PRICES, SITE } from '@/lib/site'
 
 // Bricolage/Instrument/Plex Mono instead of Space Grotesk + Geist Mono -
 // the latter pair is the recognizable "safe AI-generated site" default
@@ -33,45 +35,94 @@ const plexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://www.scalardigital.co.uk'),
-  title: 'Scalar Digital — Pure-code websites for high-end UK trades',
-  description:
-    'We build fast, hand-coded websites for driveways, landscaping, loft conversions, extensions and roofing firms. No WordPress bloat. Full ownership. From £750.',
-  keywords: [
-    'web design for tradesmen',
-    'driveway website design',
-    'landscaping website',
-    'loft conversion website',
-    'builder website UK',
-    'local SEO trades',
-  ],
+  metadataBase: new URL(SITE.url),
+  title: {
+    default: 'Scalar Digital | Web Design for UK Trades, From £750',
+    template: '%s | Scalar Digital',
+  },
+  description: SITE.description,
+  applicationName: SITE.name,
+  authors: [{ name: SITE.name, url: SITE.url }],
+  creator: SITE.name,
+  publisher: SITE.name,
   alternates: { canonical: '/' },
   openGraph: {
-    title: 'Scalar Digital — Pure-code websites for high-end UK trades',
+    title: 'Scalar Digital | Web Design for UK Trades',
     description:
-      'Websites that look more expensive than the jobs you quote. Fast, hand-coded, fully owned. From £750.',
+      'Websites that look more expensive than the jobs you quote. Fast, hand-coded, fully owned. Fixed price from £750.',
     type: 'website',
     url: '/',
-    siteName: 'Scalar Digital',
+    siteName: SITE.name,
+    locale: 'en_GB',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Scalar Digital — Pure-code websites for high-end UK trades',
-    description: 'Websites that look more expensive than the jobs you quote. From £750.',
+    title: 'Scalar Digital | Web Design for UK Trades',
+    description: 'Websites that look more expensive than the jobs you quote. Fixed price from £750.',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1, 'max-video-preview': -1 },
   },
 }
 
-const jsonLd = {
+// One connected graph: the business, the website, and what it sells. Nothing here claims reviews,
+// ratings, a street address or credentials the business does not have.
+const structuredData = {
   '@context': 'https://schema.org',
-  '@type': 'ProfessionalService',
-  name: 'Scalar Digital',
-  description: 'Hand-coded websites for UK trade businesses — loft conversions, driveways, landscaping and extensions.',
-  url: 'https://www.scalardigital.co.uk',
-  email: 'hello@scalardigital.co.uk',
-  telephone: '+447401696272',
-  areaServed: 'GB',
-  priceRange: '£750+',
-  address: { '@type': 'PostalAddress', addressCountry: 'GB' },
+  '@graph': [
+    {
+      '@type': ['Organization', 'ProfessionalService'],
+      '@id': `${SITE.url}/#organization`,
+      name: SITE.name,
+      url: SITE.url,
+      description: SITE.description,
+      logo: { '@type': 'ImageObject', url: SITE.logo, width: 520, height: 520 },
+      image: SITE.logo,
+      email: SITE.email,
+      telephone: SITE.phone,
+      sameAs: [SITE.linkedin],
+      areaServed: { '@type': 'Country', name: 'United Kingdom' },
+      knowsAbout: [
+        'Web design for tradespeople',
+        'Hand-coded websites',
+        'Website performance',
+        'Local SEO for trades',
+      ],
+      hasOfferCatalog: {
+        '@type': 'OfferCatalog',
+        name: 'Website design for UK trades',
+        itemListElement: [
+          {
+            '@type': 'Offer',
+            name: 'Landing page',
+            price: PRICES.landing,
+            priceCurrency: 'GBP',
+            itemOffered: { '@type': 'Service', name: 'One hand-coded, mobile-first landing page' },
+          },
+          {
+            '@type': 'Offer',
+            name: 'The Scalar build',
+            price: PRICES.build,
+            priceCurrency: 'GBP',
+            itemOffered: {
+              '@type': 'Service',
+              name: 'Five hand-coded pages plus a private dashboard for enquiries, quotes, jobs and invoices',
+            },
+          },
+        ],
+      },
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${SITE.url}/#website`,
+      url: SITE.url,
+      name: SITE.name,
+      inLanguage: 'en-GB',
+      publisher: { '@id': `${SITE.url}/#organization` },
+    },
+  ],
 }
 
 export const viewport: Viewport = {
@@ -96,7 +147,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://wfyzsnyfliohevpjpuib.supabase.co" />
       </head>
       <body className="antialiased font-sans">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <JsonLd data={structuredData} />
         <Preloader />
         <SmoothScroll />
         <SiteNav />

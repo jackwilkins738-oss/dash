@@ -9,9 +9,9 @@ const SERVICES = [
     title: 'Genuinely fast',
     body: (
       <>
-        Hand-coded and lightweight, so your site loads before a customer even thinks about hitting back. Amazon
-        found every extra {stat('0.1 seconds')} of load time cost them {stat('1% in sales')} — yours won&apos;t have
-        that problem.
+        Hand-coded and lightweight, so your site loads before a customer even thinks about hitting back. Google has
+        reported that {stat('more than half')} of mobile visits are abandoned when a page takes longer than three
+        seconds to load — yours won&apos;t be one of them.
       </>
     ),
   },
@@ -21,8 +21,7 @@ const SERVICES = [
     body: (
       <>
         Most of your customers are on a phone in a driveway or a garden. A site that isn&apos;t built for that loses
-        visitors {stat('5 times faster')} than one that is — yours is built for the thumb first, not squeezed to fit
-        it after.
+        them within seconds — yours is built for the thumb first, not squeezed to fit it after.
       </>
     ),
   },
@@ -31,8 +30,9 @@ const SERVICES = [
     title: 'No WordPress bloat',
     body: (
       <>
-        No themes, no 30 plugins, no security holes. {stat('9 in 10')} hacked business websites run WordPress —
-        almost always through a plugin, not WordPress itself. Yours has none to break in through.
+        No themes, no 30 plugins, no security holes. Security firms&apos; annual reports consistently find WordPress
+        makes up {stat('the large majority')} of hacked CMS websites, usually through an outdated plugin rather than
+        WordPress itself. Yours has none to break in through.
       </>
     ),
   },

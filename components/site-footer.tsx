@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { TRADES } from '@/lib/trades'
 import { ArrowUp, ArrowUpRight, BadgeCheck, Code2, KeyRound, Mail, MessageCircle, Phone, Tag } from 'lucide-react'
 
 const WHATSAPP = 'https://wa.me/66638306449'
@@ -12,6 +13,7 @@ const SERVICES = [
   { href: '/work#pricing', label: 'The Scalar build', note: '£2,500' },
   { href: '/#dash', label: 'Client dashboard', note: 'included' },
   { href: '/work#estimate', label: 'Price estimator', note: '' },
+  { href: '/guides/how-much-does-a-tradesman-website-cost', label: 'Website cost guide', note: '' },
 ]
 
 const COMPANY = [
@@ -181,6 +183,16 @@ export function SiteFooter() {
             </ul>
           </div>
         </div>
+
+        {/* Trade pages: real internal links, useful to visitors and crawlers alike */}
+        <nav aria-label="Websites for trades" className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border py-6">
+          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">Websites for</span>
+          {TRADES.map((t) => (
+            <Link key={t.slug} href={`/websites-for/${t.slug}`} className={linkClass}>
+              {t.label}
+            </Link>
+          ))}
+        </nav>
 
         {/* Bottom bar */}
         <div className="flex flex-col gap-4 border-t border-border py-6 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">

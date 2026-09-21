@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/page-header'
 import { Reveal } from '@/components/reveal'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — Scalar Digital',
+  title: 'Privacy Policy',
   description: 'What Scalar Digital collects through this site, why, and how to exercise your data rights.',
   alternates: { canonical: '/privacy' },
   robots: { index: true, follow: true },
