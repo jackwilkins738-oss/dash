@@ -54,33 +54,51 @@ gtag('config', '${GA_ID}');`}
       </Script>
 
       {!asked && (
+        // A slim bar pinned to the bottom edge rather than a floating card.
+        // The card was ~140px tall sitting over the bottom-left of the
+        // viewport, which on this site meant it covered the hero's CTA row
+        // and then a heading or a paragraph of body copy on every section
+        // as you scrolled - it stays until it's answered, so that's the
+        // whole first visit. A full-width strip reads as browser chrome,
+        // costs ~56px, and covers no column of text.
+        //
+        // pr-20/sm:pr-28 keeps the buttons clear of the WhatsApp button,
+        // which is fixed at bottom-right and sits on top of this bar.
         <div
           role="dialog"
           aria-label="Analytics cookies"
-          className="fixed bottom-4 left-4 right-4 z-[60] max-w-sm rounded-xl border border-border bg-card/95 p-4 text-sm shadow-2xl backdrop-blur-xl sm:right-auto"
+          className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-card/95 backdrop-blur-xl"
         >
-          <p className="leading-relaxed text-foreground/90">
-            I&apos;d like to use Google Analytics cookies to see which pages help people. Nothing is set unless you
-            accept.{' '}
-            <a href="/privacy#cookies" className="text-blueprint underline-offset-4 hover:underline">
-              Details
-            </a>
-          </p>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => choose('granted')}
-              className="flex-1 rounded-md border border-border px-3 py-2 font-mono text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-blueprint hover:text-blueprint"
-            >
-              Accept
-            </button>
-            <button
-              type="button"
-              onClick={() => choose('denied')}
-              className="flex-1 rounded-md border border-border px-3 py-2 font-mono text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-blueprint hover:text-blueprint"
-            >
-              Decline
-            </button>
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-2.5 pr-16 text-xs leading-snug sm:gap-6 sm:px-8 sm:pr-28 sm:text-sm">
+            {/* Short form on phones. Beside the buttons there is only about
+                130px of column left, and the full sentence wrapped to four
+                lines - a 138px bar, taller than the card this replaced. */}
+            <p className="leading-snug text-foreground/90">
+              <span className="sm:hidden">Analytics cookies? Nothing is set unless you accept.</span>
+              <span className="hidden sm:inline">
+                I&apos;d like to use Google Analytics cookies to see which pages help people. Nothing is set
+                unless you accept.
+              </span>{' '}
+              <a href="/privacy#cookies" className="text-blueprint underline-offset-4 hover:underline">
+                Details
+              </a>
+            </p>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => choose('granted')}
+                className="btn-chamfer-sm border border-blueprint/40 bg-blueprint/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-foreground transition-colors hover:border-blueprint hover:text-blueprint sm:px-4 sm:py-2 sm:text-xs"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                onClick={() => choose('denied')}
+                className="btn-chamfer-sm border border-border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-foreground transition-colors hover:border-blueprint hover:text-blueprint sm:px-4 sm:py-2 sm:text-xs"
+              >
+                Decline
+              </button>
+            </div>
           </div>
         </div>
       )}

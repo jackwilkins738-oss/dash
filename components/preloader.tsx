@@ -3,6 +3,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 
+// Shown once per browser tab. The build sequence is a first-impression
+// piece; replaying it on every refresh and every return visit just taxes
+// someone who already watched it, on a site whose whole argument is that
+// it loads before you think to hit back.
+const SEEN_KEY = 'scalar-preloaded'
+
+function alreadySeen() {
+  // Throws in a private window with site data blocked - treat that as
+  // "not seen" and play it, rather than taking the page down.
+  try {
+    return window.sessionStorage.getItem(SEEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export function Preloader() {
   const root = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -11,12 +27,29 @@ export function Preloader() {
 
   useEffect(() => {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    document.body.style.overflow = 'hidden'
 
     const finish = () => {
       document.body.style.overflow = ''
+      try {
+        window.sessionStorage.setItem(SEEN_KEY, '1')
+      } catch {
+        // Preference just won't carry to the next page - it replays, which
+        // is the current behaviour anyway.
+      }
       setDone(true)
     }
+
+    // Returning within the same tab: drop the overlay on the first effect
+    // tick without locking scroll or running the timeline. `done` still
+    // starts false so the server and client agree on the first render -
+    // deriving it from sessionStorage during render would be a hydration
+    // mismatch - so there is a single frame of overlay before it goes.
+    if (alreadySeen()) {
+      finish()
+      return
+    }
+
+    document.body.style.overflow = 'hidden'
 
     if (prefersReduced) {
       setCount(100)
