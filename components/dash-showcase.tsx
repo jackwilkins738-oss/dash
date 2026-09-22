@@ -18,6 +18,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
+import { EnquiryHandoff } from '@/components/enquiry-handoff'
 
 /*
  * An interactive preview of the dash, drawn with the real product's own
@@ -403,7 +404,11 @@ export function DashShowcase() {
           </p>
         </Reveal>
 
-        <Reveal stagger className="mt-10 grid gap-5 md:grid-cols-2">
+        <Reveal className="mt-10">
+          <EnquiryHandoff />
+        </Reveal>
+
+        <Reveal stagger className="mt-8 grid gap-5 md:grid-cols-2">
           <div className="rounded-2xl border border-border bg-card/40 p-7">
             <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
               Most trades today
