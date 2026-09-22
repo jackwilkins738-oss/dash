@@ -147,12 +147,12 @@ export function SpeedCheck() {
     if (timerRef.current) clearInterval(timerRef.current)
     timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000)
     const controller = new AbortController()
-    // A single real Lighthouse run can take well over 45s server-side on
-    // Google's end - confirmed by testing directly against the live API,
-    // where even scalardigital.co.uk alone took longer than that. This runs
-    // two in parallel (their site and Scalar's own), so the timeout has to be
-    // generous enough not to cut off a run that was going to succeed.
-    const timeout = setTimeout(() => controller.abort(), 90_000)
+    // Live testing found 90s still wasn't enough on repeated real runs - a
+    // genuine Lighthouse audit's latency on Google's end is highly variable
+    // and firing two in parallel (their site + Scalar's own) compounds it.
+    // This is purely the browser waiting, no server or quota cost to us, so
+    // there's no reason to cut it off early - 3 minutes covers it.
+    const timeout = setTimeout(() => controller.abort(), 180_000)
 
     try {
       const cachedOwn = readOwnScoreCache()
@@ -168,7 +168,7 @@ export function SpeedCheck() {
     } catch (err) {
       setStatus('error')
       if (err instanceof Error && err.name === 'AbortError') {
-        setErrorMsg("That's taking longer than usual — Google's checker may be under load right now. Try again in a moment.")
+        setErrorMsg("That's taken over 3 minutes without an answer — Google's checker is having real trouble right now. Try again shortly.")
       } else if (err instanceof Error && err.message === 'rate-limited') {
         setErrorMsg("Google's checker is busy right now — give it a minute and try again.")
       } else {
@@ -238,8 +238,10 @@ export function SpeedCheck() {
               Running Google&apos;s real test&hellip; {elapsed}s
               <span className="block normal-case tracking-normal text-muted-foreground/70">
                 {elapsed < 20
-                  ? "A genuine Lighthouse audit, not a shortcut — usually done within a minute."
-                  : 'Still going — a slow site takes Google longer to fully load and measure.'}
+                  ? 'A genuine Lighthouse audit, not a shortcut — real ones can take a minute or two.'
+                  : elapsed < 60
+                    ? 'Still going — Google is genuinely measuring the page, not stuck.'
+                    : "Taking a while today, but still working — Google's own servers set the pace here, not this site."}
               </span>
             </p>
           )}
