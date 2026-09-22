@@ -329,6 +329,20 @@ ul {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+/* A 3-up variant for sections with exactly three items (materials.html) -
+   1 column on a phone, 3 from tablet width up, rather than reusing the
+   4-up grid's breakpoints for a 3-item layout. */
+.services-grid-3 {
+  margin-top: 40px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .services-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
 .card {
   background: var(--card);
   border: 1px solid var(--card-border);
@@ -1031,6 +1045,229 @@ ul {
 .other-jobs a {
   color: var(--accent-light);
   font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------
+   Shared interaction layer - scroll progress, magnetic buttons,
+   cursor-lit cards, animated number entrances. Same vocabulary as the
+   parent Scalar site's own interaction-layer.tsx, reimplemented here in
+   plain CSS/JS since this page has no framework.
+   --------------------------------------------------------------------- */
+.scroll-progress-track {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 110;
+  background: transparent;
+}
+#scrollProgress {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+  transition: width 0.1s linear;
+}
+
+[data-magnetic] {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+[data-spotlight],
+.card,
+.job,
+.option-card,
+.area-card {
+  position: relative;
+  --mx: 50%;
+  --my: 50%;
+}
+[data-spotlight]::before,
+.card::before,
+.job::before,
+.option-card::before,
+.area-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(220px circle at var(--mx) var(--my), rgba(143, 214, 180, 0.14), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+[data-spotlight]:hover::before,
+.card:hover::before,
+.job:hover::before,
+.option-card:hover::before,
+.area-card:hover::before {
+  opacity: 1;
+}
+/* The glow sits behind each card's own content - everything inside needs
+   a stacking context above it, or the overlay would sit on top and mute
+   the text/icons underneath. */
+.card > *,
+.job > *,
+.option-card > *,
+.area-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+[data-jump] {
+  opacity: 0;
+  display: inline-block;
+}
+
+/* ---------------------------------------------------------------------
+   Material lifespan comparison bars - real, sourced figures (see
+   script.js's comment for the price guides these and the configurator's
+   own numbers were checked against). Grows in once, on first view.
+   --------------------------------------------------------------------- */
+.lifespan-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 8px;
+}
+.lifespan-bar {
+  display: grid;
+  grid-template-columns: 100px 1fr 90px;
+  align-items: center;
+  gap: 14px;
+  opacity: 0.75;
+  transition: opacity 0.25s ease;
+}
+.lifespan-bar.is-selected {
+  opacity: 1;
+}
+.lifespan-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.lifespan-bar-label .swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--swatch);
+  flex: none;
+}
+.lifespan-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.lifespan-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent-light));
+}
+.lifespan-bar.is-selected .lifespan-fill {
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+  box-shadow: 0 0 12px rgba(143, 214, 180, 0.45);
+}
+.lifespan-years {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: right;
+}
+.lifespan-source {
+  margin-top: 14px;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------
+   "How it works" handoff flow (index.html) - three connected nodes with a
+   travelling dot, the same visual grammar as the Scalar-build's own
+   enquiry-to-dashboard animation, adapted to Verdigris's own moment:
+   message sent -> quote returned -> job booked.
+   --------------------------------------------------------------------- */
+.flow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin-top: 40px;
+}
+@media (max-width: 700px) {
+  .flow {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+}
+.flow-node {
+  position: relative;
+  text-align: center;
+  padding: 0 20px;
+}
+.flow-node-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 1.5px solid var(--card-border);
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: border-color 0.3s ease, color 0.3s ease, background 0.3s ease, transform 0.3s ease;
+}
+.flow-node.is-active .flow-node-icon {
+  border-color: var(--accent-light);
+  color: var(--accent-light);
+  background: rgba(95, 168, 138, 0.14);
+  transform: scale(1.08);
+}
+.flow-node h3 {
+  margin-top: 16px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.flow-node p {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  max-width: 26ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+.flow-line {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  width: 100%;
+  height: 1.5px;
+  background: var(--line);
+}
+.flow-node:last-child .flow-line {
+  display: none;
+}
+@media (max-width: 700px) {
+  .flow-line {
+    display: none;
+  }
+}
+.flow-dot {
+  position: absolute;
+  top: -3px;
+  left: 0%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  box-shadow: 0 0 8px 2px rgba(143, 214, 180, 0.55);
+  opacity: 0;
+  transition: left 1.1s cubic-bezier(0.65, 0, 0.35, 1), opacity 0.3s ease;
 }
 
 /* Scroll reveal */

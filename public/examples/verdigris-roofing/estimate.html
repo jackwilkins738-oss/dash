@@ -22,6 +22,7 @@
 </script>
 </head>
 <body>
+<div class="scroll-progress-track" aria-hidden="true"><div id="scrollProgress"></div></div>
 
 <div class="scalar-banner">
   <span class="wrap scalar-banner-inner">
@@ -51,6 +52,7 @@
       <a href="/examples/verdigris-roofing/">Home</a>
       <a href="/examples/verdigris-roofing/services.html">Services</a>
       <a href="/examples/verdigris-roofing/work.html">Our work</a>
+      <a href="/examples/verdigris-roofing/materials.html">Materials</a>
       <a href="/examples/verdigris-roofing/areas.html">Areas we cover</a>
       <a href="/examples/verdigris-roofing/estimate.html" aria-current="page">Instant estimate</a>
       <a href="/examples/verdigris-roofing/contact.html">Contact</a>
@@ -64,7 +66,8 @@
     <a href="/examples/verdigris-roofing/">Home</a>
     <a href="/examples/verdigris-roofing/services.html">Services</a>
     <a href="/examples/verdigris-roofing/work.html">Our work</a>
-    <a href="/examples/verdigris-roofing/areas.html">Areas we cover</a>
+    <a href="/examples/verdigris-roofing/materials.html">Materials</a>
+      <a href="/examples/verdigris-roofing/areas.html">Areas we cover</a>
     <a href="/examples/verdigris-roofing/estimate.html" aria-current="page">Instant estimate</a>
     <a href="/examples/verdigris-roofing/contact.html">Contact</a>
     <a class="btn btn-primary" href="/examples/verdigris-roofing/estimate.html">Instant estimate</a>
@@ -129,6 +132,34 @@
           </div>
         </div>
 
+        <div class="config-step reveal" data-done="true">
+          <div class="config-step-head">
+            <span class="card-num">&#9432;</span>
+            <h3>How long each material actually lasts</h3>
+          </div>
+          <div class="lifespan-chart">
+            <div class="lifespan-bar is-selected" data-material="concrete" data-max-years="60">
+              <span class="lifespan-bar-label"><span class="swatch" style="--swatch:#7c5443"></span>Concrete tile</span>
+              <span class="lifespan-track"><span class="lifespan-fill"></span></span>
+              <span class="lifespan-years">40&ndash;60 yrs</span>
+            </div>
+            <div class="lifespan-bar" data-material="clay" data-max-years="100">
+              <span class="lifespan-bar-label"><span class="swatch" style="--swatch:#b3592f"></span>Clay tile</span>
+              <span class="lifespan-track"><span class="lifespan-fill"></span></span>
+              <span class="lifespan-years">60&ndash;100 yrs</span>
+            </div>
+            <div class="lifespan-bar" data-material="slate" data-max-years="150">
+              <span class="lifespan-bar-label"><span class="swatch" style="--swatch:#3f4c56"></span>Slate</span>
+              <span class="lifespan-track"><span class="lifespan-fill"></span></span>
+              <span class="lifespan-years">80&ndash;150 yrs</span>
+            </div>
+          </div>
+          <p class="lifespan-source">
+            Typical UK lifespans (upper estimate shown) — yours will depend on installation, pitch and upkeep.
+            <a href="/examples/verdigris-roofing/materials.html">More on each material &rarr;</a>
+          </p>
+        </div>
+
         <p class="other-jobs reveal">
           Repair, flat roof or guttering instead? Those are priced per job, not by size —
           <a href="https://wa.me/447700900123" target="_blank" rel="noopener noreferrer">message us a photo on WhatsApp</a>
@@ -160,12 +191,13 @@
         <div class="price-display">
           <span class="price-label">Estimated price</span>
           <span class="price-value" id="priceValue">£0</span>
-          <p class="price-note">A real quote is always written and fixed before we start — this is a starting guide, not a bill.</p>
+          <p class="price-note" id="materialLife">40&ndash;60 years typical lifespan</p>
         </div>
 
-        <a class="btn btn-primary btn-lg config-cta" id="configCta" href="https://wa.me/447700900123" target="_blank" rel="noopener noreferrer">
+        <a class="btn btn-primary btn-lg config-cta" id="configCta" data-magnetic href="https://wa.me/447700900123" target="_blank" rel="noopener noreferrer">
           Get this as a fixed quote
         </a>
+        <p class="price-note" style="margin-top:10px;">A real quote is always written and fixed before we start — this is a starting guide, not a bill.</p>
       </div>
 
     </div>
