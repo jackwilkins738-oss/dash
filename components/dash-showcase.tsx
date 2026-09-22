@@ -373,19 +373,33 @@ export function DashShowcase() {
   const View = VIEWS[view]
 
   return (
-    <section id="dash" className="border-t border-border py-24 sm:py-32">
-      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+    <section id="dash" className="relative overflow-hidden border-y border-[#e8935e]/25 py-24 sm:py-32">
+      {/* A distinct product zone: the dash has its own brand (warm orange, dark
+          sidebar) inside the mockup below - this wash carries that identity out
+          into the marketing section itself, so the eye registers "a different
+          product" before reading a word, then the mockup pays it off. */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(60% 55% at 50% 0%, rgba(232,147,94,0.10), transparent 65%), radial-gradient(45% 40% at 100% 100%, rgba(232,147,94,0.07), transparent 60%)',
+        }}
+        aria-hidden="true"
+      />
+      <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="max-w-3xl">
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
-            The dash · included in The Scalar build
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#e8935e]/40 bg-[#e8935e]/10 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.25em] text-[#e8935e]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#e8935e]" />
+            Included with every Scalar build — not an add-on
           </span>
-          <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
-            The site brings the lead in. The dash runs the job after.
+          <h2 className="mt-5 font-display text-balance text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
+            The site brings the lead in.
+            <br className="hidden sm:block" /> <span className="text-[#e8935e]">The dash runs the job after.</span>
           </h2>
-          <p className="mt-5 max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-            Every Scalar build comes with your own private dashboard: enquiries, quotes, jobs, invoices and a customer
-            portal in one place, instead of five apps and a WhatsApp thread. Click around the preview below — same
-            layout as the real thing, shown here with sample data.
+          <p className="mt-5 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
+            This is the part that separates a website from a business system. Enquiries, quotes, jobs, invoices and
+            a customer portal, in your own name and colours, instead of five apps and a WhatsApp thread. Click
+            around the preview below — same layout as the real product, shown here with sample data.
           </p>
         </Reveal>
 
@@ -408,8 +422,8 @@ export function DashShowcase() {
               ))}
             </ul>
           </div>
-          <div className="rounded-2xl border border-blueprint/40 bg-card p-7">
-            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">With the dash</span>
+          <div className="rounded-2xl border border-[#e8935e]/40 bg-card p-7">
+            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-[#e8935e]">With the dash</span>
             <ul className="mt-5 space-y-3.5 text-sm text-foreground/90">
               {[
                 'Every enquiry in one list, and the ones nobody has followed up get flagged',
@@ -418,7 +432,7 @@ export function DashShowcase() {
                 'Variations approved in the customer’s portal, and logged',
               ].map((t) => (
                 <li key={t} className="flex items-start gap-3">
-                  <Check className="mt-0.5 h-4 w-4 flex-none text-blueprint" strokeWidth={2.5} />
+                  <Check className="mt-0.5 h-4 w-4 flex-none text-[#e8935e]" strokeWidth={2.5} />
                   {t}
                 </li>
               ))}
@@ -496,7 +510,7 @@ export function DashShowcase() {
         <Reveal stagger className="mt-16 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map(({ Icon, title, body }) => (
             <div key={title}>
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-blueprint/30 bg-blueprint/10 text-blueprint">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e8935e]/30 bg-[#e8935e]/10 text-[#e8935e]">
                 <Icon className="h-4 w-4" strokeWidth={2.25} />
               </span>
               <h3 className="mt-4 font-display text-lg font-semibold">{title}</h3>
@@ -506,17 +520,17 @@ export function DashShowcase() {
         </Reveal>
 
         <Reveal className="mt-16">
-          <div className="relative overflow-hidden rounded-2xl border border-blueprint/40 bg-card p-8 sm:p-10">
+          <div className="relative overflow-hidden rounded-2xl border border-[#e8935e]/40 bg-card p-8 sm:p-10">
             <div
               className="pointer-events-none absolute inset-0 opacity-70"
-              style={{ background: 'radial-gradient(80% 70% at 100% 0%, oklch(0.62 0.135 244 / 0.18), transparent 60%)' }}
+              style={{ background: 'radial-gradient(80% 70% at 100% 0%, rgba(232,147,94,0.18), transparent 60%)' }}
               aria-hidden="true"
             />
             <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="max-w-xl">
-                <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Included, not an add-on</span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-[#e8935e]">Included, not an add-on</span>
                 <p className="mt-3 font-display text-2xl font-bold sm:text-3xl">
-                  The dash comes with The Scalar build. <span className="text-blueprint">£2,500, fixed.</span>
+                  The dash comes with The Scalar build. <span className="text-[#e8935e]">£2,500, fixed.</span>
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   Your five-page site and your own dashboard, agreed as one price before a line of code is written. Dashboard hosting is free for your first 12 months; after that it is a small optional monthly fee, agreed up front. Your website stays yours either way.
@@ -524,7 +538,7 @@ export function DashShowcase() {
               </div>
               <Link
                 href="/contact"
-                className="btn-chamfer group inline-flex flex-none items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
+                className="btn-chamfer group inline-flex flex-none items-center justify-center gap-2 bg-[#e8935e] px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-[#1a0f08] transition-colors hover:bg-[#f5b488]"
               >
                 Start your build
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
