@@ -4,7 +4,7 @@ import { BlueprintCanvas } from '@/components/blueprint-canvas'
 import { SiteShowcase } from '@/components/site-showcase'
 import { TrustBadges } from '@/components/trust-badges'
 
-const HEADLINE = "Websites that look more expensive than the job you're quoting."
+const HEADLINE = "The digital infrastructure ambitious trade businesses run on."
 const WORDS = HEADLINE.split(' ')
 
 // A server component. The reveal (the headline rising word by word, then the
@@ -39,7 +39,7 @@ export function Hero() {
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-4 py-1.5 backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-blueprint" />
               <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
-                Web design for high-end UK trades
+                Digital infrastructure for UK trades
               </span>
             </div>
 
@@ -60,8 +60,9 @@ export function Hero() {
             </h1>
 
             <p className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-              I&apos;m a tradesman who learned to code. I build fast, hand-made websites for driveway, landscaping,
-              loft and extension firms who are tired of losing quality jobs to a slower, cheaper-looking rival.
+              I build the site, the enquiry system and the dashboard behind it as one piece of work, engineered by
+              someone who&apos;s stood on the tools. It&apos;s built to win the jobs worth having and to run the
+              admin around them, not just to exist.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -88,8 +89,8 @@ export function Hero() {
             >
               <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-brass" aria-hidden="true" />
               <span>
-                <span className="font-semibold text-foreground">Every build includes your own private dashboard</span>
-                {' '}for enquiries, quotes, jobs and invoices.{' '}
+                <span className="font-semibold text-foreground">Every build runs on your own private dashboard</span>
+                {' '}— enquiries, quotes, jobs and invoices, in one place.{' '}
                 <span className="text-blueprint underline-offset-4 group-hover:underline">See it in action &darr;</span>
               </span>
             </Link>
@@ -98,7 +99,7 @@ export function Hero() {
               {[
                 { k: '<1s', v: 'Load time on desktop' },
                 { k: '100', v: 'Lighthouse target' },
-                { k: '£750', v: 'Fixed from' },
+                { k: '<2 hrs', v: 'Enquiry reply time' },
               ].map((s) => (
                 <div key={s.v}>
                   <dt className="font-mono text-2xl font-bold text-blueprint sm:text-3xl">{s.k}</dt>

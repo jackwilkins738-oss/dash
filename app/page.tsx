@@ -24,6 +24,11 @@ const PRINCIPLES = [
   },
   {
     n: '03',
+    title: 'Looked at as a system, not a page',
+    body: "Before I design anything, I look at how the enquiry actually gets picked up, quoted and closed. The site, the dashboard and the way they connect are built to fix that whole path — not just to exist.",
+  },
+  {
+    n: '04',
     title: 'Owned outright, forever',
     body: 'You pay once. The code, the domain, the lot — it belongs to you. No monthly rental on your website, no being held hostage when you want a change.',
   },
@@ -36,6 +41,7 @@ export default function HomePage() {
       <Hero />
       <TrustMarquee />
       <TradesGrid />
+      <DashShowcase />
 
       <section className="py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
@@ -123,7 +129,6 @@ export default function HomePage() {
       <SpeedRace />
       <Transformation />
       <ExampleBuild />
-      <DashShowcase />
       <CtaBand />
     </main>
   )

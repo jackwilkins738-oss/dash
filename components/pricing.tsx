@@ -4,31 +4,31 @@ import { Check } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 
 const LANDING_INCLUDED: ReactNode[] = [
-  '1 hand-coded landing page',
-  'Custom design — no templates',
+  'One hand-coded page, engineered to convert, not just to exist',
+  'Custom design, built for your business — no templates',
   'Mobile-first, sub-second load times',
-  'Basic on-page SEO',
-  'WhatsApp, call and enquiry form',
-  'You own the code and domain outright',
-  '14 days of tweaks after launch',
+  'Local search foundations built in',
+  'WhatsApp, call and enquiry routing built in',
+  'You own the code and the domain outright',
+  '14 days of support after launch',
 ]
 
 const BUILD_INCLUDED: ReactNode[] = [
-  '5 hand-coded pages, including a Gallery and Service Areas page',
+  'Five hand-coded pages, including a gallery and a service-areas page',
   <>
     <strong className="font-semibold text-blueprint">Your own private dashboard</strong> — enquiries, quotes, jobs,
-    invoices and a customer portal, in your business name and colours. Hosted by me, free for your first 12 months
+    invoices and a customer portal, running under your business name. Hosted free for your first 12 months
   </>,
-  'Custom design — no templates',
+  'Custom design, built around how your business actually wins work',
   'Mobile-first, sub-second load times',
-  'Local SEO built into the site structure, not just a meta tag',
-  'WhatsApp, call and enquiry form',
+  "Local SEO built into the site's structure, not bolted on as a meta tag",
+  'WhatsApp, call and enquiry routing built in',
   <>
-    Google Business & reviews wired in — listings with photos get{' '}
+    Google Business and reviews wired in — listings with photos get{' '}
     <strong className="font-semibold text-blueprint">42% more direction requests</strong>
   </>,
-  'You own the code and domain outright',
-  '30 days of tweaks after launch',
+  'You own the code and the domain outright',
+  '30 days of support after launch',
 ]
 
 export function Pricing() {
@@ -38,11 +38,12 @@ export function Pricing() {
         <Reveal className="max-w-2xl">
           <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Pricing</span>
           <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
-            Two fixed prices. No surprises, no monthly rental on your site.
+            One number, agreed before any work starts.
           </h2>
           <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
-            You quote fixed prices, so I do too. Need a single strong page or a full site with room to show off past
-            work — either way we agree the number before a single line of code is written.
+            The price reflects what&apos;s actually being built: a site engineered to win better work, and the
+            system behind it that runs your enquiries, quotes and jobs. We agree the figure before a line of code
+            is written, and it doesn&apos;t move once we start.
           </p>
         </Reveal>
 
@@ -51,13 +52,13 @@ export function Pricing() {
             label="Landing Page"
             price="£750"
             included={LANDING_INCLUDED}
-            footnote="No hidden extras once we start"
+            footnote="Fixed at the outset — nothing added later"
           />
           <PriceCard
             label="The Scalar build"
             price="£2,500"
             included={BUILD_INCLUDED}
-            footnote="No hidden extras once we start"
+            footnote="Fixed at the outset — nothing added later"
             highlighted
           />
         </Reveal>
