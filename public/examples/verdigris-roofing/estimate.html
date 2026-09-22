@@ -82,8 +82,9 @@
       <p class="breadcrumb reveal"><a href="/examples/verdigris-roofing/">Home</a> / Instant estimate</p>
       <h1 class="reveal">Build your roof. Watch the price move.</h1>
       <p class="lead reveal">
-        Pick a material and a rough size for a re-roof — the price updates as you go. It&rsquo;s a real starting
-        point, not the final number; that always comes as a proper written quote.
+        Material, size, roof shape, access, extras — the same things a roofer actually walks the job for, not just
+        square footage. The price updates as you go, itemised, so you can see what's driving it. It&rsquo;s a real
+        starting point, not the final number; that always comes as a proper written quote.
       </p>
     </div>
   </section>
@@ -148,6 +149,45 @@
           </div>
         </div>
 
+        <div class="config-step" data-done="true">
+          <div class="config-step-head">
+            <span class="card-num">03</span>
+            <h3>Roof shape</h3>
+          </div>
+          <div class="option-grid">
+            <button class="option-card" type="button" data-complexity="simple" aria-pressed="true">
+              Simple
+              <span class="price-hint">One or two plain pitches</span>
+            </button>
+            <button class="option-card" type="button" data-complexity="moderate" aria-pressed="false">
+              Some hips/valleys
+              <span class="price-hint">Typical semi or detached</span>
+            </button>
+            <button class="option-card" type="button" data-complexity="complex" aria-pressed="false">
+              Complex
+              <span class="price-hint">Dormers, multiple valleys</span>
+            </button>
+          </div>
+          <p class="config-note">More cuts, more junctions, more labour &mdash; a complex roof genuinely costs more to cover, not just more to look at.</p>
+        </div>
+
+        <div class="config-step" data-done="true">
+          <div class="config-step-head">
+            <span class="card-num">04</span>
+            <h3>How&rsquo;s the access?</h3>
+          </div>
+          <div class="option-grid option-grid-2col">
+            <button class="option-card" type="button" data-access="standard" aria-pressed="true">
+              Standard
+              <span class="price-hint">Front &amp; side access, room for scaffold</span>
+            </button>
+            <button class="option-card" type="button" data-access="restricted" aria-pressed="false">
+              Restricted
+              <span class="price-hint">Terraced, no side access, narrow street</span>
+            </button>
+          </div>
+        </div>
+
         <div class="config-step reveal" data-done="true">
           <div class="config-step-head">
             <span class="card-num">&#9432;</span>
@@ -178,7 +218,7 @@
 
         <div class="config-step reveal" data-done="true">
           <div class="config-step-head">
-            <span class="card-num">03</span>
+            <span class="card-num">05</span>
             <h3>Anything else while we&rsquo;re there?</h3>
           </div>
           <ul class="extras-list">
@@ -198,12 +238,24 @@
             </li>
             <li class="extra-toggle">
               <span>
-                <span class="extra-toggle-label">Skip hire, included on-site</span>
-                <span class="extra-toggle-price">+&pound;320</span>
+                <span class="extra-toggle-label">Loft insulation top-up to current Building Regs</span>
+                <span class="extra-toggle-price">+&pound;850</span>
               </span>
-              <button type="button" class="switch" data-extra="skip" role="switch" aria-checked="false" aria-label="Add skip hire"></button>
+              <button type="button" class="switch" data-extra="insulation" role="switch" aria-checked="false" aria-label="Add loft insulation top-up"></button>
+            </li>
+            <li class="extra-toggle">
+              <span>
+                <span class="extra-toggle-label">Add a roof window (Velux-style)</span>
+                <span class="extra-toggle-price">+&pound;950</span>
+              </span>
+              <button type="button" class="switch" data-extra="veluxWindow" role="switch" aria-checked="false" aria-label="Add a roof window"></button>
             </li>
           </ul>
+          <p class="config-note">
+            A full re-cover like this counts as &ldquo;renovating a thermal element&rdquo; under Building Regs Part
+            L, which means bringing the insulation up to current standard where it&rsquo;s feasible to &mdash; if
+            your loft&rsquo;s under that already, this is the one to tick.
+          </p>
         </div>
 
         </div>
@@ -256,6 +308,29 @@
           <span class="price-value" id="priceValue">£0</span>
           <p class="price-note" id="materialLife">40&ndash;60 years typical lifespan</p>
         </div>
+
+        <dl class="price-breakdown" id="priceBreakdown">
+          <div class="breakdown-row">
+            <dt>Base &mdash; material &amp; size</dt>
+            <dd id="bdBase">£0</dd>
+          </div>
+          <div class="breakdown-row" id="bdComplexityRow" hidden>
+            <dt>Roof shape</dt>
+            <dd id="bdComplexity">+£0</dd>
+          </div>
+          <div class="breakdown-row" id="bdAccessRow" hidden>
+            <dt>Access</dt>
+            <dd id="bdAccess">+£0</dd>
+          </div>
+          <div class="breakdown-row" id="bdExtrasRow" hidden>
+            <dt>Extras</dt>
+            <dd id="bdExtras">+£0</dd>
+          </div>
+          <div class="breakdown-row breakdown-total">
+            <dt>Total estimate</dt>
+            <dd id="bdTotal">£0</dd>
+          </div>
+        </dl>
 
         <a class="btn btn-primary btn-lg config-cta" id="configCta" data-magnetic href="https://wa.me/447700900123" target="_blank" rel="noopener noreferrer">
           Get this as a fixed quote

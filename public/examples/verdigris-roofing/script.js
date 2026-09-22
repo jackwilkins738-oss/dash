@@ -150,8 +150,23 @@
       { label: 'Average semi', base: 8500 },
       { label: 'Large detached', base: 11500 },
     ];
+    // Complexity/access surcharges checked against real UK trade guides: a
+    // complex roof (multiple hips/valleys/dormers) runs 30-40% more in
+    // labour than a simple one of the same size, and restricted access adds
+    // roughly £500-£2,000 in scaffold/hoisting time (BookABuilderUK, Fix My
+    // Roof, Better Roofing, 2026 guides) - kept toward the lower/mid end of
+    // both ranges since standard scaffolding is already in the base price.
+    var COMPLEXITY = {
+      simple: { label: 'Simple roof shape', pct: 0 },
+      moderate: { label: 'Some hips/valleys', pct: 0.15 },
+      complex: { label: 'Complex roof shape', pct: 0.35 },
+    };
+    var ACCESS = {
+      standard: { label: 'Standard access', flat: 0 },
+      restricted: { label: 'Restricted access', flat: 750 },
+    };
 
-    var state = { material: 'concrete', size: 1, extras: 0 };
+    var state = { material: 'concrete', size: 1, complexity: 'simple', access: 'standard', extras: 0 };
     var priceEl = document.getElementById('priceValue');
     var displayedPrice = 0;
     var priceAnimId = null;
@@ -159,7 +174,11 @@
     function estimate() {
       var m = MATERIALS[state.material];
       var s = SIZES[state.size];
-      return Math.round((s.base * m.multiplier) / 50) * 50 + state.extras;
+      var base = Math.round((s.base * m.multiplier) / 50) * 50;
+      var complexityAdj = Math.round((base * COMPLEXITY[state.complexity].pct) / 50) * 50;
+      var accessAdj = ACCESS[state.access].flat;
+      var total = base + complexityAdj + accessAdj + state.extras;
+      return { base: base, complexity: complexityAdj, access: accessAdj, extras: state.extras, total: total };
     }
 
     function animatePrice(target) {
@@ -183,6 +202,10 @@
       priceAnimId = requestAnimationFrame(tick);
     }
 
+    function money(n) {
+      return '£' + Math.abs(n).toLocaleString('en-GB');
+    }
+
     function render() {
       var m = MATERIALS[state.material];
       document.querySelectorAll('[data-material]').forEach(function (btn) {
@@ -195,8 +218,38 @@
         span.setAttribute('data-active', String(i === state.size));
       });
 
-      var total = estimate();
-      animatePrice(total);
+      document.querySelectorAll('[data-complexity]').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', String(btn.getAttribute('data-complexity') === state.complexity));
+      });
+      document.querySelectorAll('[data-access]').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', String(btn.getAttribute('data-access') === state.access));
+      });
+
+      var breakdown = estimate();
+      animatePrice(breakdown.total);
+
+      var bdBase = document.getElementById('bdBase');
+      if (bdBase) bdBase.textContent = money(breakdown.base);
+      var bdComplexityRow = document.getElementById('bdComplexityRow');
+      var bdComplexity = document.getElementById('bdComplexity');
+      if (bdComplexityRow && bdComplexity) {
+        bdComplexityRow.hidden = breakdown.complexity === 0;
+        bdComplexity.textContent = '+' + money(breakdown.complexity);
+      }
+      var bdAccessRow = document.getElementById('bdAccessRow');
+      var bdAccess = document.getElementById('bdAccess');
+      if (bdAccessRow && bdAccess) {
+        bdAccessRow.hidden = breakdown.access === 0;
+        bdAccess.textContent = '+' + money(breakdown.access);
+      }
+      var bdExtrasRow = document.getElementById('bdExtrasRow');
+      var bdExtras = document.getElementById('bdExtras');
+      if (bdExtrasRow && bdExtras) {
+        bdExtrasRow.hidden = breakdown.extras === 0;
+        bdExtras.textContent = '+' + money(breakdown.extras);
+      }
+      var bdTotal = document.getElementById('bdTotal');
+      if (bdTotal) bdTotal.textContent = money(breakdown.total);
 
       var ctaLine = document.getElementById('configSummary');
       if (ctaLine) {
@@ -210,7 +263,8 @@
       var cta = document.getElementById('configCta');
       if (cta) {
         var msg = 'Hi, I used the instant estimate on your site: ' + SIZES[state.size].label.toLowerCase() +
-          ' re-roof in ' + m.label.toLowerCase() + ', estimated around £' + total.toLocaleString('en-GB') +
+          ' re-roof in ' + m.label.toLowerCase() + ' (' + COMPLEXITY[state.complexity].label.toLowerCase() + ', ' +
+          ACCESS[state.access].label.toLowerCase() + '), estimated around ' + money(breakdown.total) +
           '. Can I get a proper written price?';
         cta.href = 'https://wa.me/447700900123?text=' + encodeURIComponent(msg);
       }
@@ -219,6 +273,20 @@
     document.querySelectorAll('[data-material]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.material = btn.getAttribute('data-material');
+        render();
+      });
+    });
+
+    document.querySelectorAll('[data-complexity]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.complexity = btn.getAttribute('data-complexity');
+        render();
+      });
+    });
+
+    document.querySelectorAll('[data-access]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.access = btn.getAttribute('data-access');
         render();
       });
     });
@@ -271,6 +339,7 @@
     var otherJobPanel = document.getElementById('otherJobPanel');
     var priceLabelEl = document.querySelector('.price-label');
     var roofStage = document.querySelector('.roof-stage');
+    var priceBreakdownEl = document.getElementById('priceBreakdown');
     if (jobTypeButtons.length && reroofSteps && otherJobPanel) {
       jobTypeButtons.forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -282,12 +351,14 @@
             reroofSteps.hidden = false;
             otherJobPanel.hidden = true;
             if (roofStage) roofStage.hidden = false;
+            if (priceBreakdownEl) priceBreakdownEl.hidden = false;
             if (priceLabelEl) priceLabelEl.textContent = 'Estimated price';
             render();
           } else {
             var info = OTHER_JOBS[job];
             reroofSteps.hidden = true;
             otherJobPanel.hidden = false;
+            if (priceBreakdownEl) priceBreakdownEl.hidden = true;
             document.getElementById('otherJobTitle').textContent = info.title;
             document.getElementById('otherJobDesc').textContent = info.desc;
             document.getElementById('otherJobPrice').textContent = info.price;
@@ -792,7 +863,8 @@
   var EXTRAS = {
     guttering: 450,
     chimney: 280,
-    skip: 320,
+    insulation: 850,
+    veluxWindow: 950,
   };
   var extraToggles = document.querySelectorAll('.switch[data-extra]');
   if (extraToggles.length) {

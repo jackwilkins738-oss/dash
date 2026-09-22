@@ -1192,6 +1192,49 @@ ul {
   color: var(--muted);
   font-weight: 500;
 }
+.option-grid-2col {
+  grid-template-columns: repeat(2, 1fr);
+}
+.config-note {
+  margin-top: 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.price-breakdown {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 0.85rem;
+}
+.breakdown-row[hidden] {
+  display: none;
+}
+.breakdown-row dt {
+  color: var(--ink-dim);
+}
+.breakdown-row dd {
+  margin: 0;
+  color: var(--ink);
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}
+.breakdown-row.breakdown-total {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 0.95rem;
+}
+.breakdown-row.breakdown-total dt,
+.breakdown-row.breakdown-total dd {
+  color: var(--ink);
+  font-weight: 700;
+}
 
 .job-type-grid {
   display: grid;
