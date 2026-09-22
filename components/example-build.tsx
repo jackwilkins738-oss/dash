@@ -96,26 +96,28 @@ const EXAMPLES: Example[] = [
     offset: 'lg:mt-0',
   },
   {
-    slug: 'upkeep',
-    label: 'upkeep — property care & maintenance',
-    url: 'https://upkeep-website.pages.dev/',
-    eyebrow: 'Property care & maintenance',
+    slug: 'verdigris',
+    label: 'verdigris — roofing, Kent & East Sussex',
+    // Hosted on this same domain, not a separate pages.dev project - see
+    // public/examples/verdigris-roofing/ and the rewrite in next.config.mjs.
+    url: '/examples/verdigris-roofing/',
+    eyebrow: 'Roofing & flashing — Kent & East Sussex',
     headline: (
       <>
-        Complete property care.
+        A roof that outlasts
         <br />
-        <span style={{ color: '#F58220' }}>One trusted contact.</span>
+        <span style={{ color: '#8fd6b4' }}>the mortgage.</span>
       </>
     ),
-    cta: 'Get a Quote',
-    bg: 'radial-gradient(120% 90% at 85% 10%, rgba(245,130,32,0.18), transparent 60%), repeating-linear-gradient(rgba(245,130,32,0.04) 0 1px, transparent 1px 44px), #111111',
-    border: 'rgba(245,130,32,0.32)',
-    glow: 'rgba(245,130,32,0.35)',
-    eyebrowColor: '#F58220',
-    headlineColor: '#ffffff',
-    ctaBg: '#F58220',
-    ctaColor: '#111111',
-    dotColors: ['#F58220', '#d96f13', '#5B5B5B'],
+    cta: 'Get a Fixed Price',
+    bg: 'radial-gradient(120% 90% at 85% 10%, rgba(95,168,138,0.2), transparent 60%), radial-gradient(90% 70% at 10% 100%, rgba(47,77,63,0.35), transparent 55%), #0e1210',
+    border: 'rgba(95,168,138,0.32)',
+    glow: 'rgba(95,168,138,0.35)',
+    eyebrowColor: '#8fd6b4',
+    headlineColor: '#f3f1ea',
+    ctaBg: 'linear-gradient(135deg, #8fd6b4, #5fa88a)',
+    ctaColor: '#062015',
+    dotColors: ['#5fa88a', '#2f4d3f', '#8fd6b4'],
     offset: 'lg:mt-10',
   },
   {
@@ -157,10 +159,11 @@ export function ExampleBuild() {
             Not mockups. Real, working sites.
           </h2>
           <p className="mt-5 max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-            Five full builds — three concept sites for trades, plus two built for real: a property-care company
-            and a wellbeing app&apos;s product site. Each is a working site designed to turn visitors into
-            enquiries or sign-ups, and each has an entirely different look and market. That&apos;s deliberate:
-            every build starts from a blank page, not a theme, so no two sites end up looking related.
+            Five full builds — Verdigris is live on this same domain, click through and look around properly;
+            Mike is a real wellbeing app&apos;s product site; the other three are concept builds for trades. Each
+            is a working site designed to turn visitors into enquiries or sign-ups, and each has an entirely
+            different look and market. That&apos;s deliberate: every build starts from a blank page, not a
+            theme, so no two sites end up looking related.
           </p>
         </Reveal>
 

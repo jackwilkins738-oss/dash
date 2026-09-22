@@ -17,6 +17,17 @@ const scriptSrc = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Static example builds live as plain HTML under public/examples/<slug>/index.html
+  // (see components/example-build.tsx) - files in public/ are served at their
+  // literal path, with no directory-index resolution, so without this a
+  // visitor typing the clean URL gets a 404. Add one rewrite per example as
+  // they're built.
+  async rewrites() {
+    return [
+      { source: '/examples/verdigris-roofing', destination: '/examples/verdigris-roofing/index.html' },
+      { source: '/examples/verdigris-roofing/', destination: '/examples/verdigris-roofing/index.html' },
+    ]
+  },
   // experimental.inlineCss was tried and removed. The Next docs recommend it for
   // small Tailwind CSS with mostly first-time visitors, which describes this
   // site, so it was enabled - and then measured properly (Lighthouse mobile,
