@@ -118,7 +118,7 @@ function Gap({ score, label, sub, highlight }: { score: number; label: string; s
   )
 }
 
-export function SpeedCheck() {
+export function SpeedCheck({ linkToFullPage = false }: { linkToFullPage?: boolean } = {}) {
   const [input, setInput] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -198,6 +198,14 @@ export function SpeedCheck() {
             Paste your site below and I&apos;ll run it through Google&apos;s own speed test, live, right here — the
             same test Google uses to help decide where you rank. No sign-up, nothing stored.
           </p>
+          {linkToFullPage && (
+            <Link
+              href="/speed-test"
+              className="mt-3 inline-block text-xs text-muted-foreground underline underline-offset-4 hover:text-blueprint"
+            >
+              Open this as its own page — worth bookmarking or sharing
+            </Link>
+          )}
         </Reveal>
 
         <Reveal className="mt-10">

@@ -14,6 +14,7 @@ const SERVICES = [
   { href: '/#dash', label: 'Client dashboard', note: 'with the £2,500 build' },
   { href: '/work#estimate', label: 'Price estimator', note: '' },
   { href: '/guides/how-much-does-a-tradesman-website-cost', label: 'Website cost guide', note: '' },
+  { href: '/speed-test', label: 'Free speed test', note: '' },
 ]
 
 const COMPANY = [

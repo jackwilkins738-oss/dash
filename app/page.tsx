@@ -128,7 +128,7 @@ export default function HomePage() {
       </section>
       <Comparison />
       <SpeedRace />
-      <SpeedCheck />
+      <SpeedCheck linkToFullPage />
       <Transformation />
       <ExampleBuild />
       <CtaBand />

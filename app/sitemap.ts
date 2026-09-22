@@ -18,6 +18,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     at('/guides', UPDATED, 0.6),
     at('/guides/how-much-does-a-tradesman-website-cost', UPDATED, 0.8),
     at('/process', UPDATED, 0.6),
+    at('/speed-test', UPDATED, 0.7),
     at('/contact', UPDATED, 0.7),
     at('/refer', UPDATED, 0.4),
     at('/privacy', '2026-09-21', 0.2),
