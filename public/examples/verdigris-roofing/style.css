@@ -505,6 +505,52 @@ ul {
   margin-top: 4px;
 }
 
+/* WhatsApp - deliberately WhatsApp's own green, not the brand's verdigris,
+   the same reasoning the parent Scalar site uses for its own button: instant
+   recognition matters more than palette purity for this one element. */
+.whatsapp-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.5);
+  transition: transform 0.18s ease;
+}
+.whatsapp-fab:hover {
+  transform: scale(1.06);
+}
+.whatsapp-fab-ping {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50%;
+  background: #25d366;
+  animation: whatsapp-ping 2.4s ease-out infinite;
+}
+@keyframes whatsapp-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .whatsapp-fab-ping {
+    animation: none;
+  }
+}
+
 /* Scroll reveal */
 .reveal {
   opacity: 0;
