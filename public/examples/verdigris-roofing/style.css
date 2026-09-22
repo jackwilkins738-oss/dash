@@ -551,6 +551,240 @@ ul {
   }
 }
 
+.mt-link {
+  margin-top: 32px;
+}
+.text-link {
+  color: var(--accent-light);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+.text-link:hover {
+  border-color: var(--accent-light);
+}
+
+/* Nav active state - which of the 5 pages you're on */
+.nav-links a[aria-current='page'],
+.nav-mobile a[aria-current='page'] {
+  color: var(--accent-light);
+}
+.nav-links a[aria-current='page']::after {
+  right: 0;
+}
+
+/* Sub-page header - a smaller version of the home hero, for the other 4 pages */
+.page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 64px 0 56px;
+  border-bottom: 1px solid var(--line);
+}
+.page-header .hero-glow {
+  height: 100%;
+}
+.page-header h1 {
+  position: relative;
+  font-size: clamp(2rem, 1.6rem + 2vw, 3.2rem);
+  font-weight: 800;
+  line-height: 1.08;
+  max-width: 20ch;
+}
+.page-header .lead {
+  position: relative;
+}
+.breadcrumb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.breadcrumb a {
+  color: var(--muted);
+  transition: color 0.15s ease;
+}
+.breadcrumb a:hover {
+  color: var(--accent-light);
+}
+
+/* Services page - each service gets a full block, not just a card teaser */
+.service-block {
+  display: grid;
+  gap: 20px;
+  padding: 36px 0;
+  border-bottom: 1px solid var(--line);
+}
+.service-block:first-of-type {
+  padding-top: 0;
+}
+.service-block:last-of-type {
+  border-bottom: none;
+}
+@media (min-width: 760px) {
+  .service-block {
+    grid-template-columns: 1fr 1.3fr;
+    gap: 48px;
+  }
+}
+.service-block h2 {
+  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+  font-weight: 700;
+}
+.service-block .service-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 18px;
+}
+.service-block .service-facts div dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.service-block .service-facts div dd {
+  margin: 3px 0 0;
+  font-weight: 700;
+  color: var(--accent-light);
+}
+.service-block .service-includes li {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 0.92rem;
+  color: var(--ink-dim);
+}
+
+/* Work gallery filter tabs */
+.filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 28px;
+}
+.filter-tab {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  font-family: inherit;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.filter-tab:hover {
+  color: var(--ink);
+}
+.filter-tab[aria-pressed='true'] {
+  background: rgba(95, 168, 138, 0.14);
+  border-color: rgba(95, 168, 138, 0.5);
+  color: var(--accent-light);
+}
+.job[hidden] {
+  display: none;
+}
+
+/* Service areas page */
+.areas-grid {
+  margin-top: 40px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 640px) {
+  .areas-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.area-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.area-card h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.area-card p {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* Contact page: a demo form. Clearly labelled as sample UI, not a working
+   backend - this static page has nowhere to send a submission. */
+.contact-layout {
+  display: grid;
+  gap: 40px;
+}
+@media (min-width: 900px) {
+  .contact-layout {
+    grid-template-columns: 1fr 1fr;
+    gap: 64px;
+  }
+}
+.form-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 24px;
+  padding: 10px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+.field {
+  margin-bottom: 18px;
+}
+.field label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--ink-dim);
+}
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 11px 14px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.field textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+.contact-side .card {
+  margin-bottom: 14px;
+}
+.contact-side .card h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1rem;
+}
+
 /* Scroll reveal */
 .reveal {
   opacity: 0;
