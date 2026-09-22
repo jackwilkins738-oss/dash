@@ -362,4 +362,82 @@
       runFlow();
     }
   }
+
+  // ---------------------------------------------------------------------
+  // Hero visual (index.html) - a cursor-tilt house illustration that
+  // cycles through the three roof materials on its own, so the "watch it
+  // change" moment from the estimate page is visible before a visitor has
+  // clicked anything. Same MATERIALS figures as the configurator (small
+  // terrace base, since the hero already says "From £X").
+  // ---------------------------------------------------------------------
+  var heroCard = document.getElementById('heroRoofCard');
+  var heroRoofFace = document.getElementById('heroRoofFace');
+  if (heroCard && heroRoofFace) {
+    var HERO_MATERIALS = [
+      { label: 'Concrete tile', fill: '#7c5443', price: 6500 },
+      { label: 'Clay tile', fill: '#b3592f', price: 9100 },
+      { label: 'Slate', fill: '#3f4c56', price: 10400 },
+    ];
+    var heroMaterialEl = document.getElementById('heroMaterialLabel');
+    var heroPriceEl = document.getElementById('heroPriceLabel');
+    var heroIndex = 0;
+    var heroTimer = null;
+
+    var showHeroMaterial = function (i) {
+      var m = HERO_MATERIALS[i];
+      heroRoofFace.style.fill = m.fill;
+      if (heroMaterialEl) {
+        heroMaterialEl.style.opacity = '0';
+        heroPriceEl.style.opacity = '0';
+        setTimeout(function () {
+          heroMaterialEl.textContent = m.label;
+          heroPriceEl.textContent = '£' + m.price.toLocaleString('en-GB');
+          heroMaterialEl.style.opacity = '1';
+          heroPriceEl.style.opacity = '1';
+        }, 250);
+      }
+    };
+    showHeroMaterial(0);
+
+    var startHeroCycle = function () {
+      if (heroTimer || reduced) return;
+      heroTimer = window.setInterval(function () {
+        heroIndex = (heroIndex + 1) % HERO_MATERIALS.length;
+        showHeroMaterial(heroIndex);
+      }, 3200);
+    };
+    var stopHeroCycle = function () {
+      window.clearInterval(heroTimer);
+      heroTimer = null;
+    };
+
+    if ('IntersectionObserver' in window) {
+      var heroIo = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) startHeroCycle();
+            else stopHeroCycle();
+          });
+        },
+        { threshold: 0.4 },
+      );
+      heroIo.observe(heroCard);
+    } else {
+      startHeroCycle();
+    }
+
+    // Cursor tilt - fine pointers only, same reasoning as the magnetic
+    // buttons above.
+    if (fine && !reduced) {
+      heroCard.addEventListener('mousemove', function (e) {
+        var r = heroCard.getBoundingClientRect();
+        var px = (e.clientX - r.left) / r.width - 0.5;
+        var py = (e.clientY - r.top) / r.height - 0.5;
+        heroCard.style.transform = 'rotateY(' + px * 10 + 'deg) rotateX(' + py * -10 + 'deg)';
+      });
+      heroCard.addEventListener('mouseleave', function () {
+        heroCard.style.transform = 'rotateY(0deg) rotateX(0deg)';
+      });
+    }
+  }
 })();
