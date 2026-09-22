@@ -83,7 +83,7 @@
       { label: 'Large detached', base: 11500 },
     ];
 
-    var state = { material: 'concrete', size: 1 };
+    var state = { material: 'concrete', size: 1, extras: 0 };
     var priceEl = document.getElementById('priceValue');
     var displayedPrice = 0;
     var priceAnimId = null;
@@ -91,7 +91,7 @@
     function estimate() {
       var m = MATERIALS[state.material];
       var s = SIZES[state.size];
-      return Math.round((s.base * m.multiplier) / 50) * 50;
+      return Math.round((s.base * m.multiplier) / 50) * 50 + state.extras;
     }
 
     function animatePrice(target) {
@@ -162,6 +162,11 @@
         render();
       });
     }
+
+    document.addEventListener('extras-changed', function (e) {
+      state.extras = e.detail.total;
+      render();
+    });
 
     render();
   }
@@ -440,4 +445,341 @@
       });
     }
   }
+
+  // =======================================================================
+  // Wow-factor pass 2. Every block below is guarded by the element it
+  // needs existing, so this is a safe no-op on any page that doesn't have
+  // the relevant markup - same pattern as everything above.
+  // =======================================================================
+
+  // --- Preloader ---------------------------------------------------------
+  // A real percentage count (not a fake instant flash), with a slight
+  // overshoot on the last tick so it settles rather than just stopping -
+  // same overshoot curve philosophy as the parent Scalar site's JumpStat.
+  var preloader = document.getElementById('preloader');
+  if (preloader) {
+    var plCount = document.getElementById('preloaderCount');
+    var plBar = document.getElementById('preloaderBarFill');
+    document.body.classList.add('pl-active');
+    if (reduced) {
+      preloader.remove();
+      document.body.classList.remove('pl-active');
+    } else {
+      var plStart = null;
+      var plDuration = 1400;
+      var plTick = function (now) {
+        if (!plStart) plStart = now;
+        var t = Math.min(1, (now - plStart) / plDuration);
+        var eased = 1 - Math.pow(1 - t, 2);
+        var pct = Math.round(eased * 100);
+        if (plCount) plCount.textContent = pct;
+        if (plBar) plBar.style.width = pct + '%';
+        if (t < 1) {
+          requestAnimationFrame(plTick);
+        } else {
+          setTimeout(function () {
+            preloader.classList.add('pl-exit');
+            document.body.classList.remove('pl-active');
+            setTimeout(function () {
+              preloader.remove();
+            }, 750);
+          }, 250);
+        }
+      };
+      requestAnimationFrame(plTick);
+    }
+  }
+
+  // --- Custom two-part cursor ---------------------------------------------
+  // A dot that tracks the pointer exactly, and a ring that lags gently
+  // behind it (lerped each frame) and expands over anything clickable.
+  // Fine pointers only - there's no cursor on a phone to replace.
+  if (fine && !reduced) {
+    var cDot = document.createElement('div');
+    cDot.className = 'cursor-dot';
+    var cRing = document.createElement('div');
+    cRing.className = 'cursor-ring';
+    document.body.appendChild(cDot);
+    document.body.appendChild(cRing);
+    document.documentElement.classList.add('has-custom-cursor');
+
+    var mx = -100,
+      my = -100,
+      rx = -100,
+      ry = -100;
+    document.addEventListener('mousemove', function (e) {
+      mx = e.clientX;
+      my = e.clientY;
+      cDot.style.transform = 'translate(' + mx + 'px, ' + my + 'px) translate(-50%, -50%)';
+      var target = e.target.closest && e.target.closest('a, button, [role="button"], input, select, textarea');
+      cRing.classList.toggle('is-hover', !!target);
+    });
+    var cursorLoop = function () {
+      rx += (mx - rx) * 0.16;
+      ry += (my - ry) * 0.16;
+      cRing.style.transform = 'translate(' + rx + 'px, ' + ry + 'px) translate(-50%, -50%)';
+      requestAnimationFrame(cursorLoop);
+    };
+    requestAnimationFrame(cursorLoop);
+    document.addEventListener('mouseleave', function () {
+      cDot.style.opacity = '0';
+      cRing.style.opacity = '0';
+    });
+    document.addEventListener('mouseenter', function () {
+      cDot.style.opacity = '1';
+      cRing.style.opacity = '1';
+    });
+  }
+
+  // --- Condensing glass navbar --------------------------------------------
+  var navEl = document.getElementById('top');
+  if (navEl) {
+    var syncNavCondense = function () {
+      navEl.classList.toggle('is-condensed', window.scrollY > 40);
+    };
+    window.addEventListener('scroll', syncNavCondense, { passive: true });
+    syncNavCondense();
+  }
+
+  // --- Animated stat dial (78% response-rate figure) ----------------------
+  var dialFill = document.querySelector('.stat-dial-fill');
+  if (dialFill) {
+    var dialNumberEl = document.querySelector('.stat-dial-number');
+    var dialPercent = Number(dialFill.getAttribute('data-percent')) || 0;
+    var dialCircumference = 2 * Math.PI * 55; // r=55, matches the SVG below
+    var runDial = function () {
+      var start = null;
+      var dur = 1400;
+      var tick = function (now) {
+        if (!start) start = now;
+        var t = Math.min(1, (now - start) / dur);
+        var eased = 1 - Math.pow(1 - t, 3);
+        var current = Math.round(eased * dialPercent);
+        if (dialNumberEl) dialNumberEl.textContent = current + '%';
+        dialFill.style.strokeDashoffset = String(dialCircumference * (1 - (eased * dialPercent) / 100));
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+    if (reduced || !('IntersectionObserver' in window)) {
+      dialFill.style.strokeDashoffset = String(dialCircumference * (1 - dialPercent / 100));
+      if (dialNumberEl) dialNumberEl.textContent = dialPercent + '%';
+    } else {
+      var dialIo = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            dialIo.unobserve(entry.target);
+            runDial();
+          });
+        },
+        { threshold: 0.5 },
+      );
+      dialIo.observe(dialFill);
+    }
+  }
+
+  // --- Footer word reveal ---------------------------------------------------
+  // Sits at the very bottom of the page, so the shared .reveal observer's
+  // -10% bottom rootMargin can never be satisfied once the page hits max
+  // scroll. A dedicated, more lenient observer (no bottom shrink) instead.
+  var footerWord = document.getElementById('footerWord');
+  if (footerWord) {
+    if (reduced || !('IntersectionObserver' in window)) {
+      footerWord.classList.add('in');
+    } else {
+      var footerIo = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              footerWord.classList.add('in');
+              footerIo.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0 },
+      );
+      footerIo.observe(footerWord);
+    }
+  }
+
+  // --- Services accordion --------------------------------------------------
+  var accordionItems = document.querySelectorAll('.accordion-item');
+  if (accordionItems.length) {
+    var firstPanel = accordionItems[0].querySelector('.accordion-panel');
+    accordionItems[0].classList.add('is-open');
+    firstPanel.style.maxHeight = 'none';
+    accordionItems.forEach(function (item) {
+      var trigger = item.querySelector('.accordion-trigger');
+      var panel = item.querySelector('.accordion-panel');
+      trigger.addEventListener('click', function () {
+        var willOpen = !item.classList.contains('is-open');
+        accordionItems.forEach(function (other) {
+          var otherPanel = other.querySelector('.accordion-panel');
+          if (otherPanel.style.maxHeight === 'none') {
+            otherPanel.style.maxHeight = otherPanel.scrollHeight + 'px';
+            otherPanel.getBoundingClientRect();
+          }
+          other.classList.remove('is-open');
+          other.querySelector('.accordion-trigger').setAttribute('aria-expanded', 'false');
+          otherPanel.style.maxHeight = '0px';
+        });
+        if (willOpen) {
+          item.classList.add('is-open');
+          trigger.setAttribute('aria-expanded', 'true');
+          panel.style.maxHeight = panel.scrollHeight + 'px';
+        }
+      });
+    });
+  }
+
+  // --- Estimate calculator polish: glowing slider track + extras toggles --
+  var sizeSliderEl = document.getElementById('sizeSlider');
+  var sizeTrackFill = document.getElementById('sizeTrackFill');
+  if (sizeSliderEl && sizeTrackFill) {
+    var syncSliderFill = function () {
+      var pct = (Number(sizeSliderEl.value) / Number(sizeSliderEl.max)) * 100;
+      sizeTrackFill.style.width = pct + '%';
+    };
+    sizeSliderEl.addEventListener('input', syncSliderFill);
+    syncSliderFill();
+  }
+
+  var EXTRAS = {
+    guttering: 450,
+    chimney: 280,
+    skip: 320,
+  };
+  var extraToggles = document.querySelectorAll('.switch[data-extra]');
+  if (extraToggles.length) {
+    var updateExtrasTotal = function () {
+      var total = 0;
+      extraToggles.forEach(function (sw) {
+        if (sw.getAttribute('aria-checked') === 'true') total += EXTRAS[sw.getAttribute('data-extra')] || 0;
+      });
+      var evt = new CustomEvent('extras-changed', { detail: { total: total } });
+      document.dispatchEvent(evt);
+    };
+    extraToggles.forEach(function (sw) {
+      sw.addEventListener('click', function () {
+        var checked = sw.getAttribute('aria-checked') === 'true';
+        sw.setAttribute('aria-checked', String(!checked));
+        updateExtrasTotal();
+      });
+    });
+  }
+
+  // --- Hero ambient scene: hand-rolled Canvas2D rain + stars + fog --------
+  // Deliberately not WebGL/Three.js: it would need either a third-party CDN
+  // script (blocked by this site's own CSP, and not worth widening it for
+  // a cosmetic effect) or a vendored library file. A hand-written Canvas2D
+  // scene needs neither - zero dependencies, and still genuinely animated.
+  // Desktop + fine pointer only, same reasoning as the tilt effect above.
+  var ambientCanvas = document.getElementById('heroAmbient');
+  if (ambientCanvas && fine && !reduced) {
+    var actx = ambientCanvas.getContext('2d');
+    var stars = [];
+    var drops = [];
+    var acWidth = 0,
+      acHeight = 0,
+      acDpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    var resizeCanvas = function () {
+      var rect = ambientCanvas.getBoundingClientRect();
+      acWidth = rect.width;
+      acHeight = rect.height;
+      ambientCanvas.width = acWidth * acDpr;
+      ambientCanvas.height = acHeight * acDpr;
+      actx.setTransform(acDpr, 0, 0, acDpr, 0, 0);
+    };
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    for (var si = 0; si < 60; si++) {
+      stars.push({
+        x: Math.random(),
+        y: Math.random() * 0.6,
+        r: Math.random() * 1.2 + 0.3,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+    for (var di = 0; di < 70; di++) {
+      drops.push({
+        x: Math.random(),
+        y: Math.random(),
+        len: Math.random() * 14 + 8,
+        speed: Math.random() * 0.012 + 0.01,
+      });
+    }
+
+    var ambientRunning = false;
+    var ambientLoop = function (now) {
+      if (!ambientRunning) return;
+      actx.clearRect(0, 0, acWidth, acHeight);
+
+      // Stars - a slow twinkle
+      actx.fillStyle = 'rgba(200, 230, 220, 0.8)';
+      stars.forEach(function (s) {
+        var tw = 0.4 + 0.6 * Math.abs(Math.sin(now * 0.001 + s.phase));
+        actx.globalAlpha = tw;
+        actx.beginPath();
+        actx.arc(s.x * acWidth, s.y * acHeight, s.r, 0, Math.PI * 2);
+        actx.fill();
+      });
+      actx.globalAlpha = 1;
+
+      // Rain - falling lines, wrapping to the top
+      actx.strokeStyle = 'rgba(143, 214, 180, 0.35)';
+      actx.lineWidth = 1;
+      drops.forEach(function (d) {
+        d.y += d.speed;
+        if (d.y > 1.1) d.y = -0.1;
+        var px = d.x * acWidth;
+        var py = d.y * acHeight;
+        actx.beginPath();
+        actx.moveTo(px, py);
+        actx.lineTo(px - 2, py + d.len);
+        actx.stroke();
+      });
+
+      requestAnimationFrame(ambientLoop);
+    };
+
+    var startAmbient = function () {
+      if (ambientRunning) return;
+      ambientRunning = true;
+      requestAnimationFrame(ambientLoop);
+    };
+    var stopAmbient = function () {
+      ambientRunning = false;
+    };
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stopAmbient();
+      else if (heroCard) startAmbient();
+    });
+
+    if ('IntersectionObserver' in window) {
+      var ambientIo = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              startAmbient();
+              ambientCanvas.parentElement.classList.add('is-ready');
+            } else {
+              stopAmbient();
+            }
+          });
+        },
+        { threshold: 0.2 },
+      );
+      ambientIo.observe(ambientCanvas);
+    } else {
+      startAmbient();
+      ambientCanvas.parentElement.classList.add('is-ready');
+    }
+  }
+
+  // --- Giant footer word: scroll-linked reveal, and glowing window pulse --
+  // (Footer word reuses the site-wide .reveal system - just needs the
+  // 'reveal' class added in the HTML, see index.html.)
 })();

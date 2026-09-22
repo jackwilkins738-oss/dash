@@ -123,6 +123,7 @@
             <h3>Roughly how big?</h3>
           </div>
           <div class="size-row">
+            <span class="size-track-bg" aria-hidden="true"><span class="size-track-fill" id="sizeTrackFill"></span></span>
             <input type="range" class="size-slider" id="sizeSlider" min="0" max="2" step="1" value="1" aria-label="Roof size" />
           </div>
           <div class="size-labels">
@@ -158,6 +159,36 @@
             Typical UK lifespans (upper estimate shown) — yours will depend on installation, pitch and upkeep.
             <a href="/examples/verdigris-roofing/materials.html">More on each material &rarr;</a>
           </p>
+        </div>
+
+        <div class="config-step reveal" data-done="true">
+          <div class="config-step-head">
+            <span class="card-num">03</span>
+            <h3>Anything else while we&rsquo;re there?</h3>
+          </div>
+          <ul class="extras-list">
+            <li class="extra-toggle">
+              <span>
+                <span class="extra-toggle-label">Guttering clearance &amp; check</span>
+                <span class="extra-toggle-price">+&pound;450</span>
+              </span>
+              <button type="button" class="switch" data-extra="guttering" role="switch" aria-checked="false" aria-label="Add guttering clearance and check"></button>
+            </li>
+            <li class="extra-toggle">
+              <span>
+                <span class="extra-toggle-label">Chimney flashing renewed</span>
+                <span class="extra-toggle-price">+&pound;280</span>
+              </span>
+              <button type="button" class="switch" data-extra="chimney" role="switch" aria-checked="false" aria-label="Add chimney flashing renewal"></button>
+            </li>
+            <li class="extra-toggle">
+              <span>
+                <span class="extra-toggle-label">Skip hire, included on-site</span>
+                <span class="extra-toggle-price">+&pound;320</span>
+              </span>
+              <button type="button" class="switch" data-extra="skip" role="switch" aria-checked="false" aria-label="Add skip hire"></button>
+            </li>
+          </ul>
         </div>
 
         <p class="other-jobs reveal">
