@@ -612,6 +612,11 @@ ul {
   align-items: flex-end;
   padding: 16px;
   background: linear-gradient(155deg, var(--job-a), var(--job-b));
+  cursor: pointer;
+}
+.job-tile:focus-visible {
+  outline: 2px solid var(--accent-light);
+  outline-offset: -2px;
 }
 .job-tile span {
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
@@ -920,6 +925,50 @@ ul {
   color: var(--ink-dim);
 }
 
+/* All-jobs comparison table */
+.compare-table-wrap {
+  margin-top: 28px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  -webkit-overflow-scrolling: touch;
+}
+.compare-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.compare-table th,
+.compare-table td {
+  text-align: left;
+  padding: 16px 20px;
+  white-space: nowrap;
+}
+.compare-table thead th {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.compare-table tbody th {
+  font-weight: 700;
+  color: var(--ink);
+}
+.compare-table tbody td {
+  color: var(--ink-dim);
+}
+.compare-table tbody tr:not(:last-child) th,
+.compare-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--line);
+}
+.compare-table tbody tr:hover {
+  background: rgba(143, 214, 180, 0.05);
+}
+
 /* Work gallery filter tabs */
 .filter-tabs {
   display: flex;
@@ -1028,6 +1077,7 @@ ul {
 .field select:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(95, 168, 138, 0.28);
 }
 .field textarea {
   resize: vertical;
@@ -1143,6 +1193,38 @@ ul {
   font-weight: 500;
 }
 
+.job-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .job-type-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.job-type-card {
+  padding: 12px 10px;
+  border-radius: 10px;
+  border: 1.5px solid var(--card-border);
+  background: var(--card);
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.job-type-card:hover {
+  border-color: rgba(95, 168, 138, 0.45);
+}
+.job-type-card[aria-pressed='true'] {
+  border-color: var(--accent-light);
+  background: rgba(95, 168, 138, 0.14);
+  color: var(--ink);
+}
+
 .size-row {
   display: flex;
   align-items: center;
@@ -1156,6 +1238,12 @@ ul {
   border-radius: 999px;
   background: var(--line);
   outline: none;
+}
+.size-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(143, 214, 180, 0.4);
+}
+.size-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px rgba(143, 214, 180, 0.4);
 }
 .size-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -1943,4 +2031,87 @@ html.has-custom-cursor button {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* --- Work gallery lightbox modal ---------------------------------------- */
+.job-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 8, 0.72);
+  backdrop-filter: blur(3px);
+  z-index: 300;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.job-modal-backdrop.is-open {
+  opacity: 1;
+}
+.job-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -46%);
+  width: min(480px, calc(100vw - 40px));
+  max-height: min(600px, calc(100vh - 40px));
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.6);
+  z-index: 301;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0.25s;
+  padding: 0 0 26px;
+}
+.job-modal.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.job-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+.job-modal-tile {
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(155deg, var(--job-a, var(--accent)), var(--job-b, var(--accent-deep)));
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.job-modal-cat {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-light);
+  margin: 20px 24px 0;
+}
+.job-modal h3 {
+  font-size: 1.25rem;
+  margin: 8px 24px 0;
+}
+.job-modal #jobModalDesc {
+  color: var(--ink-dim);
+  margin: 10px 24px 20px;
+}
+.job-modal .btn {
+  margin: 0 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .job-modal,
+  .job-modal-backdrop {
+    transition: none;
+  }
 }

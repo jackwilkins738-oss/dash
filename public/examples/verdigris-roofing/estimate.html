@@ -95,6 +95,21 @@
 
         <div class="config-step" data-done="true">
           <div class="config-step-head">
+            <span class="card-num">00</span>
+            <h3>What kind of job?</h3>
+          </div>
+          <div class="job-type-grid" role="group" aria-label="Job type">
+            <button class="job-type-card" type="button" data-job="reroof" aria-pressed="true">Re-roof</button>
+            <button class="job-type-card" type="button" data-job="repair" aria-pressed="false">Repair or leak</button>
+            <button class="job-type-card" type="button" data-job="flat" aria-pressed="false">Flat roofing</button>
+            <button class="job-type-card" type="button" data-job="guttering" aria-pressed="false">Guttering &amp; flashing</button>
+          </div>
+        </div>
+
+        <div id="reroofSteps">
+
+        <div class="config-step" data-done="true">
+          <div class="config-step-head">
             <span class="card-num">01</span>
             <h3>Material</h3>
           </div>
@@ -191,10 +206,27 @@
           </ul>
         </div>
 
+        </div>
+
+        <div id="otherJobPanel" class="config-step" data-done="true" hidden>
+          <div class="config-step-head">
+            <span class="card-num">01</span>
+            <h3 id="otherJobTitle">Repair or leak</h3>
+          </div>
+          <p class="lead" id="otherJobDesc" style="margin-top:6px;"></p>
+          <dl class="service-facts">
+            <div><dt>Typical price</dt><dd id="otherJobPrice"></dd></div>
+            <div><dt id="otherJobTimeLabel">On site</dt><dd id="otherJobTime"></dd></div>
+            <div><dt>Guarantee</dt><dd id="otherJobGuarantee"></dd></div>
+          </dl>
+          <p class="other-jobs" style="margin-top:16px;">
+            This one&rsquo;s priced per job, not by size — the range above is typical, and a real number needs a
+            quick look at the job (a photo&rsquo;s usually enough).
+          </p>
+        </div>
+
         <p class="other-jobs reveal">
-          Repair, flat roof or guttering instead? Those are priced per job, not by size —
-          <a href="https://wa.me/447700900123" target="_blank" rel="noopener noreferrer">message us a photo on WhatsApp</a>
-          and we&rsquo;ll give you a straight answer.
+          <a href="/examples/verdigris-roofing/services.html">See everything included in each job &rarr;</a>
         </p>
 
       </div>

@@ -97,63 +97,63 @@
 
       <div class="work-grid" style="margin-top:28px;">
         <article class="job reveal" data-category="reroof" style="--job-a:#3a6b53;--job-b:#1c2f26;">
-          <div class="job-tile"><span>Slate re-roof</span></div>
+          <div class="job-tile" role="button" tabindex="0" aria-haspopup="dialog" aria-label="View details: Full re-roof, Tunbridge Wells"><span>Slate re-roof</span></div>
           <div class="job-meta">
             <h3>Full re-roof — Tunbridge Wells</h3>
             <p>Natural slate to concrete tile, 4 days on site &middot; £8,900</p>
           </div>
         </article>
         <article class="job reveal" data-category="flat" style="--job-a:#4f9c78;--job-b:#22392c;">
-          <div class="job-tile"><span>Flat roof</span></div>
+          <div class="job-tile" role="button" tabindex="0" aria-haspopup="dialog" aria-label="View details: Extension flat roof, Tonbridge"><span>Flat roof</span></div>
           <div class="job-meta">
             <h3>Extension flat roof — Tonbridge</h3>
             <p>GRP fibreglass, 20-year warranty &middot; £3,150</p>
           </div>
         </article>
         <article class="job reveal" data-category="repair" style="--job-a:#2f4d3f;--job-b:#141d18;">
-          <div class="job-tile"><span>Leak repair</span></div>
+          <div class="job-tile" role="button" tabindex="0" aria-haspopup="dialog" aria-label="View details: Emergency leak, Sevenoaks"><span>Leak repair</span></div>
           <div class="job-meta">
             <h3>Emergency leak — Sevenoaks</h3>
             <p>Same-week callout, ridge line re-bedded &middot; £480</p>
           </div>
         </article>
         <article class="job reveal" data-category="guttering" style="--job-a:#6fae91;--job-b:#233830;">
-          <div class="job-tile"><span>Guttering</span></div>
+          <div class="job-tile" role="button" tabindex="0" aria-haspopup="dialog" aria-label="View details: Fascia and guttering, Crowborough"><span>Guttering</span></div>
           <div class="job-meta">
             <h3>Fascia &amp; guttering — Crowborough</h3>
             <p>Full run replaced, cast-iron effect uPVC &middot; £1,850</p>
           </div>
         </article>
         <article class="job reveal" data-category="reroof" style="--job-a:#5fa88a;--job-b:#1c2f26;">
-          <div class="job-tile"><span>Concrete tile re-roof</span></div>
+          <div class="job-tile" role="button" tabindex="0" aria-haspopup="dialog" aria-label="View details: Full re-roof, East Grinstead"><span>Concrete tile re-roof</span></div>
           <div class="job-meta">
             <h3>Full re-roof — East Grinstead</h3>
             <p>Full strip, new membrane, concrete tile &middot; £6,900</p>
           </div>
         </article>
         <article class="job reveal" data-category="repair" style="--job-a:#284537;--job-b:#111814;">
-          <div class="job-tile"><span>Storm damage</span></div>
+          <div class="job-tile" role="button" tabindex="0" aria-haspopup="dialog" aria-label="View details: Storm repair, Uckfield"><span>Storm damage</span></div>
           <div class="job-meta">
             <h3>Storm repair — Uckfield</h3>
             <p>Ridge tiles re-bedded, valley re-flashed &middot; £620</p>
           </div>
         </article>
         <article class="job reveal" data-category="flat" style="--job-a:#3f7a5c;--job-b:#1a2b22;">
-          <div class="job-tile"><span>Garage flat roof</span></div>
+          <div class="job-tile" role="button" tabindex="0" aria-haspopup="dialog" aria-label="View details: Garage flat roof, Tunbridge Wells"><span>Garage flat roof</span></div>
           <div class="job-meta">
             <h3>Garage flat roof — Tunbridge Wells</h3>
             <p>Single-ply system, new upstands &middot; £2,650</p>
           </div>
         </article>
         <article class="job reveal" data-category="guttering" style="--job-a:#88c2a3;--job-b:#274134;">
-          <div class="job-tile"><span>Lead work</span></div>
+          <div class="job-tile" role="button" tabindex="0" aria-haspopup="dialog" aria-label="View details: Chimney flashing, Tonbridge"><span>Lead work</span></div>
           <div class="job-meta">
             <h3>Chimney flashing — Tonbridge</h3>
             <p>Code 5 lead, full stepped flashing &middot; £780</p>
           </div>
         </article>
         <article class="job reveal" data-category="reroof" style="--job-a:#264334;--job-b:#0f1712;">
-          <div class="job-tile"><span>Clay tile re-roof</span></div>
+          <div class="job-tile" role="button" tabindex="0" aria-haspopup="dialog" aria-label="View details: Full re-roof, Sevenoaks"><span>Clay tile re-roof</span></div>
           <div class="job-meta">
             <h3>Full re-roof — Sevenoaks</h3>
             <p>Handmade clay tile to match a listed terrace &middot; £9,200</p>
@@ -164,6 +164,16 @@
       <p id="noJobs" class="lead" style="display:none; margin-top:28px;">No jobs in that category yet — check back, or message us on WhatsApp for examples.</p>
     </div>
   </section>
+
+  <div class="job-modal-backdrop" id="jobModalBackdrop" hidden></div>
+  <div class="job-modal" id="jobModal" role="dialog" aria-modal="true" aria-labelledby="jobModalTitle" hidden>
+    <button class="job-modal-close" id="jobModalClose" aria-label="Close">&times;</button>
+    <div class="job-modal-tile" id="jobModalTile"></div>
+    <p class="job-modal-cat" id="jobModalCat"></p>
+    <h3 id="jobModalTitle"></h3>
+    <p id="jobModalDesc"></p>
+    <a class="btn btn-primary btn-lg" id="jobModalCta" href="https://wa.me/447700900123" target="_blank" rel="noopener noreferrer">Message us about a job like this</a>
+  </div>
 
   <section class="cta-band">
     <div class="wrap cta-inner reveal">

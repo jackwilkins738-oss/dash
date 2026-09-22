@@ -62,6 +62,74 @@
     });
   }
 
+  // Work gallery lightbox (work.html only - no-op elsewhere, no markup to find)
+  var jobModal = document.getElementById('jobModal');
+  var jobModalBackdrop = document.getElementById('jobModalBackdrop');
+  if (jobModal && jobModalBackdrop) {
+    var jobModalClose = document.getElementById('jobModalClose');
+    var jobModalTile = document.getElementById('jobModalTile');
+    var jobModalCat = document.getElementById('jobModalCat');
+    var jobModalTitle = document.getElementById('jobModalTitle');
+    var jobModalDesc = document.getElementById('jobModalDesc');
+    var jobModalCta = document.getElementById('jobModalCta');
+    var catLabels = { reroof: 'Re-roof', repair: 'Repair', flat: 'Flat roofing', guttering: 'Guttering & flashing' };
+    var lastTrigger = null;
+
+    function openJobModal(tile) {
+      var job = tile.closest('.job');
+      var title = job.querySelector('h3').textContent;
+      var desc = job.querySelector('p').textContent;
+      var cat = job.getAttribute('data-category');
+      lastTrigger = tile;
+      jobModalTile.style.setProperty('--job-a', getComputedStyle(job).getPropertyValue('--job-a'));
+      jobModalTile.style.setProperty('--job-b', getComputedStyle(job).getPropertyValue('--job-b'));
+      jobModalCat.textContent = catLabels[cat] || 'Job';
+      jobModalTitle.textContent = title;
+      jobModalDesc.textContent = desc;
+      jobModalCta.href = 'https://wa.me/447700900123?text=' + encodeURIComponent('Hi, I saw the ' + title + ' job on your site and want a similar quote.');
+      jobModalBackdrop.hidden = false;
+      jobModal.hidden = false;
+      requestAnimationFrame(function () {
+        jobModalBackdrop.classList.add('is-open');
+        jobModal.classList.add('is-open');
+      });
+      jobModalClose.focus();
+      document.addEventListener('keydown', onJobModalKeydown);
+    }
+
+    function closeJobModal() {
+      jobModalBackdrop.classList.remove('is-open');
+      jobModal.classList.remove('is-open');
+      document.removeEventListener('keydown', onJobModalKeydown);
+      setTimeout(
+        function () {
+          jobModalBackdrop.hidden = true;
+          jobModal.hidden = true;
+        },
+        reduced ? 0 : 250,
+      );
+      if (lastTrigger) lastTrigger.focus();
+    }
+
+    function onJobModalKeydown(e) {
+      if (e.key === 'Escape') closeJobModal();
+    }
+
+    document.querySelectorAll('.job-tile').forEach(function (tile) {
+      tile.addEventListener('click', function () {
+        openJobModal(tile);
+      });
+      tile.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openJobModal(tile);
+        }
+      });
+    });
+    jobModalClose.addEventListener('click', closeJobModal);
+    jobModalBackdrop.addEventListener('click', closeJobModal);
+  }
+
   // Instant estimate configurator (estimate.html only). Vanilla JS state
   // machine: a plain object holds the selection, one render() call keeps
   // the roof colour, the price and the button states all in sync with it -
@@ -167,6 +235,82 @@
       state.extras = e.detail.total;
       render();
     });
+
+    // Job type switch: re-roof keeps the size/material configurator above;
+    // the other three services are priced per job (checked against the same
+    // real ranges shown on services.html), so they get an honest range +
+    // guarantee instead of a fake precise number.
+    var OTHER_JOBS = {
+      repair: {
+        title: 'Repair or leak',
+        desc: 'Most leaks are a small, findable fault, diagnosed properly before anything is quoted.',
+        price: '£220 – £900',
+        timeLabel: 'Response',
+        time: 'Same week, active leaks priority',
+        guarantee: '2 years on the repair',
+      },
+      flat: {
+        title: 'Flat roofing',
+        desc: 'GRP fibreglass and single-ply systems for extensions, garages and dormers.',
+        price: '£2,400 – £4,800',
+        timeLabel: 'On site',
+        time: '1–2 days',
+        guarantee: '20 years, written',
+      },
+      guttering: {
+        title: 'Guttering & flashing',
+        desc: 'Lead work, fascias, soffits and full guttering runs.',
+        price: '£650 – £2,200',
+        timeLabel: 'On site',
+        time: '1 day, most jobs',
+        guarantee: '10 years, written',
+      },
+    };
+    var jobTypeButtons = document.querySelectorAll('.job-type-card');
+    var reroofSteps = document.getElementById('reroofSteps');
+    var otherJobPanel = document.getElementById('otherJobPanel');
+    var priceLabelEl = document.querySelector('.price-label');
+    var roofStage = document.querySelector('.roof-stage');
+    if (jobTypeButtons.length && reroofSteps && otherJobPanel) {
+      jobTypeButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var job = btn.getAttribute('data-job');
+          jobTypeButtons.forEach(function (b) {
+            b.setAttribute('aria-pressed', String(b === btn));
+          });
+          if (job === 'reroof') {
+            reroofSteps.hidden = false;
+            otherJobPanel.hidden = true;
+            if (roofStage) roofStage.hidden = false;
+            if (priceLabelEl) priceLabelEl.textContent = 'Estimated price';
+            render();
+          } else {
+            var info = OTHER_JOBS[job];
+            reroofSteps.hidden = true;
+            otherJobPanel.hidden = false;
+            document.getElementById('otherJobTitle').textContent = info.title;
+            document.getElementById('otherJobDesc').textContent = info.desc;
+            document.getElementById('otherJobPrice').textContent = info.price;
+            document.getElementById('otherJobTimeLabel').textContent = info.timeLabel;
+            document.getElementById('otherJobTime').textContent = info.time;
+            document.getElementById('otherJobGuarantee').textContent = info.guarantee;
+            if (roofStage) roofStage.hidden = true;
+            if (priceAnimId) cancelAnimationFrame(priceAnimId);
+            if (priceEl) priceEl.textContent = info.price;
+            if (priceLabelEl) priceLabelEl.textContent = 'Typical price range';
+            var summaryEl = document.getElementById('configSummary');
+            if (summaryEl) summaryEl.textContent = info.title;
+            var lifeEl2 = document.getElementById('materialLife');
+            if (lifeEl2) lifeEl2.textContent = info.guarantee;
+            var cta = document.getElementById('configCta');
+            if (cta) {
+              var msg = 'Hi, I have a ' + info.title.toLowerCase() + ' job and want a proper written price.';
+              cta.href = 'https://wa.me/447700900123?text=' + encodeURIComponent(msg);
+            }
+          }
+        });
+      });
+    }
 
     render();
   }
