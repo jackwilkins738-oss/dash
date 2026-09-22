@@ -25,7 +25,7 @@ const PRINCIPLES = [
   {
     n: '03',
     title: 'Looked at as a system, not a page',
-    body: "Before I design anything, I look at how the enquiry actually gets picked up, quoted and closed. The site, the dashboard and the way they connect are built to fix that whole path — not just to exist.",
+    body: "Before I design anything, I look at how the enquiry actually gets picked up, quoted and closed. With the full build, the site and the dashboard behind it are built to fix that whole path — not just to exist.",
   },
   {
     n: '04',

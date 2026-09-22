@@ -11,7 +11,7 @@ const headingClass = 'font-mono text-[11px] uppercase tracking-[0.25em] text-mut
 const SERVICES = [
   { href: '/work#pricing', label: 'Landing page', note: 'from £750' },
   { href: '/work#pricing', label: 'The Scalar build', note: '£2,500' },
-  { href: '/#dash', label: 'Client dashboard', note: 'included' },
+  { href: '/#dash', label: 'Client dashboard', note: 'with the £2,500 build' },
   { href: '/work#estimate', label: 'Price estimator', note: '' },
   { href: '/guides/how-much-does-a-tradesman-website-cost', label: 'Website cost guide', note: '' },
 ]

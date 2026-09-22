@@ -60,9 +60,9 @@ export function Hero() {
             </h1>
 
             <p className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-              I build the site, the enquiry system and the dashboard behind it as one piece of work, engineered by
-              someone who&apos;s stood on the tools. It&apos;s built to win the jobs worth having and to run the
-              admin around them, not just to exist.
+              I build fast, hand-coded sites for trades — and with the full build, the private dashboard that runs
+              the enquiries, quotes and jobs behind it. Engineered by someone who&apos;s stood on the tools, to win
+              the jobs worth having and run the admin around them, not just to exist.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -89,7 +89,7 @@ export function Hero() {
             >
               <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-brass" aria-hidden="true" />
               <span>
-                <span className="font-semibold text-foreground">Every build runs on your own private dashboard</span>
+                <span className="font-semibold text-foreground">The Scalar build runs on your own private dashboard</span>
                 {' '}— enquiries, quotes, jobs and invoices, in one place.{' '}
                 <span className="text-blueprint underline-offset-4 group-hover:underline">See it in action &darr;</span>
               </span>
