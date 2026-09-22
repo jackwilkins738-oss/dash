@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex, type ShowcaseArt } from '@/lib/showcase'
+import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex, showcaseIndexForTrade, type ShowcaseArt } from '@/lib/showcase'
 
 // The hero's centrepiece: a small, honest illustration of what the product
 // is. A real-looking website for a trade, set in a 3D scene that turns to
@@ -19,8 +19,8 @@ import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex, type ShowcaseArt
 
 type Vars = CSSProperties & Record<`--${string}`, string | number>
 
-export function SiteShowcase() {
-  const [active, setActive] = useState(0)
+export function SiteShowcase({ initialTrade }: { initialTrade?: string } = {}) {
+  const [active, setActive] = useState(() => showcaseIndexForTrade(initialTrade) ?? 0)
   const rootRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const tiltRef = useRef<HTMLDivElement>(null)
@@ -32,6 +32,27 @@ export function SiteShowcase() {
   // timing in step for free, and pausing the animation (hover, focus,
   // offscreen) pauses the rotation with it. Choosing a tab yourself stops it.
   const [auto, setAuto] = useState(true)
+
+  // A visitor arriving from a trade-specific link (an outreach batch, a
+  // trade page's own preview link) should land on the matching tab instead
+  // of whatever the rotation happens to default to. This reads the URL
+  // itself, after mount, rather than the page passing it down via Next's
+  // `searchParams` - that would opt the whole (otherwise fully static)
+  // homepage into per-request dynamic rendering just for this. The cost is
+  // one extra render right after hydration for the handful of visitors who
+  // arrive with a `?trade=` link; every other visitor pays nothing.
+  useEffect(() => {
+    if (initialTrade) return
+    const idx = showcaseIndexForTrade(new URLSearchParams(window.location.search).get('trade'))
+    // Syncing from an external system (the URL the page loaded with) into
+    // React state once on mount - not reacting to props/state changing, so
+    // the "don't setState synchronously in an effect" warning doesn't apply.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (idx !== null) setActive(idx)
+    // Mount-only: this is meant to read the URL the page was loaded with,
+    // not to react to later client-side navigation within the SPA.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const root = rootRef.current

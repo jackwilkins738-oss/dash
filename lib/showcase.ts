@@ -96,3 +96,50 @@ export function nextShowcaseIndex(current: number, count: number = SHOWCASE_TRAD
   if (count <= 0) return 0
   return (current + 1) % count
 }
+
+// The five trade pages (lib/trades.ts) and this four-trade preview use
+// different id schemes - the pages are named after the audience
+// ("driveway-installers"), this preview after the work ("driveways"). A
+// visitor arriving from a trade-specific outreach batch or a trade page's
+// link should land on the matching preview rather than whatever the
+// rotation happens to be showing. There's no dedicated builders/extensions
+// scene yet, so that one maps to the closest visual (loft conversions,
+// the other "bigger structural job") rather than being left unmatched.
+const TRADE_ALIASES: Record<string, ShowcaseTrade['id']> = {
+  // /websites-for/ page slugs
+  'roofers': 'roofing',
+  'loft-conversion-companies': 'lofts',
+  'driveway-installers': 'driveways',
+  'landscapers': 'landscaping',
+  'builders-and-extension-firms': 'lofts',
+  // common singular/plain variants, in case a link is written by hand
+  'roofer': 'roofing',
+  'roof': 'roofing',
+  'loft': 'lofts',
+  'loft-conversion': 'lofts',
+  'driveway': 'driveways',
+  'landscaper': 'landscaping',
+  'landscape': 'landscaping',
+  'garden': 'landscaping',
+  'builder': 'lofts',
+  'extension': 'lofts',
+  'extensions': 'lofts',
+}
+
+/**
+ * Resolve a `?trade=` value (or similar) from a URL to a SHOWCASE_TRADES
+ * index, so the hero preview can open on the right trade instead of always
+ * starting from the first tab. Accepts the trade-page slugs, this preview's
+ * own ids, and a few plain-English variants; anything unrecognised falls
+ * back to the default rotation. Case/whitespace-insensitive since it's
+ * meant to tolerate a hand-typed or slightly-off link, not just a generated one.
+ */
+export function showcaseIndexForTrade(query?: string | string[] | null): number | null {
+  const value = Array.isArray(query) ? query[0] : query
+  if (!value) return null
+  const key = value.trim().toLowerCase()
+  const id = SHOWCASE_TRADES.some((t) => t.id === key) ? (key as ShowcaseTrade['id']) : TRADE_ALIASES[key]
+  if (!id) return null
+  const idx = SHOWCASE_TRADES.findIndex((t) => t.id === id)
+  return idx === -1 ? null : idx
+}

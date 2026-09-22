@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex } from './showcase.ts'
+import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex, showcaseIndexForTrade } from './showcase.ts'
 
 describe('SHOWCASE_TRADES', () => {
   it('has more than one trade, or there is nothing to switch between', () => {
@@ -86,5 +86,58 @@ describe('SHOWCASE_CYCLE_MS', () => {
   it('is long enough to read a headline and short enough to keep moving', () => {
     assert.ok(SHOWCASE_CYCLE_MS >= 3000)
     assert.ok(SHOWCASE_CYCLE_MS <= 10000)
+  })
+})
+
+describe('showcaseIndexForTrade', () => {
+  it('matches a /websites-for/ page slug to its preview trade', () => {
+    assert.equal(showcaseIndexForTrade('roofers'), SHOWCASE_TRADES.findIndex((t) => t.id === 'roofing'))
+    assert.equal(
+      showcaseIndexForTrade('loft-conversion-companies'),
+      SHOWCASE_TRADES.findIndex((t) => t.id === 'lofts'),
+    )
+    assert.equal(
+      showcaseIndexForTrade('driveway-installers'),
+      SHOWCASE_TRADES.findIndex((t) => t.id === 'driveways'),
+    )
+    assert.equal(
+      showcaseIndexForTrade('landscapers'),
+      SHOWCASE_TRADES.findIndex((t) => t.id === 'landscaping'),
+    )
+  })
+
+  it('maps the one trade with no dedicated scene to its closest visual match', () => {
+    // builders-and-extension-firms has no preview of its own (see lib/showcase.ts) -
+    // it should still resolve to something, not fall through to the default rotation.
+    const idx = showcaseIndexForTrade('builders-and-extension-firms')
+    assert.notEqual(idx, null)
+  })
+
+  it('matches the preview\'s own ids directly', () => {
+    for (const t of SHOWCASE_TRADES) {
+      assert.equal(showcaseIndexForTrade(t.id), SHOWCASE_TRADES.indexOf(t))
+    }
+  })
+
+  it('is case- and whitespace-insensitive, for a hand-typed link', () => {
+    assert.equal(showcaseIndexForTrade(' Roofers '), showcaseIndexForTrade('roofers'))
+    assert.equal(showcaseIndexForTrade('ROOFING'), showcaseIndexForTrade('roofing'))
+  })
+
+  it('accepts a few plain-English variants of a trade', () => {
+    assert.equal(showcaseIndexForTrade('roofer'), showcaseIndexForTrade('roofers'))
+    assert.equal(showcaseIndexForTrade('driveway'), showcaseIndexForTrade('driveway-installers'))
+    assert.equal(showcaseIndexForTrade('garden'), showcaseIndexForTrade('landscapers'))
+  })
+
+  it('returns null for an unrecognised or missing value, so the caller keeps the default', () => {
+    assert.equal(showcaseIndexForTrade('plumbers'), null)
+    assert.equal(showcaseIndexForTrade(''), null)
+    assert.equal(showcaseIndexForTrade(undefined), null)
+    assert.equal(showcaseIndexForTrade(null), null)
+  })
+
+  it('takes the first value when a query param repeats', () => {
+    assert.equal(showcaseIndexForTrade(['roofers', 'lofts']), showcaseIndexForTrade('roofers'))
   })
 })
