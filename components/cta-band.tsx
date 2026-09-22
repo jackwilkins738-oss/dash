@@ -38,6 +38,14 @@ export function CtaBand() {
                 Message on WhatsApp
               </a>
             </div>
+            {/* A real constraint, not manufactured urgency - no countdown, no
+                "spots left" pressure. It exists to explain *why* the 2-hour
+                reply and the fixed price hold up: there's only ever a few
+                builds running at once. Keep this genuinely current. */}
+            <p className="mt-6 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <span className="h-1.5 w-1.5 flex-none rounded-full bg-blueprint" aria-hidden="true" />
+              Taking on 1 new build a week — kept small so none of them get rushed
+            </p>
           </div>
         </Reveal>
       </div>
