@@ -10,6 +10,7 @@ import { JumpStat } from '@/components/jump-stat'
 import { TradesGrid } from '@/components/trades-grid'
 import { Comparison } from '@/components/comparison'
 import { SpeedRace } from '@/components/speed-race'
+import { SpeedCheck } from '@/components/speed-check'
 
 const PRINCIPLES = [
   {
@@ -127,6 +128,7 @@ export default function HomePage() {
       </section>
       <Comparison />
       <SpeedRace />
+      <SpeedCheck />
       <Transformation />
       <ExampleBuild />
       <CtaBand />

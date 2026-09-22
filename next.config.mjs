@@ -63,7 +63,10 @@ const nextConfig = {
               // endpoint (region1, region2...) depending on where the
               // visitor is - allowing only the bare domain drops EU traffic,
               // which is essentially all of it for a UK trades site.
-              "connect-src 'self' https://admin.scalardigital.co.uk https://wfyzsnyfliohevpjpuib.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
+              // googleapis.com is the live PageSpeed Insights check on the
+              // homepage (components/speed-check.tsx) - it calls Google
+              // directly from the visitor's own browser, no server involved.
+              "connect-src 'self' https://admin.scalardigital.co.uk https://wfyzsnyfliohevpjpuib.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://www.googleapis.com",
               "frame-ancestors 'none'",
               "object-src 'none'",
               "base-uri 'self'",
