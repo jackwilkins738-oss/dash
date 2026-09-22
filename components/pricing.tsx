@@ -53,12 +53,14 @@ export function Pricing() {
             price="£750"
             included={LANDING_INCLUDED}
             footnote="Fixed at the outset — nothing added later"
+            exampleHref="/examples/verdigris-roofing/landing.html"
           />
           <PriceCard
             label="The Scalar build"
             price="£2,500"
             included={BUILD_INCLUDED}
             footnote="Fixed at the outset — nothing added later"
+            exampleHref="/examples/verdigris-roofing/"
             highlighted
           />
         </Reveal>
@@ -72,12 +74,14 @@ function PriceCard({
   price,
   included,
   footnote,
+  exampleHref,
   highlighted = false,
 }: {
   label: string
   price: string
   included: ReactNode[]
   footnote: string
+  exampleHref?: string
   highlighted?: boolean
 }) {
   return (
@@ -132,6 +136,16 @@ function PriceCard({
           Start your build
           <span className="transition-transform group-hover:translate-x-1">&rarr;</span>
         </Link>
+        {exampleHref && (
+          <a
+            href={exampleHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 flex items-center justify-center gap-1.5 text-center text-sm text-blueprint underline-offset-4 hover:underline"
+          >
+            See a live example at this tier
+          </a>
+        )}
         <p className="mt-4 text-center font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
           {footnote}
         </p>

@@ -551,6 +551,40 @@ ul {
   }
 }
 
+/* The one element on this page that isn't Verdigris talking - a small
+   Scalar Digital label, deliberately in Scalar's own blueprint blue rather
+   than Verdigris's green, so it reads as a separate voice rather than
+   something a real client site would say about itself. */
+.scalar-banner {
+  background: #16324d;
+  border-bottom: 1px solid rgba(77, 155, 224, 0.35);
+}
+.scalar-banner-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 16px;
+  padding: 9px 24px;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: #cfe3f5;
+  text-align: center;
+}
+.scalar-banner-inner strong {
+  color: #ffffff;
+}
+.scalar-banner-inner a {
+  color: #7fc1f5;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.scalar-banner-inner a:hover {
+  color: #ffffff;
+}
+
 .mt-link {
   margin-top: 32px;
 }
