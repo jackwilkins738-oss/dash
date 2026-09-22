@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Gauge, Loader2, TriangleAlert } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
@@ -125,6 +125,12 @@ export function SpeedCheck() {
   const [theirs, setTheirs] = useState<Score | null>(null)
   const [ownScore, setOwnScore] = useState<Score | null>(null)
   const [checkedHost, setCheckedHost] = useState('')
+  const [elapsed, setElapsed] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => () => {
+    if (timerRef.current) clearInterval(timerRef.current)
+  }, [])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -137,8 +143,16 @@ export function SpeedCheck() {
 
     setStatus('loading')
     setErrorMsg('')
+    setElapsed(0)
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000)
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 30_000)
+    // A single real Lighthouse run can take well over 45s server-side on
+    // Google's end - confirmed by testing directly against the live API,
+    // where even scalardigital.co.uk alone took longer than that. This runs
+    // two in parallel (their site and Scalar's own), so the timeout has to be
+    // generous enough not to cut off a run that was going to succeed.
+    const timeout = setTimeout(() => controller.abort(), 90_000)
 
     try {
       const cachedOwn = readOwnScoreCache()
@@ -154,7 +168,7 @@ export function SpeedCheck() {
     } catch (err) {
       setStatus('error')
       if (err instanceof Error && err.name === 'AbortError') {
-        setErrorMsg('That took too long to check. Google sometimes struggles with very slow sites — try again.')
+        setErrorMsg("That's taking longer than usual — Google's checker may be under load right now. Try again in a moment.")
       } else if (err instanceof Error && err.message === 'rate-limited') {
         setErrorMsg("Google's checker is busy right now — give it a minute and try again.")
       } else {
@@ -162,6 +176,10 @@ export function SpeedCheck() {
       }
     } finally {
       clearTimeout(timeout)
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
     }
   }
 
@@ -217,7 +235,12 @@ export function SpeedCheck() {
 
           {status === 'loading' && (
             <p className="mt-4 text-center font-mono text-xs uppercase tracking-[0.15em] text-muted-foreground">
-              Running Google&apos;s test — this can take up to 30 seconds, more for a slow site
+              Running Google&apos;s real test&hellip; {elapsed}s
+              <span className="block normal-case tracking-normal text-muted-foreground/70">
+                {elapsed < 20
+                  ? "A genuine Lighthouse audit, not a shortcut — usually done within a minute."
+                  : 'Still going — a slow site takes Google longer to fully load and measure.'}
+              </span>
             </p>
           )}
 
