@@ -38,7 +38,22 @@ function isEmail(value: string) {
 }
 
 export async function POST(request: Request) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  // Cross-site fetch() calls always send an Origin header, even ones using
+  // text/plain to dodge CORS preflight; same-origin browser submissions and
+  // legitimate non-browser clients may omit it. Reject only a mismatch, not
+  // an absence - that's the standard stateless CSRF check for a route with
+  // no session/cookie to protect otherwise.
+  const origin = request.headers.get('origin')
+  if (origin && origin !== new URL(request.url).origin) {
+    return NextResponse.json({ error: 'Invalid request.' }, { status: 403 })
+  }
+
+  // x-vercel-forwarded-for is the header Vercel's own edge sets and trusts;
+  // x-forwarded-for is kept only as a fallback for non-Vercel environments.
+  const ip =
+    request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown'
   if (isRateLimited(ip)) {
     return NextResponse.json({ error: 'Too many requests. Please try again shortly.' }, { status: 429 })
   }

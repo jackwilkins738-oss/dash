@@ -51,6 +51,11 @@ const nextConfig = {
           // this is still what older browsers honour.
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          // Isolates this site's browsing context group from any window it
+          // opens or is opened by, closing off window.opener-based leaks.
+          // Nothing on this site opens/relies on a cross-origin popup, so
+          // there's no expected downside.
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
           {
             key: 'Content-Security-Policy',
             value: [
