@@ -55,9 +55,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  const name = (body.name ?? '').trim()
-  const email = (body.email ?? '').trim()
-  const message = (body.message ?? '').trim()
+  const name = (body.name ?? '').trim().slice(0, 100)
+  const email = (body.email ?? '').trim().slice(0, 254)
+  const message = (body.message ?? '').trim().slice(0, 4000)
+  const phone = (body.phone ?? '').trim().slice(0, 30)
+  const trade = (body.trade ?? '').trim().slice(0, 60)
+  const projectType = (body.projectType ?? '').trim().slice(0, 60)
+  const budget = (body.budget ?? '').trim().slice(0, 60)
 
   if (name.length < 2) {
     return NextResponse.json({ error: 'Please enter your name.' }, { status: 422 })
@@ -82,10 +86,10 @@ export async function POST(request: Request) {
     '',
     `Name: ${name}`,
     `Email: ${email}`,
-    body.phone ? `Phone: ${body.phone.trim()}` : null,
-    body.trade ? `Trade: ${body.trade.trim()}` : null,
-    body.projectType ? `Project type: ${body.projectType.trim()}` : null,
-    body.budget ? `Budget: ${body.budget.trim()}` : null,
+    phone ? `Phone: ${phone}` : null,
+    trade ? `Trade: ${trade}` : null,
+    projectType ? `Project type: ${projectType}` : null,
+    budget ? `Budget: ${budget}` : null,
     '',
     'Message:',
     message,
@@ -116,6 +120,10 @@ export async function POST(request: Request) {
   } else if (process.env.NODE_ENV === 'production') {
     // Never tell a visitor their enquiry was sent when nothing is there to
     // receive it: fail loudly (and log the message so it isn't lost).
+    // This does put the visitor's name/email/phone/message into server logs
+    // - a deliberate, reviewed trade-off: Vercel logs are private to this
+    // account, and losing a real lead outright is worse than that. Revisit
+    // if a log drain to a less-trusted third party is ever added.
     console.error('[contact] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set - enquiry NOT delivered:\n' + lines)
     return NextResponse.json({ error: 'Could not send right now. Please try WhatsApp.' }, { status: 503 })
   } else {
