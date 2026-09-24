@@ -17,6 +17,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...TRADES.map((t) => at(`/websites-for/${t.slug}`, UPDATED, 0.8)),
     at('/guides', UPDATED, 0.6),
     at('/guides/how-much-does-a-tradesman-website-cost', UPDATED, 0.8),
+    at('/guides/website-or-facebook-page-for-tradesmen', UPDATED, 0.8),
     at('/process', UPDATED, 0.6),
     at('/speed-test', UPDATED, 0.7),
     at('/contact', UPDATED, 0.7),

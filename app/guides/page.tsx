@@ -17,6 +17,11 @@ const GUIDES = [
     title: 'How much does a website cost for a tradesman?',
     body: 'DIY builders, freelancers, agencies and fixed-price builds compared, plus the costs people forget and the questions to ask first.',
   },
+  {
+    href: '/guides/website-or-facebook-page-for-tradesmen',
+    title: 'Website or Facebook page? What actually wins work.',
+    body: 'A fair comparison of running your trade business on a Facebook or Instagram page versus your own website, and where relying on one alone costs you jobs.',
+  },
 ]
 
 export default function GuidesPage() {
