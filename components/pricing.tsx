@@ -6,7 +6,7 @@ import { Reveal } from '@/components/reveal'
 const LANDING_INCLUDED: ReactNode[] = [
   'One hand-coded page, engineered to convert, not just to exist',
   'Custom design, built for your business — no templates',
-  'Mobile-first, sub-second load times',
+  'Mobile-first, built for 90+ on Google’s mobile speed test',
   'Local search foundations built in',
   'WhatsApp, call and enquiry routing built in',
   'You own the code and the domain outright',
@@ -20,7 +20,7 @@ const BUILD_INCLUDED: ReactNode[] = [
     invoices and a customer portal, running under your business name. Hosted free for your first 12 months
   </>,
   'Custom design, built around how your business actually wins work',
-  'Mobile-first, sub-second load times',
+  'Mobile-first, built for 90+ on Google’s mobile speed test',
   "Local SEO built into the site's structure, not bolted on as a meta tag",
   'WhatsApp, call and enquiry routing built in',
   <>
