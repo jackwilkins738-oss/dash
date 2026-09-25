@@ -64,6 +64,13 @@ export function Pricing() {
             highlighted
           />
         </Reveal>
+
+        <Reveal className="mt-8">
+          <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-muted-foreground">
+            Your domain name is registered in your own name and paid for by you directly to the registrar, typically
+            under £15 a year. I&apos;ll help you set it up and point it at your site.
+          </p>
+        </Reveal>
       </div>
     </section>
   )
