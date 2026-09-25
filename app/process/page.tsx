@@ -31,7 +31,7 @@ const STEPS = [
   {
     n: '04',
     title: 'You check it before it goes live',
-    body: 'Load it on your own phone, on your own site, before anything is public. Tweaks during this stage are included, not billed as extras.',
+    body: 'Load it on your own phone, on your own site, before anything is public. Tweaks to what we agreed are included, not billed as extras. Something new, like an extra page or feature, is quoted separately.',
   },
   {
     n: '05',
