@@ -8,7 +8,7 @@ import { Reveal } from '@/components/reveal'
 export const metadata: Metadata = {
   title: 'How a Trade Website Build Works',
   description:
-    'How a hand-coded trade website gets built, start to finish: fixed price agreed up front, real progress along the way, and no retainer once it ships.',
+    'How a hand-coded trade website gets built, start to finish: fixed price agreed up front, real progress along the way, and no retainer on your website once it ships.',
   alternates: { canonical: '/process' },
 }
 
@@ -84,7 +84,7 @@ export default function ProcessPage() {
             {[
               ['1', 'Person you deal with, start to finish'],
               ['2 hrs', 'Typical time to a fixed price'],
-              ['0', 'Retainers or monthly fees once it ships'],
+              ['0', 'Monthly fees on your website, ever'],
             ].map(([value, label]) => (
               <div key={label} className="rounded-xl border border-border bg-card/40 p-6">
                 <div className="font-mono text-3xl font-bold text-blueprint">{value}</div>

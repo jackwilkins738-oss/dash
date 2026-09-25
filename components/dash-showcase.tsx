@@ -538,7 +538,7 @@ export function DashShowcase() {
                   The dash comes with The Scalar build. <span className="text-[#e8935e]">£2,500, fixed.</span>
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Your five-page site and your own dashboard, agreed as one price before a line of code is written. Dashboard hosting is free for your first 12 months; after that it is a small optional monthly fee, agreed up front. Your website stays yours either way.
+                  Your five-page site and your own dashboard, agreed as one price before a line of code is written. Dashboard hosting is free for your first 12 months; after that it is a small optional monthly dashboard fee, agreed up front. Your website is always yours, with or without the dashboard.
                 </p>
               </div>
               <Link

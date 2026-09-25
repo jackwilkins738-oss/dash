@@ -51,8 +51,8 @@ export function DashPitch() {
 
         <Reveal className="mt-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Hosted by me, free for your first 12 months, then a small optional monthly fee agreed up front. Your website
-            stays yours either way.
+            Hosted by me, free for your first 12 months, then a small optional monthly dashboard fee agreed up front. Your website
+            is always yours, with or without the dashboard.
           </p>
           <Link
             href="/#dash"
