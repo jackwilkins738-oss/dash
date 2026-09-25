@@ -35,8 +35,8 @@ const STEPS = [
   },
   {
     n: '05',
-    title: '30 days of aftercare, then it’s yours',
-    body: 'Free tweaks for a month after launch. After that the code and the domain are outright yours — no monthly retainer on the website, no being locked to me to make a change.',
+    title: '30 days of aftercare (14 on the Landing Page), then it’s yours',
+    body: 'Free tweaks and fixes for 30 days after launch on The Scalar build, and 14 days on the Landing Page. After that the code and the domain are outright yours — no monthly retainer on the website, no being locked to me to make a change.',
   },
 ]
 
