@@ -17,7 +17,13 @@ Usage (PowerShell):
 Options:
     --sheet PATH     outreach workbook (default: outreach/outreach-master.xlsx in this
                      checkout, or in the main checkout when run from a worktree)
-    --out PATH       where to write the links CSV (default: preview-links.csv beside the sheet)
+    --out PATH       where to write the links CSV (default: preview-links.csv beside the
+                     master sheet, preview-links-<sheet name>.csv beside any other sheet)
+Outputs, beside the sheet:
+    preview-links[-<sheet>].csv   every prospect and their preview link
+    mailmeteor[-<sheet>].csv      ready to import into Mailmeteor: email-channel prospects
+                                  only (no sole traders, no bad emails), with business,
+                                  greeting_name, email, mobile_score, lcp_s, preview_url
     --dry-run        write the CSV, send nothing
     --only TEXT      only prospects whose business name or website contains TEXT
     --limit N        only the first N prospects (after --only)
@@ -191,6 +197,7 @@ def main() -> None:
             }
         )
         src = "email" if channel == "email" else "letter"
+        contact = str(row.get("Contact name") or "").strip()
         links.append(
             {
                 "Business": business,
@@ -198,18 +205,50 @@ def main() -> None:
                 "Channel": channel,
                 "Status": row.get("Status") or "",
                 "preview_url": f"{site}/for/{slug}?src={src}",
+                "_slug": slug,
+                "_greeting": contact.split()[0] if contact else "there",
             }
         )
 
-    out = args.out or args.sheet.parent / "preview-links.csv"
-    with out.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["Business", "Email", "Channel", "Status", "preview_url"])
-        writer.writeheader()
-        writer.writerows(links)
+    # One set of output files per sheet, so running a second list (e.g. the
+    # loft-conversions workbook) never overwrites the master list's links.
+    suffix = "" if args.sheet.stem == "outreach-master" else f"-{args.sheet.stem}"
+    out = args.out or args.sheet.parent / f"preview-links{suffix}.csv"
+
+    def write_outputs() -> None:
+        by_slug = {p["slug"]: p for p in prospects}
+        with out.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Business", "Email", "Channel", "Status", "preview_url"])
+            writer.writeheader()
+            writer.writerows({k: v for k, v in r.items() if not k.startswith("_")} for r in links)
+        mm = out.parent / f"mailmeteor{suffix}.csv"
+        with mm.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(
+                f, fieldnames=["business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status"]
+            )
+            writer.writeheader()
+            for r in links:
+                p = by_slug[r["_slug"]]
+                if p["channel"] != "email":
+                    continue
+                score = p.get("mobile_score")
+                writer.writerow(
+                    {
+                        "business": r["Business"],
+                        "greeting_name": r["_greeting"],
+                        "email": r["Email"],
+                        "mobile_score": "" if score is None else int(score),
+                        "lcp_s": "" if p.get("lcp_s") is None else p["lcp_s"],
+                        "preview_url": r["preview_url"],
+                        "status": r["Status"],
+                    }
+                )
+        print(f"Wrote {out.name} and {mm.name}")
+
+    write_outputs()
 
     by_channel = {c: sum(1 for p in prospects if p["channel"] == c) for c in ("email", "letter")}
     print(f"{len(prospects)} prospects ({by_channel['email']} email, {by_channel['letter']} letter), {skipped} skipped")
-    print(f"Wrote {out}")
 
     # --only / --limit narrow what gets checked and pushed. The links CSV
     # above always covers everyone, so it never loses rows.
@@ -278,12 +317,23 @@ def main() -> None:
             if result is None:
                 print("    couldn't check this one - nothing saved for it")
                 continue
+            # Google's headline score and LCP fill the prospect's own fields
+            # when the sheet has none (new lists); the sheet's figures win.
+            score, lcp = result.pop("_mobile_score", None), result.pop("_lcp_s", None)
+            if p.get("mobile_score") is None and score is not None:
+                p["mobile_score"] = score
+            if p.get("lcp_s") is None and lcp is not None:
+                p["lcp_s"] = lcp
             p["teardown"] = result
             p["teardown_at"] = datetime.now(timezone.utc).isoformat()
             problems = [k for k, v in result["checks"].items() if v is False]
             extras = {k: v for k, v in result.items() if k not in ("v", "checks")}
             print(f"    problems: {', '.join(problems) or 'none'} | {extras}")
             time.sleep(1)
+
+    # Rewritten after the teardown, so new scores reach the Mailmeteor file.
+    if args.teardown:
+        write_outputs()
 
     if args.dry_run:
         print("Dry run: nothing sent.")

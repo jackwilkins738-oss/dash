@@ -88,6 +88,16 @@ def run_pagespeed(url: str, api_key: str, timeout: int = 180) -> dict:
     audits = lh.get("audits") or {}
     out: dict = {"checks": {}}
 
+    # The headline mobile score and LCP, so a new prospect with nothing in
+    # the sheet gets both from this one run. Kept under "_" keys: they are
+    # prospect fields, not teardown checks, and push_prospects.py moves them.
+    perf = (cats.get("performance") or {}).get("score")
+    if isinstance(perf, (int, float)):
+        out["_mobile_score"] = round(perf * 100)
+    lcp = (audits.get("largest-contentful-paint") or {}).get("numericValue")
+    if isinstance(lcp, (int, float)):
+        out["_lcp_s"] = round(lcp / 1000, 1)
+
     for key, cat in (("seoScore", "seo"), ("accessibilityScore", "accessibility")):
         score = (cats.get(cat) or {}).get("score")
         if isinstance(score, (int, float)):
