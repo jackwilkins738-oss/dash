@@ -1,0 +1,845 @@
+/* Verdigris Roofing - styles for the show-piece interaction layer (pro.js).
+   Loaded after style.css on every page. */
+
+/* ---- Hero reassurance line ------------------------------------------- */
+.hero-promise {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.hero-promise span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.hero-promise span::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  box-shadow: 0 0 8px var(--accent-light);
+}
+
+/* ---- Mobile action bar ------------------------------------------------ */
+.mab {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 8px;
+  padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+  background: rgba(14, 18, 16, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line);
+  transform: translateY(110%);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mab.is-in {
+  transform: translateY(0);
+}
+.mab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  color: var(--ink);
+}
+.mab-wa {
+  background: #25d366;
+  border-color: #25d366;
+  color: #fff;
+}
+.mab-primary {
+  background: linear-gradient(135deg, var(--accent-light), var(--accent));
+  border-color: transparent;
+  color: #0b1510;
+}
+@media (min-width: 760px) {
+  .mab {
+    display: none;
+  }
+}
+@media (max-width: 759px) {
+  /* The bar carries WhatsApp on phones; the floating bubble would sit on it. */
+  .has-mab .whatsapp-fab {
+    display: none;
+  }
+  .has-mab .site-footer {
+    padding-bottom: 84px;
+  }
+}
+
+/* ---- Inner-page headline word rise ------------------------------------ */
+.split-h1 .word {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-bottom: 0.1em;
+  margin-bottom: -0.1em;
+}
+.split-h1 .word span {
+  display: inline-block;
+  transform: translateY(110%);
+  animation: word-rise 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--w-i, 0) * 55ms + 120ms);
+}
+
+/* ---- Live "open now" status (contact) ---------------------------------- */
+.open-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 22px;
+  padding: 9px 16px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: rgba(23, 29, 26, 0.7);
+  font-size: 13.5px;
+  color: var(--ink-dim);
+}
+.open-status strong {
+  color: var(--ink);
+}
+.os-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d9a44a;
+}
+.open-status.is-open .os-dot {
+  background: var(--accent-light);
+  box-shadow: 0 0 0 0 rgba(143, 214, 180, 0.6);
+  animation: os-pulse 2s ease-out infinite;
+}
+@keyframes os-pulse {
+  to {
+    box-shadow: 0 0 0 10px rgba(143, 214, 180, 0);
+  }
+}
+
+/* ---- Section intro shared by the new sections --------------------------- */
+.sp-intro {
+  max-width: 680px;
+}
+.sp-intro .lead {
+  margin-top: 16px;
+}
+
+/* ---- Before / after slider -------------------------------------------- */
+.ba {
+  margin: 36px 0 44px;
+}
+.ba-stage {
+  --x: 50%;
+  position: relative;
+  aspect-ratio: 800 / 380;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  cursor: ew-resize;
+  touch-action: pan-y;
+  user-select: none;
+  box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.8);
+}
+.ba-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.ba-after {
+  clip-path: inset(0 0 0 var(--x));
+}
+.ba-tag {
+  position: absolute;
+  top: 16px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: rgba(10, 12, 11, 0.7);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.ba-tag-before {
+  left: 16px;
+  color: #d9b48a;
+}
+.ba-tag-after {
+  right: 16px;
+  color: var(--accent-light);
+}
+.ba-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--x);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent-light);
+  box-shadow: 0 0 18px rgba(143, 214, 180, 0.8);
+  pointer-events: none;
+}
+.ba-handle span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  border-radius: 50%;
+  background: rgba(14, 18, 16, 0.85);
+  border: 2px solid var(--accent-light);
+  display: grid;
+  place-items: center;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ba-handle span::before {
+  content: '\2039\00a0\203A';
+  color: var(--accent-light);
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 700;
+}
+.ba-stage.is-dragging .ba-handle span,
+.ba-stage:hover .ba-handle span {
+  transform: scale(1.12);
+}
+.ba-range {
+  position: absolute;
+  inset: auto 0 0 0;
+  width: 100%;
+  opacity: 0;
+  height: 1px;
+}
+.ba-range:focus-visible + .ba-focus,
+.ba-stage:focus-within {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 3px;
+}
+.ba-caption {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ba-sheen {
+  animation: ba-sheen 5.5s ease-in-out infinite;
+}
+@keyframes ba-sheen {
+  0% {
+    transform: translateX(0);
+  }
+  60%,
+  100% {
+    transform: translateX(1400px);
+  }
+}
+
+/* ---- Roof explorer ---------------------------------------------------- */
+.explorer {
+  padding: 96px 0;
+  border-top: 1px solid var(--line);
+  background:
+    radial-gradient(70% 60% at 20% 0%, rgba(95, 168, 138, 0.1), transparent 60%),
+    var(--bg);
+}
+.explorer-grid {
+  display: grid;
+  gap: 22px;
+  margin-top: 40px;
+}
+@media (min-width: 960px) {
+  .explorer-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    align-items: stretch;
+  }
+}
+.explorer-stage {
+  position: relative;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: linear-gradient(to bottom, #16242b, #1d2a26 70%, #1a211d);
+  transition: background 1.2s ease;
+  min-height: 300px;
+}
+.explorer-stage[data-weather='rain'] {
+  background: linear-gradient(to bottom, #151b1e, #1b2320 70%, #171c19);
+}
+.explorer-stage[data-weather='storm'] {
+  background: linear-gradient(to bottom, #0b0e10, #141a17 70%, #121613);
+}
+.explorer-stage svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.explorer-stage::after {
+  /* lightning */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #dfe9ff;
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+.explorer-stage.is-flash::after {
+  animation: flash 0.9s ease-out;
+}
+@keyframes flash {
+  0% {
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.9;
+  }
+  12% {
+    opacity: 0.1;
+  }
+  18% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.sun {
+  transition: opacity 1s ease;
+}
+.explorer-stage:not([data-weather='clear']) .sun {
+  opacity: 0;
+}
+.cloud {
+  opacity: 0;
+  transition: opacity 1s ease, transform 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(-20px);
+}
+.explorer-stage:not([data-weather='clear']) .cloud {
+  opacity: 1;
+  transform: none;
+  animation: cloud-drift 14s ease-in-out infinite alternate;
+}
+.explorer-stage[data-weather='storm'] .cloud {
+  fill: #0f1417;
+}
+@keyframes cloud-drift {
+  to {
+    translate: 26px 0;
+  }
+}
+.weather-toggle {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(10, 12, 11, 0.7);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(6px);
+}
+.weather-toggle button {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s;
+}
+.weather-toggle button[aria-checked='true'] {
+  background: var(--accent);
+  color: #0b1510;
+}
+.explorer-hint {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+.explorer-stage.is-touched .explorer-hint {
+  opacity: 0;
+}
+
+/* rain */
+.rain-drop {
+  stroke: rgba(170, 205, 230, 0.55);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  opacity: 0;
+}
+.explorer-stage[data-weather='rain'] .rain-drop:not(.rain-heavy),
+.explorer-stage[data-weather='storm'] .rain-drop {
+  opacity: 1;
+  animation: rain-fall var(--rd, 0.8s) linear var(--rdl, 0s) infinite;
+}
+.explorer-stage[data-weather='storm'] .rain-drop {
+  animation-duration: calc(var(--rd, 0.8s) * 0.6);
+  stroke: rgba(190, 215, 240, 0.7);
+}
+.explorer-stage.is-offscreen .rain-drop,
+.explorer-stage.is-offscreen .cloud {
+  animation-play-state: paused;
+}
+@keyframes rain-fall {
+  to {
+    transform: translate(-30px, 390px);
+  }
+}
+
+/* water getting in at the weak points (storm) */
+.leak {
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+.leak circle {
+  fill: #9fd0f0;
+}
+.explorer-stage[data-weather='storm'] .leak {
+  opacity: 1;
+}
+.explorer-stage[data-weather='storm'] .leak circle {
+  animation: leak-drip 1.3s cubic-bezier(0.55, 0, 1, 0.45) infinite;
+}
+.leak circle:nth-child(2) {
+  animation-delay: 0.45s !important;
+}
+.leak circle:nth-child(3) {
+  animation-delay: 0.9s !important;
+}
+@keyframes leak-drip {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(26px);
+    opacity: 0;
+  }
+}
+
+/* hotspots */
+.hs {
+  cursor: pointer;
+  outline: none;
+}
+.hs-ring {
+  fill: none;
+  stroke: var(--accent-light);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hs-ping 2.2s ease-out infinite;
+}
+.hs-dot {
+  fill: var(--accent-light);
+  stroke: #0e1210;
+  stroke-width: 3;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), fill 0.3s;
+}
+.hs:hover .hs-dot,
+.hs:focus-visible .hs-dot,
+.hs.is-active .hs-dot {
+  transform: scale(1.45);
+  fill: #fff;
+}
+.hs.is-active .hs-ring {
+  stroke: #fff;
+}
+.explorer-stage[data-weather='storm'] .hs:not(.is-active) .hs-dot {
+  fill: #e8a651;
+}
+.explorer-stage[data-weather='storm'] .hs:not(.is-active) .hs-ring {
+  stroke: #e8a651;
+}
+.hs:focus-visible .hs-ring {
+  stroke-width: 3;
+}
+@keyframes hs-ping {
+  from {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+  to {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+.hs-label {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  fill: var(--ink-dim);
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.hs:hover .hs-label,
+.hs.is-active .hs-label {
+  opacity: 1;
+}
+
+/* panel */
+.explorer-panel {
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+}
+.explorer-panel.is-swap > * {
+  animation: xp-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.explorer-panel.is-swap > :nth-child(2) {
+  animation-delay: 0.04s;
+}
+.explorer-panel.is-swap > :nth-child(3) {
+  animation-delay: 0.08s;
+}
+.explorer-panel.is-swap > :nth-child(4) {
+  animation-delay: 0.12s;
+}
+.explorer-panel.is-swap > :nth-child(5) {
+  animation-delay: 0.16s;
+}
+@keyframes xp-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.xp-num {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--accent-light);
+}
+.xp-title {
+  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+.xp-facts {
+  margin: 20px 0 0;
+  display: grid;
+  gap: 14px;
+}
+.xp-facts dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.xp-facts dd {
+  margin: 4px 0 0;
+  color: var(--ink-dim);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.xp-price {
+  margin-top: auto;
+  padding-top: 20px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+}
+.xp-price span {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.xp-price strong {
+  font-size: 20px;
+  color: var(--accent-light);
+  text-align: right;
+}
+.xp-cta {
+  margin-top: 18px;
+  text-align: center;
+}
+
+/* ---- Exploded roof (pinned) ------------------------------------------- */
+.anatomy {
+  --e: 0;
+  position: relative;
+  height: 340vh;
+  border-top: 1px solid var(--line);
+  background:
+    radial-gradient(60% 50% at 75% 50%, rgba(95, 168, 138, 0.12), transparent 70%),
+    var(--bg-alt);
+}
+.anatomy-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+.anatomy-inner {
+  display: grid;
+  gap: 28px;
+  width: 100%;
+  align-items: center;
+}
+@media (min-width: 960px) {
+  .anatomy-inner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: 48px;
+  }
+}
+.anatomy-list {
+  list-style: none;
+  padding: 0;
+  margin: 26px 0 0;
+  counter-reset: an;
+  display: grid;
+  gap: 4px;
+}
+.anatomy-list li {
+  position: relative;
+  padding: 10px 0 10px 44px;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  transition: color 0.4s, border-color 0.4s;
+}
+.anatomy-list li::before {
+  counter-increment: an;
+  content: counter(an, decimal-leading-zero);
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  color: inherit;
+}
+.anatomy-list strong {
+  display: block;
+  font-size: 16px;
+  color: inherit;
+}
+.anatomy-list p {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: max-height 0.5s ease, opacity 0.4s ease, margin 0.4s;
+}
+.anatomy-list li.is-active {
+  color: var(--ink);
+  border-color: var(--accent-light);
+}
+.anatomy-list li.is-active p {
+  max-height: 120px;
+  opacity: 1;
+  margin-top: 6px;
+  color: var(--ink-dim);
+}
+.anatomy.is-static .anatomy-list p {
+  max-height: none;
+  opacity: 1;
+}
+.anatomy-stage svg {
+  display: block;
+  width: 100%;
+  max-height: 72vh;
+  overflow: visible;
+}
+.anatomy .layer {
+  transform: translateY(calc((2 - var(--i)) * 58px * var(--e)));
+  transition: opacity 0.45s ease, filter 0.45s ease;
+}
+.anatomy[data-active='0'] .layer:not([data-layer='0']),
+.anatomy[data-active='1'] .layer:not([data-layer='1']),
+.anatomy[data-active='2'] .layer:not([data-layer='2']),
+.anatomy[data-active='3'] .layer:not([data-layer='3']),
+.anatomy[data-active='4'] .layer:not([data-layer='4']) {
+  opacity: 0.22;
+}
+.anatomy[data-active='0'] .layer[data-layer='0'],
+.anatomy[data-active='1'] .layer[data-layer='1'],
+.anatomy[data-active='2'] .layer[data-layer='2'],
+.anatomy[data-active='3'] .layer[data-layer='3'],
+.anatomy[data-active='4'] .layer[data-layer='4'] {
+  filter: drop-shadow(0 0 14px rgba(143, 214, 180, 0.55));
+}
+.anatomy-progress {
+  margin-top: 22px;
+  height: 2px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.anatomy-progress span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+  transform: scaleX(var(--e));
+  transform-origin: 0 50%;
+}
+@media (max-width: 959px) {
+  .anatomy {
+    height: 300vh;
+  }
+  .anatomy-sticky {
+    align-items: flex-start;
+    padding-top: 76px;
+  }
+  .anatomy-copy .lead {
+    display: none;
+  }
+  .anatomy-list {
+    margin-top: 14px;
+  }
+  .anatomy-list li {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .anatomy-list li:not(.is-active) strong {
+    font-size: 14px;
+  }
+  .anatomy-stage svg {
+    max-height: 38vh;
+  }
+  .anatomy .layer {
+    transform: translateY(calc((2 - var(--i)) * 40px * var(--e)));
+  }
+}
+.anatomy.is-static {
+  height: auto;
+  padding: 88px 0;
+}
+.anatomy.is-static .anatomy-sticky {
+  position: static;
+  height: auto;
+}
+
+/* ---- Scroll-driven motion (CSS only, where supported) ------------------- */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-inner,
+    .page-header .wrap {
+      animation: recede linear both;
+      animation-timeline: view();
+      animation-range: exit 0% exit 90%;
+    }
+    @keyframes recede {
+      to {
+        opacity: 0.15;
+        transform: translateY(-6%) scale(0.965);
+        filter: blur(2px);
+      }
+    }
+    .eyebrow {
+      position: relative;
+    }
+    .eyebrow::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      bottom: -7px;
+      width: 44px;
+      height: 1px;
+      background: linear-gradient(90deg, var(--accent-light), transparent);
+      transform-origin: 0 50%;
+      animation: rule-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 40% cover 35%;
+    }
+    .cta-band .eyebrow::after {
+      left: 50%;
+      margin-left: -22px;
+    }
+    @keyframes rule-draw {
+      from {
+        transform: scaleX(0);
+      }
+    }
+    @media (min-width: 860px) {
+      .work-grid .job:nth-child(odd) {
+        --drift: 26px;
+      }
+      .work-grid .job:nth-child(even) {
+        --drift: -16px;
+      }
+      .work-grid .job {
+        animation: drift linear both;
+        animation-timeline: view();
+        animation-range: cover;
+      }
+      @keyframes drift {
+        from {
+          translate: 0 var(--drift, 0);
+        }
+        to {
+          translate: 0 calc(var(--drift, 0) * -1);
+        }
+      }
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .split-h1 .word span {
+    animation: none;
+    transform: none;
+  }
+  .mab,
+  .anatomy .layer {
+    transition: none;
+  }
+  .hs-ring,
+  .ba-sheen,
+  .rain-drop,
+  .leak circle,
+  .cloud,
+  .open-status.is-open .os-dot {
+    animation: none !important;
+  }
+}
