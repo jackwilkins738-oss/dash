@@ -24,3 +24,6 @@ tsconfig.tsbuildinfo
 outreach/
 scratch/
 SCALAR/
+
+# Python bytecode from scripts/
+__pycache__/

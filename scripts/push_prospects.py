@@ -19,12 +19,24 @@ Options:
                      checkout, or in the main checkout when run from a worktree)
     --out PATH       where to write the links CSV (default: preview-links.csv beside the sheet)
     --dry-run        write the CSV, send nothing
+    --only TEXT      only prospects whose business name or website contains TEXT
+    --limit N        only the first N prospects (after --only)
+    --teardown       also run the automated website teardown (site_teardown.py) and
+                     push its findings - off by default. Takes ~20-60s per site, so it
+                     refuses to run on more than 10 prospects unless --yes-all is given.
+    --yes-all        allow --teardown on more than 10 prospects
 Env:
     PROSPECTS_API_SECRET  required (also used to make the links unguessable)
     DASHBOARD_API_URL     default https://admin.scalardigital.co.uk
     SCALAR_TENANT_ID      default Scalar Digital's own tenant (already public in
                           the site's track.js snippet)
     SITE_URL              default https://www.scalardigital.co.uk
+    PAGESPEED_API_KEY     required for --teardown (the same Google key the site's
+                          speed test uses, NEXT_PUBLIC_PAGESPEED_API_KEY in Vercel)
+
+Try the teardown on one firm first, and check its preview page, before anything else:
+    python scripts/push_prospects.py --teardown --only "Smith Roofing" --dry-run
+    python scripts/push_prospects.py --teardown --only "Smith Roofing"
 """
 
 from __future__ import annotations
@@ -38,7 +50,9 @@ import os
 import re
 import sys
 import urllib.error
+import time
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -112,6 +126,10 @@ def main() -> None:
     ap.add_argument("--sheet", type=Path, default=default_sheet)
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--only", default=None)
+    ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--teardown", action="store_true")
+    ap.add_argument("--yes-all", action="store_true")
     args = ap.parse_args()
 
     secret = os.environ.get("PROSPECTS_API_SECRET", "")
@@ -176,12 +194,46 @@ def main() -> None:
     print(f"{len(prospects)} prospects ({by_channel['email']} email, {by_channel['letter']} letter), {skipped} skipped")
     print(f"Wrote {out}")
 
+    # --only / --limit narrow what gets checked and pushed. The links CSV
+    # above always covers everyone, so it never loses rows.
+    selected = prospects
+    if args.only:
+        needle = args.only.lower()
+        selected = [p for p in selected if needle in p["business_name"].lower() or needle in p["website"]]
+    if args.limit is not None:
+        selected = selected[: max(0, args.limit)]
+    if args.only or args.limit is not None:
+        print(f"Selected {len(selected)}: " + ", ".join(p["business_name"] for p in selected[:10]) + (" ..." if len(selected) > 10 else ""))
+    if not selected:
+        sys.exit("Nothing selected.")
+
+    if args.teardown:
+        if len(selected) > 10 and not args.yes_all:
+            sys.exit(f"--teardown would check {len(selected)} sites. Narrow it with --only/--limit, or add --yes-all.")
+        psi_key = os.environ.get("PAGESPEED_API_KEY", "")
+        if not psi_key:
+            sys.exit("--teardown needs PAGESPEED_API_KEY (the Google key the site's speed test uses).")
+        from site_teardown import teardown  # same folder as this script
+
+        for i, p in enumerate(selected, 1):
+            print(f"[{i}/{len(selected)}] Checking {p['website']} ...", flush=True)
+            result = teardown(p["website"], psi_key)
+            if result is None:
+                print("    couldn't check this one - nothing saved for it")
+                continue
+            p["teardown"] = result
+            p["teardown_at"] = datetime.now(timezone.utc).isoformat()
+            problems = [k for k, v in result["checks"].items() if v is False]
+            extras = {k: v for k, v in result.items() if k not in ("v", "checks")}
+            print(f"    problems: {', '.join(problems) or 'none'} | {extras}")
+            time.sleep(1)
+
     if args.dry_run:
         print("Dry run: nothing sent.")
         return
 
-    for start in range(0, len(prospects), 500):
-        batch = prospects[start : start + 500]
+    for start in range(0, len(selected), 500):
+        batch = selected[start : start + 500]
         req = urllib.request.Request(
             f"{api}/api/prospects/import",
             data=json.dumps({"tenant_id": tenant, "prospects": batch}).encode(),

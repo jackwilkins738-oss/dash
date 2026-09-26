@@ -12,6 +12,8 @@
 //   PROSPECTS_API_SECRET   the same value as the dashboard's own
 //   TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID   already set for the contact form
 
+import type { Teardown } from '@/lib/teardown'
+
 export type Prospect = {
   slug: string
   business_name: string
@@ -20,6 +22,9 @@ export type Prospect = {
   website: string | null
   mobile_score: number | null
   lcp_s: number | null
+  /** Automated website checks (dashboard migration 042), when they've been run. */
+  teardown?: Teardown | null
+  teardown_at?: string | null
   updated_at?: string
 }
 

@@ -9,6 +9,7 @@ import { Reveal } from '@/components/reveal'
 import { PreviewBeacon } from '@/components/preview-beacon'
 import { getProspect, type Prospect } from '@/lib/prospect-api'
 import { showcaseIdForTradeText } from '@/lib/showcase'
+import { teardownFindings, teardownPasses } from '@/lib/teardown'
 
 // A private page for one business Scalar is reaching out to: their real
 // Google speed score next to a concept of what a Scalar build would look
@@ -62,6 +63,15 @@ export default async function ProspectPreviewPage({ params }: Props) {
   const contactHref = `/contact?firm=${encodeURIComponent(p.business_name)}`
   const band = p.mobile_score != null ? scoreBand(p.mobile_score) : null
   const slow = p.mobile_score != null && p.mobile_score < 90
+
+  // The teardown is judged against the year it was run, not today, so a
+  // finding like a stale copyright year can't change meaning as time passes.
+  const checkedAt = p.teardown_at ? new Date(p.teardown_at) : null
+  const findings = checkedAt ? teardownFindings(p.teardown, checkedAt.getUTCFullYear()) : []
+  const passes = teardownPasses(p.teardown)
+  const checkedOn = checkedAt
+    ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).format(checkedAt)
+    : null
 
   return (
     <main>
@@ -125,6 +135,46 @@ export default async function ProspectPreviewPage({ params }: Props) {
           </div>
         </div>
       </section>
+
+      {findings.length > 0 && p.website && (
+        <section className="border-t border-border py-20 sm:py-24">
+          <div className="mx-auto max-w-4xl px-5 sm:px-8">
+            <Reveal>
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
+                What we found
+              </span>
+              <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+                {findings.length === 1 ? 'One thing' : `${findings.length} things`} on {p.website} worth fixing.
+              </h2>
+              <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
+                Checked on {checkedOn} with Google&apos;s own mobile test and a look at your public homepage
+                {passes > 0 ? ` — ${passes} other check${passes === 1 ? '' : 's'} came back fine` : ''}. Each of these
+                is something you can see for yourself.
+              </p>
+            </Reveal>
+
+            <Reveal stagger className="mt-10 divide-y divide-border border-y border-border">
+              {findings.map((f, i) => (
+                <div key={f.id} className="grid gap-3 py-7 sm:grid-cols-[3rem_1fr] sm:gap-6">
+                  <span className="font-mono text-sm text-blueprint">{String(i + 1).padStart(2, '0')}</span>
+                  <div>
+                    <h3 className="font-display text-lg font-semibold sm:text-xl">{f.title}</h3>
+                    <p className="mt-2 text-pretty leading-relaxed text-muted-foreground">{f.detail}</p>
+                    <p className="mt-3 flex items-start gap-2 text-sm text-foreground/90">
+                      <span className="mt-0.5 font-mono text-blueprint" aria-hidden="true">
+                        &rarr;
+                      </span>
+                      <span>
+                        <span className="font-semibold">In a Scalar build:</span> {f.fix}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </Reveal>
+          </div>
+        </section>
+      )}
 
       {p.website && <SpeedCheck initialUrl={p.website} />}
       <Pricing />
