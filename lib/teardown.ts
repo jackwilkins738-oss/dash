@@ -22,7 +22,8 @@ export type Teardown = {
       | 'tapTargets'
       | 'pageTitle'
       | 'metaDescription'
-      | 'https',
+      | 'https'
+      | 'secureAssets',
       boolean
     >
   >
@@ -158,6 +159,15 @@ export function teardownFindings(t: Teardown | null | undefined, currentYear: nu
       title: 'There’s no WhatsApp link',
       detail: 'Plenty of homeowners would rather send a photo of the job than make a call.',
       fix: 'One tap opens WhatsApp with a message already started.',
+    })
+  }
+  if (c.secureAssets === false && c.https !== false) {
+    out.push({
+      id: 'insecure-files',
+      title: 'Your homepage loads files over an insecure connection',
+      detail:
+        'It asks for some of its files over plain http://, which browsers block or rewrite on a secure page — so whatever they power may not work as intended.',
+      fix: 'Every file served securely, and tested in a real browser before launch.',
     })
   }
   if (c.https === false) {

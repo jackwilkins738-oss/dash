@@ -62,6 +62,14 @@ describe('teardownFindings', () => {
     assert.match(teardownFindings(t({ platform: 'wordpress', wpPluginCount: 22 }), YEAR)[0].title, /loads 22 WordPress plugins/)
   })
 
+  it('reports insecure files on a secure site, without calling the site insecure', () => {
+    const ids = teardownFindings(t({ checks: { https: true, secureAssets: false } }), YEAR).map((f) => f.id)
+    assert.deepEqual(ids, ['insecure-files'])
+    // A site not on HTTPS at all gets the one clearer finding, not both.
+    const both = teardownFindings(t({ checks: { https: false, secureAssets: false } }), YEAR).map((f) => f.id)
+    assert.deepEqual(both, ['https'])
+  })
+
   it('leaves a decent SEO score alone', () => {
     assert.equal(teardownFindings(t({ seoScore: 92 }), YEAR).length, 0)
   })

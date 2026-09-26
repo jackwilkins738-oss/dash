@@ -6,8 +6,10 @@ turns into wording (lib/teardown.ts). Two sources, both things the business
 owner can verify for themselves:
 
   1. Google's PageSpeed Insights (mobile): SEO and accessibility scores,
-     readable text size, tap-target size, HTTPS, page title and meta
-     description, how much image weight could be saved, total page weight.
+     readable text size, tap-target size, page title and meta description,
+     how much image weight could be saved, total page weight.
+     (Not its HTTPS audit: that also fails on a secure site that loads one
+     file over http://, which is a different problem - see secureAssets.)
   2. The public HTML of their homepage: a tap-to-call link, a WhatsApp link,
      an enquiry form, local business structured data, the copyright year in
      the footer, and the platform it's built on.
@@ -94,7 +96,6 @@ def run_pagespeed(url: str, api_key: str, timeout: int = 180) -> dict:
     for check, ids in (
         ("readableText", ("font-size",)),
         ("tapTargets", ("tap-targets", "target-size")),
-        ("https", ("is-on-https",)),
         ("pageTitle", ("document-title",)),
         ("metaDescription", ("meta-description",)),
     ):
@@ -233,8 +234,21 @@ def analyse_html(html: str, final_url: str | None, script_bodies: list[str] | No
         plugins = set(p.lower() for p in re.findall(r"/wp-content/plugins/([A-Za-z0-9_-]+)/", html))
         out["wpPluginCount"] = len(plugins)
 
-    if final_url and final_url.lower().startswith("http://"):
-        checks["https"] = False
+    # HTTPS is judged on where the homepage actually ended up, nothing else.
+    if final_url:
+        checks["https"] = final_url.lower().startswith("https://")
+
+    # On a secure page, files requested over plain http:// get blocked or
+    # upgraded by the browser ("mixed content"). Only resources the page
+    # loads count - an ordinary link to another http:// site is fine.
+    if final_url and final_url.lower().startswith("https://"):
+        insecure = re.findall(r"<(?:script|img|iframe|source|video|audio)\b[^>]*\bsrc\s*=\s*[\"']http://", html, re.I)
+        insecure += [
+            tag
+            for tag in re.findall(r"<link\b[^>]*>", html, re.I)
+            if re.search(r"rel\s*=\s*[\"']?stylesheet", tag, re.I) and re.search(r"href\s*=\s*[\"']http://", tag, re.I)
+        ]
+        checks["secureAssets"] = not insecure
     return out
 
 

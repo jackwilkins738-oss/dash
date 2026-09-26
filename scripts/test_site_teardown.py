@@ -24,7 +24,14 @@ class AnalyseHtml(unittest.TestCase):
         checks = analyse_html(html, "https://example.com/")["checks"]
         self.assertEqual(
             checks,
-            {"tapToCall": True, "whatsapp": True, "contactForm": True, "localSchema": True},
+            {
+                "tapToCall": True,
+                "whatsapp": True,
+                "contactForm": True,
+                "localSchema": True,
+                "https": True,
+                "secureAssets": True,
+            },
         )
 
     def test_reports_missing_links_and_form_on_a_content_page(self):
@@ -68,9 +75,23 @@ class AnalyseHtml(unittest.TestCase):
         self.assertEqual(out["wpPluginCount"], 2)
         self.assertEqual(analyse_html(page('<img src="https://static.wixstatic.com/x.jpg">'), None)["platform"], "wix")
 
-    def test_plain_http_is_flagged(self):
+    def test_https_is_judged_on_where_the_page_ended_up(self):
         self.assertFalse(analyse_html(page(""), "http://example.com/")["checks"]["https"])
-        self.assertNotIn("https", analyse_html(page(""), "https://example.com/")["checks"])
+        self.assertTrue(analyse_html(page(""), "https://example.com/")["checks"]["https"])
+        self.assertNotIn("https", analyse_html(page(""), None)["checks"])
+
+    def test_insecure_files_on_a_secure_page(self):
+        # The real case this was written for: HTTPS site, jQuery over http://.
+        html = page('<script src="http://code.jquery.com/jquery-latest.min.js"></script>')
+        checks = analyse_html(html, "https://example.com/")["checks"]
+        self.assertTrue(checks["https"])
+        self.assertFalse(checks["secureAssets"])
+        css = page('<link href="http://example.com/a.css" rel="stylesheet">')
+        self.assertFalse(analyse_html(css, "https://example.com/")["checks"]["secureAssets"])
+
+    def test_plain_links_to_http_sites_are_fine(self):
+        html = page('<a href="http://www.checkatrade.com/Firm/">Checkatrade</a><script src="https://x.com/a.js"></script>')
+        self.assertTrue(analyse_html(html, "https://example.com/")["checks"]["secureAssets"])
 
 
 class CopyrightYear(unittest.TestCase):
