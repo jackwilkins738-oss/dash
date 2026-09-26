@@ -182,6 +182,7 @@ def main() -> None:
                 "business_name": business,
                 # The sheet's own Trade always wins; a saved guess only fills a blank.
                 "trade": row.get("Trade") or guesses.get(domain) or None,
+                "_sheet_trade": bool(row.get("Trade")),
                 "area": row.get("Area") or None,
                 "website": domain,
                 "mobile_score": number(row.get("Mobile score")),
@@ -238,15 +239,19 @@ def main() -> None:
         from site_teardown import fetch_html  # same folder as this script
         from trade_guess import guess_trade, page_text_for_guess
 
-        blanks = [p for p in selected if not p["trade"]]
+        # Every prospect without a Trade in the sheet - including ones guessed
+        # before, so an improved guesser corrects earlier guesses.
+        blanks = [p for p in selected if not p["_sheet_trade"]]
         print(f"Guessing trades for {len(blanks)} prospects with none in the sheet ...")
         new_guesses = 0
         for p in blanks:
             html, _ = fetch_html(f"https://{p['website']}/")
             if html is None:
                 html, _ = fetch_html(f"http://{p['website']}/")
-            guess = guess_trade(page_text_for_guess(html)) if html else None
-            print(f"    {p['business_name']}: {guess or 'no guess'}")
+            guess = guess_trade(page_text_for_guess(html), p["business_name"]) if html else guess_trade("", p["business_name"])
+            previous = guesses.get(p["website"])
+            changed = f"  (was: {previous})" if previous and guess and previous != guess else ""
+            print(f"    {p['business_name']}: {guess or 'no guess'}{changed}")
             if guess:
                 p["trade"] = guess
                 guesses[p["website"]] = guess
@@ -288,7 +293,9 @@ def main() -> None:
         batch = selected[start : start + 500]
         req = urllib.request.Request(
             f"{api}/api/prospects/import",
-            data=json.dumps({"tenant_id": tenant, "prospects": batch}).encode(),
+            data=json.dumps(
+                {"tenant_id": tenant, "prospects": [{k: v for k, v in p.items() if not k.startswith("_")} for p in batch]}
+            ).encode(),
             headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"},
             method="POST",
         )

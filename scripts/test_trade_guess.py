@@ -21,6 +21,12 @@ class GuessTrade(unittest.TestCase):
         # "Loft conversions" also contains "conversion" (building), but loft wins on its own words.
         self.assertEqual(guess_trade("Loft conversions, dormer lofts and mansard lofts"), "Loft conversions")
 
+    def test_the_business_name_outweighs_the_page(self):
+        # The real case: a landscaper whose homepage mostly lists driveways and patios.
+        page = "Driveways, patios, block paving and resin driveways across Surrey. Patio cleaning."
+        self.assertEqual(guess_trade(page), "Driveways & patios")
+        self.assertEqual(guess_trade(page, "George William Landscaping"), "Landscaping")
+
     def test_no_match_means_no_guess(self):
         self.assertIsNone(guess_trade("Welcome to our website"))
         self.assertIsNone(guess_trade(""))

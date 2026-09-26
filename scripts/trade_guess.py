@@ -42,8 +42,7 @@ def page_text_for_guess(page_html: str) -> str:
     return re.sub(r"\s+", " ", htmllib.unescape(text)).strip()
 
 
-def guess_trade(text: str) -> str | None:
-    """Best-matching trade label for a description, or None if nothing matches."""
+def _best(text: str) -> str | None:
     lowered = f" {text.lower()} "
     best, best_score = None, 0
     for label, words in TRADES:
@@ -51,3 +50,14 @@ def guess_trade(text: str) -> str | None:
         if score > best_score:
             best, best_score = label, score
     return best
+
+
+def guess_trade(text: str, business_name: str = "") -> str | None:
+    """Best-matching trade label, or None if nothing matches.
+
+    If the business's own name names a trade, that's the answer - it's how
+    the firm describes itself. "George William Landscaping" is a landscaper
+    even when its homepage mostly lists the patios and driveways it also
+    lays. The homepage text only decides when the name doesn't say.
+    """
+    return _best(business_name) or _best(text)
