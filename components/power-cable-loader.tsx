@@ -17,6 +17,10 @@ const PowerCableImpl = dynamic(() => import('@/components/power-cable').then((m)
 type NavigatorHints = Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } }
 function deviceCanAffordIt(): boolean {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false
+  // Desktop only, like the hero's blueprint canvas. On a phone it's a
+  // decorative full-screen WebGL layer running on the battery of exactly
+  // the visitor a cold email sends here - not a trade worth making.
+  if (window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024) return false
   const nav = navigator as NavigatorHints
   if (nav.connection?.saveData) return false
   if (typeof nav.deviceMemory === 'number' && nav.deviceMemory <= 2) return false

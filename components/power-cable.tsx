@@ -112,7 +112,9 @@ export function PowerCable() {
     // ---- renderer / scene ---------------------------------------------
     const renderer = new WebGLRenderer({ antialias: !isMobile, alpha: true, powerPreference: 'low-power' })
     renderer.setClearColor(0x000000, 0)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2))
+    // Capped at 1.5x. On a 2x laptop screen that's 44% fewer pixels to fill
+    // every frame, and a softly glowing wire loses nothing visible for it.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
     renderer.toneMapping = ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.2
     mount!.appendChild(renderer.domElement)
@@ -136,11 +138,13 @@ export function PowerCable() {
     // moving highlight actually look like it's emitting light.
     const composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
-    // UnrealBloomPass sizes its internal mip chain off this resolution -
-    // halving it on mobile is the single biggest lever on its GPU cost,
-    // and the blur already hides the drop in sharpness.
-    const bloomRes = isMobile ? new Vector2(vw / 2, vh / 2) : new Vector2(vw, vh)
-    const bloomPass = new UnrealBloomPass(bloomRes, 0.95, 0.55, 0.68)
+    // The bloom is the most expensive part of every frame, and it's a blur,
+    // so it's sized in CSS pixels, not device pixels (see measure()). On a
+    // standard screen that's exactly what it always was; on a 2x screen it
+    // fills a quarter of the pixels and the glow looks as it does on a 1x
+    // screen - its blur kernels are in texels, so sizing it any smaller
+    // than this would visibly widen the halo, not just cheapen it.
+    const bloomPass = new UnrealBloomPass(new Vector2(vw, vh), 0.95, 0.55, 0.68)
     composer.addPass(bloomPass)
 
     const toScene = (px: number, pyViewport: number, z = 0) =>
@@ -304,7 +308,13 @@ export function PowerCable() {
       camera.updateProjectionMatrix()
       renderer.setSize(vw, vh)
       composer.setSize(vw, vh)
-      bloomPass.resolution.set(isMobile ? vw / 2 : vw, isMobile ? vh / 2 : vh)
+      // composer.setSize() resizes every pass - bloom included - to the full
+      // canvas (width x pixel ratio), and UnrealBloomPass.setSize() works
+      // from the size it's handed, not from its .resolution field. So the
+      // old `bloomPass.resolution.set(...)` here never took effect: the
+      // bloom ran at full device-pixel resolution. Resizing the pass itself,
+      // after the composer, is what actually takes effect.
+      bloomPass.setSize(vw, vh)
     }
 
     const updateWirePulse = () => {
@@ -584,9 +594,28 @@ export function PowerCable() {
     const FRAME_INTERVAL = 1000 / (isMobile ? 20 : 30)
     let lastRenderTime = 0
 
+    // Full frame rate only while someone is actually doing something. The
+    // canvas covers the whole viewport, so the IntersectionObserver below
+    // never reports it hidden - without this it repainted a full-screen
+    // bloom every frame for as long as the page was open, even with nobody
+    // touching it. After IDLE_AFTER_MS of no scroll/pointer/key activity it
+    // drops to IDLE_FPS: the slow travelling current still moves (t advances
+    // by real elapsed time, below), at a fraction of the cost. Any activity
+    // puts it straight back to full rate, so scrolling is never affected.
+    const IDLE_AFTER_MS = 2000
+    const IDLE_FRAME_MS = 1000 / 15
+    let lastActivity = performance.now()
+    const markActive = () => {
+      lastActivity = performance.now()
+    }
+    const ACTIVITY_EVENTS = ['scroll', 'pointermove', 'wheel', 'touchstart', 'keydown'] as const
+    ACTIVITY_EVENTS.forEach((e) => window.addEventListener(e, markActive, { passive: true }))
+
     const draw = () => {
       raf = requestAnimationFrame(draw)
       if (!visible) return
+      const frameNow = performance.now()
+      if (frameNow - lastActivity > IDLE_AFTER_MS && frameNow - lastRenderTime < IDLE_FRAME_MS) return
 
       // Mobile browsers rubber-band/overscroll at the top and bottom of
       // the page - window.scrollY genuinely goes negative or past the max
@@ -649,7 +678,9 @@ export function PowerCable() {
       // Advance by however long actually elapsed (capped so a stalled tab
       // resuming after a long gap doesn't jump the animation forward) now
       // that this tick isn't a fixed 1/60th of a second anymore.
-      if (!prefersReduced) t += Math.min(elapsed, FRAME_INTERVAL * 2) / 1000
+      // 100ms cap: comfortably above an idle-rate frame (~67-83ms, so the
+      // current keeps its speed while idle) and still stops a big jump.
+      if (!prefersReduced) t += Math.min(elapsed, 100) / 1000
     }
 
     await nextFrame()
@@ -747,6 +778,7 @@ export function PowerCable() {
       window.clearTimeout(resizeTimer)
       settleTimers.forEach(window.clearTimeout)
       window.removeEventListener('resize', onResize)
+      ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, markActive))
       ro.disconnect()
       io.disconnect()
       clearRunGroup()
