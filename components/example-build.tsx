@@ -151,19 +151,17 @@ const EXAMPLES: Example[] = [
 
 export function ExampleBuild() {
   return (
-    <section className="border-t border-border py-24 sm:py-32">
+    <section id="work" className="scroll-mt-20 border-t border-border py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal>
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Example builds</span>
+          <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Example builds</span>
           <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             Not mockups. Real, working sites.
           </h2>
           <p className="mt-5 max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-            Five full builds — Verdigris is live on this same domain, click through and look around properly;
-            Mike is a real wellbeing app&apos;s product site; the other three are concept builds for trades. Each
-            is a working site designed to turn visitors into enquiries or sign-ups, and each has an entirely
-            different look and market. That&apos;s deliberate: every build starts from a blank page, not a
-            theme, so no two sites end up looking related.
+            Five full builds, each started from a blank page rather than a theme — which is why no two look
+            related. Verdigris is live on this same domain, so click through and look around properly; Mike is a
+            real wellbeing app&apos;s product site; the other three are concept builds for trades.
           </p>
         </Reveal>
 
@@ -172,7 +170,7 @@ export function ExampleBuild() {
             <Reveal
               key={ex.slug}
               delay={i * 0.1}
-              className={ex.wide ? 'sm:col-span-2' : ex.offset}
+              className={ex.wide ? 'sm:col-span-2' : `depth-drift ${ex.offset}`}
             >
               <a
                 href={ex.url}

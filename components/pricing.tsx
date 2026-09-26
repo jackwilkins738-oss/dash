@@ -36,7 +36,7 @@ export function Pricing() {
     <section id="pricing" className="border-t border-border py-24 sm:py-28">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="max-w-2xl">
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Pricing</span>
+          <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Pricing</span>
           <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             One number, agreed before any work starts.
           </h2>
@@ -48,13 +48,11 @@ export function Pricing() {
         </Reveal>
 
         <Reveal stagger className="mt-14 grid gap-6 lg:grid-cols-2">
-          <PriceCard
-            label="Landing Page"
-            price="£750"
-            included={LANDING_INCLUDED}
-            footnote="Fixed at the outset — nothing added later"
-            exampleHref="/examples/verdigris-roofing/landing.html"
-          />
+          {/* The full build is read first on purpose. It is the offer the site
+              is really about, and it sets the frame the Landing Page is then
+              judged in - read the other way round, £2,500 is measured against
+              £750 and looks like a jump, rather than £750 being seen for what
+              it is: the lighter cut of the same standard. */}
           <PriceCard
             label="The Scalar build"
             price="£2,500"
@@ -62,6 +60,13 @@ export function Pricing() {
             footnote="Fixed at the outset — nothing added later"
             exampleHref="/examples/verdigris-roofing/"
             highlighted
+          />
+          <PriceCard
+            label="Landing Page"
+            price="£750"
+            included={LANDING_INCLUDED}
+            footnote="Fixed at the outset — nothing added later"
+            exampleHref="/examples/verdigris-roofing/landing.html"
           />
         </Reveal>
 

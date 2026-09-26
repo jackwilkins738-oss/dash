@@ -31,7 +31,7 @@ export function Hero() {
         aria-hidden="true"
       />
 
-      <div className="relative mx-auto w-full max-w-6xl px-5 pt-28 pb-20 sm:px-8">
+      <div className="hero-recede relative mx-auto w-full max-w-6xl px-5 pt-28 pb-20 sm:px-8">
         {/* One column until there is genuinely room for two: the preview needs
             roughly 480px beside a headline that still reads at a good size. */}
         <div className="grid items-center gap-14 xl:grid-cols-[minmax(0,1.04fr)_minmax(0,0.96fr)] xl:gap-8">
@@ -60,27 +60,37 @@ export function Hero() {
             </h1>
 
             <p className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-              I build fast, hand-coded sites for trades — and with the full build, the private dashboard that runs
-              the enquiries, quotes and jobs behind it. Engineered by someone who&apos;s stood on the tools, to win
-              the jobs worth having and run the admin around them, not just to exist.
+              Fast, hand-coded websites for trades — and with the full build, the private dashboard that runs your
+              enquiries, quotes and jobs behind it. Built by someone who&apos;s stood on the tools, to win the jobs
+              worth having.
             </p>
 
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Link
-                href="/contact"
-                data-magnetic
-                className="btn-chamfer group inline-flex items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
-              >
-                Start your build
-                <span className="transition-transform group-hover:translate-x-1">&rarr;</span>
-              </Link>
-              <Link
-                href="/work"
-                data-magnetic
-                className="btn-chamfer inline-flex items-center justify-center gap-2 border border-border px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-foreground transition-colors hover:border-blueprint hover:text-blueprint"
-              >
-                See the work
-              </Link>
+            <div className="mt-9">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Link
+                  href="/contact"
+                  data-magnetic
+                  className="btn-chamfer btn-sheen group inline-flex items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
+                >
+                  Start your build
+                  <span className="transition-transform group-hover:translate-x-1">&rarr;</span>
+                </Link>
+                <Link
+                  href="/#work"
+                  data-magnetic
+                  className="btn-chamfer inline-flex items-center justify-center gap-2 border border-border px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-foreground transition-colors hover:border-blueprint hover:text-blueprint"
+                >
+                  See the work
+                </Link>
+              </div>
+              {/* Answers the three things that stop a click, right where the
+                  decision to click is made: what it costs, how long until
+                  I hear back, whether I'll be sold to. All three are the same
+                  promises the closing CTA band makes. */}
+              <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                Fixed price <span className="text-blueprint/60">/</span> Plan within 2 hours{' '}
+                <span className="text-blueprint/60">/</span> No sales call
+              </p>
             </div>
 
             <Link
@@ -97,9 +107,11 @@ export function Hero() {
 
             <dl className="mt-14 grid max-w-lg grid-cols-3 gap-6 border-t border-border pt-8">
               {[
-                { k: '<1s', v: 'Load time on desktop' },
-                { k: '100', v: 'Lighthouse target' },
-                { k: '<2 hrs', v: 'Enquiry reply time' },
+                // Same verifiable figure the pricing cards promise, and that
+                // anyone can check with the site's own /speed-test tool.
+                { k: '90+', v: 'Google mobile speed score — the build target' },
+                { k: '100%', v: 'Yours — the site code and the domain' },
+                { k: '<2 hrs', v: 'To hear back from me' },
               ].map((s) => (
                 <div key={s.v}>
                   <dt className="font-mono text-2xl font-bold text-blueprint sm:text-3xl">{s.k}</dt>

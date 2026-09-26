@@ -3,7 +3,7 @@ import { Reveal } from '@/components/reveal'
 
 export function CtaBand() {
   return (
-    <section className="border-t border-border">
+    <section data-hide-action-bar className="border-t border-border">
       <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8 sm:py-32">
         <Reveal spotlight className="relative overflow-hidden rounded-2xl border border-border bg-card p-8 sm:p-14">
           <div className="blueprint-grid pointer-events-none absolute inset-0 opacity-30" aria-hidden="true" />

@@ -1,12 +1,11 @@
 import { Hero } from '@/components/hero'
-import { TrustMarquee } from '@/components/trust-marquee'
 import { PowerCable } from '@/components/power-cable-loader'
-import { Transformation } from '@/components/transformation'
 import { ExampleBuild } from '@/components/example-build'
 import { DashShowcase } from '@/components/dash-showcase'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
-import { JumpStat } from '@/components/jump-stat'
+import { ReplyClock } from '@/components/reply-clock'
+import { Pricing } from '@/components/pricing'
 import { TradesGrid } from '@/components/trades-grid'
 import { Comparison } from '@/components/comparison'
 import { SpeedRace } from '@/components/speed-race'
@@ -39,15 +38,49 @@ export default function HomePage() {
   return (
     <main className="relative isolate">
       <PowerCable />
+      {/* The order is the argument. Promise (hero), then proof before anything
+          else is claimed (real builds), then "this is for me" (trades), then
+          what actually sets the offer apart (the dashboard), then what waiting
+          costs, proof the visitor runs themselves (race, their own speed
+          test), the contrast, how the work is done, and only then the price
+          - by which point it is being weighed against everything above it,
+          not read cold. */}
       <Hero />
-      <TrustMarquee />
+      <ExampleBuild />
       <TradesGrid />
       <DashShowcase />
-
+      <section data-wire-section className="relative border-y border-border py-24 sm:py-32">
+        <div className="mx-auto max-w-2xl px-5 text-center sm:px-8">
+          <Reveal>
+            <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
+              It&apos;s called a lead for a reason
+            </span>
+            <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+              Cut the wire and it&apos;s dead in seconds. Same with an enquiry.
+            </h2>
+            <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
+              The average business takes <strong className="font-semibold text-foreground">42 hours</strong> to
+              reply to a website enquiry. Most customers don&apos;t wait that long —{' '}
+              <strong className="font-semibold text-foreground">78%</strong> hire whichever company gets back to
+              them first, not whoever&apos;s better. Watch what the wait costs.
+            </p>
+          </Reveal>
+          <ReplyClock />
+          <Reveal>
+            <p className="mx-auto mt-10 max-w-xl text-pretty leading-relaxed text-foreground/90">
+              Every site I build puts the enquiry on your phone the second it lands, so the fast reply is the
+              easy one.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+      <SpeedRace />
+      <SpeedCheck linkToFullPage />
+      <Comparison />
       <section className="py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
           <Reveal className="max-w-2xl">
-            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
+            <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
               How I work
             </span>
             <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
@@ -84,53 +117,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section data-wire-section className="relative border-y border-border py-24 sm:py-32">
-        <div className="mx-auto max-w-2xl px-5 text-center sm:px-8">
-          <Reveal>
-            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
-              It&apos;s called a lead for a reason
-            </span>
-            <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
-              Cut the wire and it&apos;s dead in seconds. Same with an enquiry.
-            </h2>
-            <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
-              The average business takes <strong className="font-semibold text-foreground">42 hours</strong> to
-              reply to a website enquiry. Most customers don&apos;t wait that long —{' '}
-              <strong className="font-semibold text-foreground">78%</strong> hire whichever company gets back to
-              them first, not whoever&apos;s better. Every site I build gets your enquiries to you the second they
-              land, so that&apos;s never the job you lose.
-            </p>
-
-            <div className="mx-auto mt-12 flex max-w-lg items-center justify-center gap-6 border-t border-border pt-10 sm:gap-10">
-              <div className="text-center">
-                <div className="font-mono text-3xl font-bold text-muted-foreground/50 line-through decoration-2 sm:text-4xl">
-                  42 hrs
-                </div>
-                <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                  Average business
-                </div>
-              </div>
-              <span className="text-2xl text-muted-foreground/40" aria-hidden="true">
-                &rarr;
-              </span>
-              <div className="text-center">
-                <JumpStat
-                  value="<2 hrs"
-                  className="inline-block font-mono text-4xl font-bold text-blueprint text-glow sm:text-5xl"
-                />
-                <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                  Every site I build
-                </div>
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-      <Comparison />
-      <SpeedRace />
-      <SpeedCheck linkToFullPage />
-      <Transformation />
-      <ExampleBuild />
+      <Pricing />
       <CtaBand />
     </main>
   )

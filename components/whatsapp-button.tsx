@@ -11,13 +11,15 @@ export function WhatsAppButton() {
   // duplicate on top of it just covers that card instead of helping.
   if (pathname === '/contact') return null
 
+  // Tablet and up only: on phones the same action lives in the mobile
+  // action bar (mobile-action-bar.tsx) instead of a second fixed element.
   return (
     <a
       href="https://wa.me/66638306449"
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Message on WhatsApp"
-      className="group fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] shadow-lg shadow-black/30 transition-transform hover:scale-105 sm:bottom-7 sm:right-7"
+      className="group fixed bottom-5 right-5 z-40 hidden h-14 w-14 items-center justify-center rounded-full bg-[#25D366] shadow-lg shadow-black/30 transition-transform hover:scale-105 sm:bottom-7 sm:right-7 sm:flex"
     >
       <span
         className="absolute inset-0 -z-10 rounded-full bg-[#25D366] motion-safe:animate-ping motion-safe:[animation-duration:2.4s]"

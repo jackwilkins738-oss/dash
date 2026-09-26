@@ -18,7 +18,7 @@ export function TradesGrid() {
     <section className="border-t border-border py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="max-w-2xl">
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Built for</span>
+          <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Built for</span>
           <h2 className="mt-4 font-display text-balance text-2xl font-bold tracking-tight sm:text-3xl">
             Trade businesses that have outgrown their website.
           </h2>

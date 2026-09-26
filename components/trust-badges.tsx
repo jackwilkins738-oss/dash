@@ -1,12 +1,16 @@
-import { BadgeCheck, Code2, ShieldCheck } from 'lucide-react'
+import { Code2, KeyRound, Lock } from 'lucide-react'
 
 // Only claims that are actually true today. An ICO registration badge
 // was discussed too, but Scalar Digital isn't registered yet - add it
 // once there's a real registration number, not before.
+// These used to include 'SSL secured' and 'Est. 2026'. Every site has SSL, so
+// listing it reads as padding, and a founding year this recent works against
+// the premium read rather than for it. What's here instead are the two
+// promises that actually lower the risk of saying yes.
 const BADGES = [
   { icon: Code2, label: 'Hand-coded — no page-builder' },
-  { icon: ShieldCheck, label: 'SSL secured' },
-  { icon: BadgeCheck, label: 'Est. 2026' },
+  { icon: Lock, label: 'Fixed price, agreed up front' },
+  { icon: KeyRound, label: 'You own the site outright' },
 ]
 
 export function TrustBadges({ className = '' }: { className?: string }) {

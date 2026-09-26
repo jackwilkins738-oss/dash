@@ -11,6 +11,7 @@ import { Preloader } from '@/components/preloader'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
 import { WhatsAppButton } from '@/components/whatsapp-button'
+import { MobileActionBar } from '@/components/mobile-action-bar'
 import { InteractionLayer } from '@/components/interaction-layer'
 import { RevealController } from '@/components/reveal-controller'
 import { JsonLd } from '@/components/json-ld'
@@ -176,6 +177,7 @@ export default function RootLayout({
         {children}
         <SiteFooter />
         <WhatsAppButton />
+        <MobileActionBar />
         {process.env.NODE_ENV === 'production' && <Analytics />}
         {process.env.NODE_ENV === 'production' && <GoogleAnalytics />}
         {/* Scalar Digital's own dashboard product, tracking this site as a

@@ -76,7 +76,7 @@ export function SpeedRace() {
     <section className="border-t border-border py-24 sm:py-32" aria-labelledby="race-heading">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="max-w-2xl">
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">The race</span>
+          <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">The race</span>
           <h2
             id="race-heading"
             className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
