@@ -116,6 +116,12 @@
   display: block;
   font: 700 2.1cqw/1 var(--font-display);
   letter-spacing: 0.06em;
+  /* A real prospect's name (preview pages) can be far longer than the
+     "YOUR FIRM" placeholder - keep it to one line inside the nav. */
+  max-width: 26cqw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sc-brand-sub {
   display: block;
@@ -467,6 +473,10 @@
 .sc-phone-name {
   font: 700 6.2cqw/1 var(--font-display);
   letter-spacing: 0.06em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sc-phone-headline {
   padding: 6cqw 8cqw 0;

@@ -19,7 +19,16 @@ import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex, showcaseIndexFor
 
 type Vars = CSSProperties & Record<`--${string}`, string | number>
 
-export function SiteShowcase({ initialTrade }: { initialTrade?: string } = {}) {
+export function SiteShowcase({
+  initialTrade,
+  firm,
+}: {
+  initialTrade?: string
+  /** A real prospect's name and domain, on their private preview page (app/for/[slug]). */
+  firm?: { name: string; domain?: string | null }
+} = {}) {
+  const firmName = firm?.name.toUpperCase() ?? 'YOUR FIRM'
+  const firmDomain = firm?.domain || 'yourfirm.co.uk'
   const [active, setActive] = useState(() => showcaseIndexForTrade(initialTrade) ?? 0)
   const rootRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -31,7 +40,9 @@ export function SiteShowcase({ initialTrade }: { initialTrade?: string } = {}) {
   // animation ends, move on. That keeps the visible bar and the actual
   // timing in step for free, and pausing the animation (hover, focus,
   // offscreen) pauses the rotation with it. Choosing a tab yourself stops it.
-  const [auto, setAuto] = useState(true)
+  // On a prospect's own preview page, stay on their trade - rotating away
+  // to someone else's would undo the point of the page.
+  const [auto, setAuto] = useState(!(firm && initialTrade))
 
   // A visitor arriving from a trade-specific link (an outreach batch, a
   // trade page's own preview link) should land on the matching tab instead
@@ -194,7 +205,7 @@ export function SiteShowcase({ initialTrade }: { initialTrade?: string } = {}) {
               <span className="sc-dot" />
               <span className="sc-dot" />
               <span className="sc-dot" />
-              <span className="sc-url">yourfirm.co.uk</span>
+              <span className="sc-url">{firmDomain}</span>
             </div>
 
             <div key={trade.id} className="sc-site sc-swap">
@@ -202,7 +213,7 @@ export function SiteShowcase({ initialTrade }: { initialTrade?: string } = {}) {
                 <div className="sc-brand">
                   <span className="sc-brand-mark" />
                   <span>
-                    <span className="sc-brand-name">YOUR FIRM</span>
+                    <span className="sc-brand-name">{firmName}</span>
                     <span className="sc-brand-sub">{trade.descriptor}</span>
                   </span>
                 </div>
@@ -273,7 +284,7 @@ export function SiteShowcase({ initialTrade }: { initialTrade?: string } = {}) {
               <div key={trade.id} className="sc-swap">
                 <div className="sc-phone-brand">
                   <span className="sc-brand-mark" />
-                  <span className="sc-phone-name">YOUR FIRM</span>
+                  <span className="sc-phone-name">{firmName}</span>
                 </div>
                 <div className="sc-phone-headline">{trade.eyebrow}</div>
                 <div className="sc-phone-call">

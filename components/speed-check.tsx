@@ -118,8 +118,11 @@ function Gap({ score, label, sub, highlight }: { score: number; label: string; s
   )
 }
 
-export function SpeedCheck({ linkToFullPage = false }: { linkToFullPage?: boolean } = {}) {
-  const [input, setInput] = useState('')
+export function SpeedCheck({
+  linkToFullPage = false,
+  initialUrl = '',
+}: { linkToFullPage?: boolean; /** Pre-filled on a prospect's preview page */ initialUrl?: string } = {}) {
+  const [input, setInput] = useState(initialUrl)
   const [status, setStatus] = useState<Status>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [theirs, setTheirs] = useState<Score | null>(null)

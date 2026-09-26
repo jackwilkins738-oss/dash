@@ -37,6 +37,20 @@ export function ContactForm() {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 60)
+  // From a prospect's preview page (/for/<slug>) and the founding-client
+  // offer: a starting line in the message box, same sanitising as `ref`.
+  const fromFirm = (searchParams.get('firm') ?? '')
+    .replace(/[^\p{L}\p{N} .'&-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80)
+  const wantsFounding = searchParams.get('founding') === '1'
+  const prefillMessage = [
+    fromFirm ? `I've seen the preview you made for ${fromFirm}.` : '',
+    wantsFounding ? "I'd like one of the three founding-client places on The Scalar build." : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -203,6 +217,7 @@ export function ContactForm() {
           name="message"
           required
           rows={5}
+          defaultValue={prefillMessage ? `${prefillMessage} ` : undefined}
           placeholder="Tell me about your firm, the jobs you want more of, and anything you like or hate about your current site."
           className={`${fieldClass} resize-none`}
         />

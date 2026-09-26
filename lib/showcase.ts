@@ -143,3 +143,20 @@ export function showcaseIndexForTrade(query?: string | string[] | null): number 
   const idx = SHOWCASE_TRADES.findIndex((t) => t.id === id)
   return idx === -1 ? null : idx
 }
+
+/**
+ * Map a free-text trade description - the wording in the outreach sheet,
+ * e.g. "Loft conversions & extensions" or "Driveways & patios" - to a
+ * preview scene id. Used by the prospect preview pages (app/for/[slug]).
+ * Order matters: the first match wins, so a mixed trade lands on the more
+ * specific scene. Unknown trades get null and the caller keeps its default.
+ */
+export function showcaseIdForTradeText(text: string | null | undefined): ShowcaseTrade['id'] | null {
+  const t = (text ?? '').toLowerCase()
+  if (!t.trim()) return null
+  if (/roof/.test(t)) return 'roofing'
+  if (/loft|extension|build|renovat/.test(t)) return 'lofts'
+  if (/drive|paving|patio|resin/.test(t)) return 'driveways'
+  if (/landscap|garden|groundwork/.test(t)) return 'landscaping'
+  return null
+}

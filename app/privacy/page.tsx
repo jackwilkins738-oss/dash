@@ -60,6 +60,33 @@ const SECTIONS = [
     ),
   },
   {
+    title: 'Business outreach',
+    body: (
+      <>
+        <p>
+          Scalar Digital contacts some trade businesses directly, by email, post or phone, using business details
+          they publish themselves: the name they trade under, their website, and the contact details listed on it.
+          That website is also run through Google&apos;s public speed test. This is done on the basis of legitimate
+          interests — offering a relevant service to a business — and limited companies are the only ones
+          contacted by email without having asked first.
+        </p>
+        <p className="mt-3">
+          Some of those messages link to a private preview page made for that business. When it&apos;s opened,
+          Scalar Digital records that it was viewed, when, how many times, and whether the link came from the
+          email or the letter, and gets a notification so it can follow up. Nothing else about the visitor is
+          collected on those pages beyond the analytics described below.
+        </p>
+        <p className="mt-3">
+          If you&apos;d rather not be contacted again, reply to any message or email{' '}
+          <a href="mailto:hello@scalardigital.co.uk" className="text-blueprint underline-offset-4 hover:underline">
+            hello@scalardigital.co.uk
+          </a>{' '}
+          and your business&apos;s details and preview page will be deleted.
+        </p>
+      </>
+    ),
+  },
+  {
     title: 'Analytics',
     body: (
       <>

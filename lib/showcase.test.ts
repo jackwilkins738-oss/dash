@@ -1,6 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex, showcaseIndexForTrade } from './showcase.ts'
+import {
+  SHOWCASE_CYCLE_MS,
+  SHOWCASE_TRADES,
+  nextShowcaseIndex,
+  showcaseIdForTradeText,
+  showcaseIndexForTrade,
+} from './showcase.ts'
 
 describe('SHOWCASE_TRADES', () => {
   it('has more than one trade, or there is nothing to switch between', () => {
@@ -139,5 +145,29 @@ describe('showcaseIndexForTrade', () => {
 
   it('takes the first value when a query param repeats', () => {
     assert.equal(showcaseIndexForTrade(['roofers', 'lofts']), showcaseIndexForTrade('roofers'))
+  })
+})
+
+describe('showcaseIdForTradeText', () => {
+  it('maps the outreach sheet wording to a scene', () => {
+    assert.equal(showcaseIdForTradeText('Roofing'), 'roofing')
+    assert.equal(showcaseIdForTradeText('Loft conversions & extensions'), 'lofts')
+    assert.equal(showcaseIdForTradeText('Extensions'), 'lofts')
+    assert.equal(showcaseIdForTradeText('Driveways & patios'), 'driveways')
+    assert.equal(showcaseIdForTradeText('Block paving'), 'driveways')
+    assert.equal(showcaseIdForTradeText('Landscaping'), 'landscaping')
+  })
+
+  it('every id it can return is a real scene', () => {
+    for (const text of ['roof', 'loft', 'drive', 'garden']) {
+      const id = showcaseIdForTradeText(text)
+      assert.ok(SHOWCASE_TRADES.some((t) => t.id === id), `${text} -> ${id}`)
+    }
+  })
+
+  it('returns null for an unknown or empty trade', () => {
+    assert.equal(showcaseIdForTradeText('Plumbing'), null)
+    assert.equal(showcaseIdForTradeText(''), null)
+    assert.equal(showcaseIdForTradeText(null), null)
   })
 })

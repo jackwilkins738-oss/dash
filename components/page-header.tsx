@@ -60,12 +60,18 @@ export function PageHeader({ eyebrow, title, body, compact = false, actions }: P
 }
 
 /** The standard pair of header actions, plus the three-promise reassurance line. */
-export function HeaderActions({ secondary }: { secondary?: { href: string; label: string } }) {
+export function HeaderActions({
+  secondary,
+  primaryHref = '/contact',
+}: {
+  secondary?: { href: string; label: string }
+  primaryHref?: string
+}) {
   return (
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Link
-          href="/contact"
+          href={primaryHref}
           data-magnetic
           className="btn-chamfer btn-sheen group inline-flex items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
         >

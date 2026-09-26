@@ -104,6 +104,13 @@ const nextConfig = {
         source: '/examples/:path*',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }],
       },
+      // Private prospect preview pages (app/for/[slug]) - never indexed.
+      // The pages set a robots meta tag too; the header also covers the
+      // 404 a wrong or expired slug returns.
+      {
+        source: '/for/:path*',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
     ]
   },
 }
