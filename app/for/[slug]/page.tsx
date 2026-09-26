@@ -51,7 +51,8 @@ function lcpNote(lcp: number) {
 
 function tradePhrase(p: Prospect) {
   const trade = p.trade?.toLowerCase()
-  return [trade ? `a ${trade} firm` : 'a trade firm', p.area ? `in ${p.area}` : null].filter(Boolean).join(' ')
+  const article = trade && /^[aeiou]/.test(trade) ? 'an' : 'a'
+  return [trade ? `${article} ${trade} firm` : 'a trade firm', p.area ? `in ${p.area}` : null].filter(Boolean).join(' ')
 }
 
 export default async function ProspectPreviewPage({ params }: Props) {

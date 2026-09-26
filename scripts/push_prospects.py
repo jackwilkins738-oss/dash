@@ -25,6 +25,10 @@ Options:
                      push its findings - off by default. Takes ~20-60s per site, so it
                      refuses to run on more than 10 prospects unless --yes-all is given.
     --yes-all        allow --teardown on more than 10 prospects
+    --guess-trades   for prospects with no Trade in the sheet, read their homepage's title,
+                     description and headings and guess one (trade_guess.py). Guesses are
+                     kept in outreach/trade-guesses.csv and reused on every later run, so a
+                     normal re-run never blanks them. Your sheet is never changed.
 Env:
     PROSPECTS_API_SECRET  required (also used to make the links unguessable)
     DASHBOARD_API_URL     default https://admin.scalardigital.co.uk
@@ -130,6 +134,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--teardown", action="store_true")
     ap.add_argument("--yes-all", action="store_true")
+    ap.add_argument("--guess-trades", action="store_true")
     args = ap.parse_args()
 
     secret = os.environ.get("PROSPECTS_API_SECRET", "")
@@ -145,6 +150,12 @@ def main() -> None:
     wb = openpyxl.load_workbook(args.sheet, read_only=True, data_only=True)
     rows = list(wb["Outreach"].iter_rows(values_only=True))
     header = [str(h).strip() if h else "" for h in rows[0]]
+
+    guesses_path = args.sheet.parent / "trade-guesses.csv"
+    guesses: dict[str, str] = {}
+    if guesses_path.exists():
+        with guesses_path.open(encoding="utf-8") as f:
+            guesses = {r["website"]: r["trade"] for r in csv.DictReader(f) if r.get("trade")}
 
     prospects, links, skipped = [], [], 0
     seen = set()
@@ -165,7 +176,8 @@ def main() -> None:
             {
                 "slug": slug,
                 "business_name": business,
-                "trade": row.get("Trade") or None,
+                # The sheet's own Trade always wins; a saved guess only fills a blank.
+                "trade": row.get("Trade") or guesses.get(domain) or None,
                 "area": row.get("Area") or None,
                 "website": domain,
                 "mobile_score": number(row.get("Mobile score")),
@@ -206,6 +218,31 @@ def main() -> None:
         print(f"Selected {len(selected)}: " + ", ".join(p["business_name"] for p in selected[:10]) + (" ..." if len(selected) > 10 else ""))
     if not selected:
         sys.exit("Nothing selected.")
+
+    if args.guess_trades:
+        from site_teardown import fetch_html  # same folder as this script
+        from trade_guess import guess_trade, page_text_for_guess
+
+        blanks = [p for p in selected if not p["trade"]]
+        print(f"Guessing trades for {len(blanks)} prospects with none in the sheet ...")
+        new_guesses = 0
+        for p in blanks:
+            html, _ = fetch_html(f"https://{p['website']}/")
+            if html is None:
+                html, _ = fetch_html(f"http://{p['website']}/")
+            guess = guess_trade(page_text_for_guess(html)) if html else None
+            print(f"    {p['business_name']}: {guess or 'no guess'}")
+            if guess:
+                p["trade"] = guess
+                guesses[p["website"]] = guess
+                new_guesses += 1
+        # Saved even on a dry run: it's only this machine's notes, and it
+        # means the real run doesn't have to read every homepage again.
+        with guesses_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["website", "trade"])
+            writer.writeheader()
+            writer.writerows({"website": w, "trade": t} for w, t in sorted(guesses.items()))
+        print(f"{new_guesses} guessed; saved to {guesses_path}")
 
     if args.teardown:
         if len(selected) > 10 and not args.yes_all:
