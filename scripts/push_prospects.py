@@ -25,6 +25,9 @@ Options:
                      push its findings - off by default. Takes ~20-60s per site, so it
                      refuses to run on more than 10 prospects unless --yes-all is given.
     --yes-all        allow --teardown on more than 10 prospects
+    --recheck        with --teardown: include sites already checked. Without it, sites
+                     listed in outreach/teardown-log.csv are skipped, so repeated
+                     `--teardown --limit 10` runs work through the list 10 at a time.
     --guess-trades   for prospects with no Trade in the sheet, read their homepage's title,
                      description and headings and guess one (trade_guess.py). Guesses are
                      kept in outreach/trade-guesses.csv and reused on every later run, so a
@@ -135,6 +138,7 @@ def main() -> None:
     ap.add_argument("--teardown", action="store_true")
     ap.add_argument("--yes-all", action="store_true")
     ap.add_argument("--guess-trades", action="store_true")
+    ap.add_argument("--recheck", action="store_true")
     args = ap.parse_args()
 
     secret = os.environ.get("PROSPECTS_API_SECRET", "")
@@ -208,7 +212,18 @@ def main() -> None:
 
     # --only / --limit narrow what gets checked and pushed. The links CSV
     # above always covers everyone, so it never loses rows.
+    log_path = args.sheet.parent / "teardown-log.csv"
+    checked: dict[str, str] = {}
+    if log_path.exists():
+        with log_path.open(encoding="utf-8") as f:
+            checked = {r["website"]: r["checked_at"] for r in csv.DictReader(f)}
+
     selected = prospects
+    if args.teardown and not args.recheck and not args.only:
+        before = len(selected)
+        selected = [p for p in selected if p["website"] not in checked]
+        if before != len(selected):
+            print(f"Skipping {before - len(selected)} already checked (see {log_path.name}; --recheck to include them)")
     if args.only:
         needle = args.only.lower()
         selected = [p for p in selected if needle in p["business_name"].lower() or needle in p["website"]]
@@ -283,6 +298,18 @@ def main() -> None:
         except urllib.error.HTTPError as e:
             sys.exit(f"Import failed: HTTP {e.code} {e.read().decode(errors='replace')}")
         print(f"Pushed {body.get('upserted')} (rejected: {body.get('rejected')})")
+
+    # Only now - after the dashboard has accepted them - are these sites
+    # logged as checked. A dry run or a failed push logs nothing.
+    done = {p["website"]: p["teardown_at"] for p in selected if p.get("teardown_at")}
+    if done:
+        checked.update(done)
+        with log_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["website", "checked_at"])
+            writer.writeheader()
+            writer.writerows({"website": w, "checked_at": t} for w, t in sorted(checked.items()))
+        remaining = sum(1 for p in prospects if p["website"] not in checked)
+        print(f"Logged {len(done)} as checked; {remaining} still to check.")
 
 
 if __name__ == "__main__":
