@@ -25,7 +25,7 @@ export function DashPitch() {
     <section className="border-t border-border py-24 sm:py-28">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="max-w-2xl">
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
+          <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
             Included in The Scalar build
           </span>
           <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
@@ -39,7 +39,7 @@ export function DashPitch() {
 
         <Reveal stagger className="mt-12 grid gap-5 md:grid-cols-3">
           {POINTS.map(({ Icon, title, body }) => (
-            <div key={title} className="rounded-2xl border border-border bg-card/40 p-7">
+            <div key={title} data-spotlight className="rounded-2xl border border-border bg-card/40 p-7 transition-colors hover:border-blueprint/40">
               <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-blueprint/40 text-blueprint">
                 <Icon className="h-5 w-5" strokeWidth={1.75} />
               </span>

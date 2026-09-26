@@ -95,7 +95,7 @@ export default function CostGuidePage() {
         <div className="mx-auto max-w-3xl px-5 sm:px-8">
           <Reveal>
             <div className="rounded-2xl border border-blueprint/40 bg-card p-7">
-              <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">The short answer</span>
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">The short answer</span>
               <p className="mt-3 text-pretty leading-relaxed text-foreground/90">
                 Most UK tradespeople pay somewhere between a few hundred pounds a year for a do-it-yourself builder and
                 several thousand pounds for an agency. What you pay depends on how many pages you need, whether the

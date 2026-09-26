@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { PageHeader } from '@/components/page-header'
+import { PageHeader, HeaderActions } from '@/components/page-header'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
@@ -48,11 +48,12 @@ export default function ProcessPage() {
         eyebrow="Process"
         title="How a build actually runs."
         body="No discovery workshops, no sign-off committees. One person, a fixed price, and a straight line from enquiry to a site that's yours outright."
+        actions={<HeaderActions />}
       />
 
       <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-4xl px-5 sm:px-8">
-          <ol className="relative border-l border-border pl-8 sm:pl-10">
+          <ol className="proc-line relative border-l border-border pl-8 sm:pl-10">
             {STEPS.map((s, i) => (
               <Reveal
                 as="li"
@@ -60,7 +61,7 @@ export default function ProcessPage() {
                 delay={i * 0.06}
                 className={i === STEPS.length - 1 ? 'relative' : 'relative pb-14 sm:pb-16'}
               >
-                <span className="absolute -left-[calc(2rem+5px)] top-0 flex h-[9px] w-[9px] -translate-x-1/2 items-center justify-center rounded-full bg-blueprint sm:-left-[calc(2.5rem+5px)]" />
+                <span className="proc-node absolute -left-[calc(2rem+5px)] top-0 flex h-[9px] w-[9px] -translate-x-1/2 items-center justify-center rounded-full bg-blueprint sm:-left-[calc(2.5rem+5px)]" />
                 <span className="font-mono text-xs text-blueprint">{s.n}</span>
                 <h2 className="mt-2 font-display text-xl font-semibold sm:text-2xl">{s.title}</h2>
                 <p className="mt-3 max-w-xl text-pretty leading-relaxed text-muted-foreground">{s.body}</p>
@@ -73,7 +74,7 @@ export default function ProcessPage() {
       <section className="border-t border-border py-20 sm:py-24">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
           <Reveal className="max-w-2xl">
-            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
+            <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
               What that actually means
             </span>
             <h2 className="mt-4 font-display text-balance text-2xl font-bold tracking-tight sm:text-3xl">
@@ -86,7 +87,7 @@ export default function ProcessPage() {
               ['2 hrs', 'Typical time to a fixed price'],
               ['0', 'Monthly fees on your website, ever'],
             ].map(([value, label]) => (
-              <div key={label} className="rounded-xl border border-border bg-card/40 p-6">
+              <div key={label} data-spotlight className="rounded-xl border border-border bg-card/40 p-6">
                 <div className="font-mono text-3xl font-bold text-blueprint">{value}</div>
                 <div className="mt-2 text-sm text-muted-foreground">{label}</div>
               </div>

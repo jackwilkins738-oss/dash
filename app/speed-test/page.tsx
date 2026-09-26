@@ -49,7 +49,7 @@ export default function SpeedTestPage() {
       <section className="border-t border-border py-20 sm:py-24">
         <div className="mx-auto max-w-4xl px-5 sm:px-8">
           <Reveal>
-            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Why it matters</span>
+            <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Why it matters</span>
             <h2 className="mt-4 font-display text-balance text-2xl font-bold tracking-tight sm:text-3xl">
               A slow site is a quiet way to lose jobs you never hear about.
             </h2>

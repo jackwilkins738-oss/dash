@@ -38,7 +38,7 @@ export default function ReferPage() {
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
           <Reveal stagger className="grid gap-5 md:grid-cols-3">
             {STEPS.map((s) => (
-              <div key={s.n} className="rounded-2xl border border-border bg-card/40 p-7">
+              <div key={s.n} data-spotlight className="rounded-2xl border border-border bg-card/40 p-7 transition-colors hover:border-blueprint/40">
                 <span className="font-mono text-sm text-blueprint">{s.n}</span>
                 <h2 className="mt-4 font-display text-lg font-semibold">{s.title}</h2>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
@@ -48,7 +48,7 @@ export default function ReferPage() {
 
           <div className="mt-14 grid gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-14">
             <Reveal>
-              <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Your link</span>
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Your link</span>
               <h2 className="mt-3 font-display text-balance text-2xl font-bold tracking-tight sm:text-3xl">
                 Make your referral link
               </h2>
@@ -58,7 +58,7 @@ export default function ReferPage() {
             </Reveal>
 
             <Reveal delay={0.1}>
-              <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">The details</span>
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">The details</span>
               <h2 className="mt-3 font-display text-balance text-2xl font-bold tracking-tight sm:text-3xl">
                 How it works
               </h2>

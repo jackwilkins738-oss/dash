@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { MessageCircle, Phone, Mail, Clock } from 'lucide-react'
+import { MessageCircle, Phone, Mail } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ContactForm } from '@/components/contact-form'
 import { Reveal } from '@/components/reveal'
+import { ReplyStatus } from '@/components/reply-status'
 
 export const metadata: Metadata = {
   title: 'Get a Quote for Your Trade Website',
@@ -35,6 +36,24 @@ const CHANNELS = [
   },
 ]
 
+const NEXT = [
+  {
+    k: '01',
+    title: 'You send it',
+    body: 'A few lines about your trade and the jobs you want more of. Thirty seconds, no account, no obligation.',
+  },
+  {
+    k: '02',
+    title: 'Within 2 hours: a plan and a price',
+    body: 'I read it myself and come back with what I’d build and one fixed figure. If it’s not a good fit, I’ll say so straight away.',
+  },
+  {
+    k: '03',
+    title: 'You decide, in your own time',
+    body: 'No sales call and no pressure. If you want to go ahead, the price is agreed before a line of code is written.',
+  },
+]
+
 export default function ContactPage() {
   return (
     <main>
@@ -49,12 +68,7 @@ export default function ContactPage() {
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
           <div className="grid gap-12 lg:grid-cols-[1fr_1.15fr] lg:gap-16">
             <Reveal>
-              <div className="inline-flex items-center gap-2 rounded-full border border-blueprint/40 bg-card/50 px-4 py-1.5">
-                <Clock className="h-3.5 w-3.5 text-blueprint" strokeWidth={2} />
-                <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-foreground">
-                  Reply within 2 hours
-                </span>
-              </div>
+              <ReplyStatus />
 
               <h2 className="mt-6 font-display text-balance text-2xl font-bold tracking-tight sm:text-3xl">
                 Prefer to skip the form?
@@ -73,6 +87,7 @@ export default function ContactPage() {
                       href={c.href}
                       target={c.external ? '_blank' : undefined}
                       rel={c.external ? 'noopener noreferrer' : undefined}
+                      data-spotlight
                       className="group flex items-center gap-4 rounded-xl border border-border bg-card/40 p-5 transition-colors hover:border-blueprint/40"
                     >
                       <div className="btn-chamfer-sm flex h-11 w-11 items-center justify-center border border-blueprint/30 bg-blueprint/10 text-blueprint transition-colors group-hover:border-blueprint/60 group-hover:bg-blueprint/15">
@@ -99,7 +114,7 @@ export default function ContactPage() {
 
               <div className="mt-8 rounded-xl border border-border bg-card/40 p-5">
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  <span className="font-medium text-foreground">Working hours:</span> Mon–Sat, 7am–7pm. Send
+                  <span className="font-medium text-foreground">Working hours:</span> Mon–Sat, 7am–7pm UK time. Send
                   anything outside those and it&apos;ll be first in the queue the next morning.
                 </p>
               </div>
@@ -111,6 +126,24 @@ export default function ContactPage() {
               </Suspense>
             </Reveal>
           </div>
+
+          {/* The step after "send" is where people hesitate: not knowing what
+              they're letting themselves in for. So it's spelled out - the same
+              promises made everywhere else on the site, in the order they happen. */}
+          <Reveal className="mt-20 border-t border-border pt-14">
+            <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
+              What happens next
+            </span>
+          </Reveal>
+          <Reveal stagger className="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+            {NEXT.map((n) => (
+              <div key={n.k} data-spotlight className="bg-background p-7">
+                <span className="font-mono text-xs text-blueprint">{n.k}</span>
+                <h3 className="mt-3 font-display text-lg font-semibold">{n.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{n.body}</p>
+              </div>
+            ))}
+          </Reveal>
         </div>
       </section>
     </main>

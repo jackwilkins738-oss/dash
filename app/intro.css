@@ -234,6 +234,43 @@
   --n: 5;
 }
 
+/* ---- inner page headers (components/page-header.tsx) --------------- */
+
+/* Same rise as the homepage headline, but it starts straight away: inner
+   pages have no hero sequence to wait for. */
+.ph-word {
+  display: inline-block;
+  animation: hero-rise 0.85s var(--ease-out5) calc(0.06s + var(--i, 0) * 0.04s) backwards;
+}
+.ph-stagger > :not(h1) {
+  animation: hero-up 0.8s var(--ease-out4) calc(0.28s + var(--n, 0) * 0.09s) backwards;
+}
+.ph-stagger > :nth-child(3) {
+  --n: 1;
+}
+.ph-stagger > :nth-child(4) {
+  --n: 2;
+}
+/* A first visit on desktop starts under the preloader curtain: hold the
+   header until the curtain has lifted, or the reveal plays unseen. */
+:root:not(.pl-seen) .ph-word,
+:root:not(.pl-seen) .ph-stagger > :not(h1) {
+  animation-delay: calc(1s + var(--i, 0) * 0.04s + var(--n, 0) * 0.09s);
+}
+
+/* The hairline across the foot of the header measures in from the left. */
+.ph-rule {
+  background: linear-gradient(90deg, transparent, var(--blueprint) 20%, var(--brass) 55%, transparent);
+  opacity: 0.55;
+  transform-origin: 0 50%;
+  animation: ph-rule 1.4s var(--ease-io3) 0.35s backwards;
+}
+@keyframes ph-rule {
+  from {
+    transform: scaleX(0);
+  }
+}
+
 /* ---- off switches --------------------------------------------------- */
 
 /* A returning visitor, or someone who asked for reduced motion: no
@@ -251,7 +288,10 @@
     display: none;
   }
   .hero-word,
-  .hero-stagger > :not(h1) {
+  .hero-stagger > :not(h1),
+  .ph-word,
+  .ph-stagger > :not(h1),
+  .ph-rule {
     animation: none;
   }
 }
@@ -271,7 +311,9 @@
   }
   .hero-word,
   .hero-stagger > :not(h1),
-  .sc-tilt {
+  .sc-tilt,
+  .ph-word,
+  .ph-stagger > :not(h1) {
     animation: none;
   }
 }

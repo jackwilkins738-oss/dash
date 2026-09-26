@@ -102,7 +102,7 @@ export default function FacebookVsWebsiteGuidePage() {
         <div className="mx-auto max-w-3xl px-5 sm:px-8">
           <Reveal>
             <div className="rounded-2xl border border-blueprint/40 bg-card p-7">
-              <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">The short answer</span>
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">The short answer</span>
               <p className="mt-3 text-pretty leading-relaxed text-foreground/90">
                 A Facebook or Instagram page is a reasonable way to show finished jobs to people who already know you.
                 It is a weaker way to be found by people who do not. Most established trades end up running both: the

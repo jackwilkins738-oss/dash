@@ -21,7 +21,7 @@ export function Faq({ items, title = 'Common questions', eyebrow = 'FAQ' }: { it
       />
       <div className="mx-auto max-w-3xl px-5 sm:px-8">
         <Reveal>
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">{eyebrow}</span>
+          <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">{eyebrow}</span>
           <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">{title}</h2>
         </Reveal>
         <div className="mt-10 divide-y divide-border border-y border-border">

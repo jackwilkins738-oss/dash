@@ -54,7 +54,7 @@ export function CostCalculator() {
     <section id="estimate" className="scroll-mt-24 border-t border-border py-24 sm:py-28">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="max-w-2xl">
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Instant estimate</span>
+          <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Instant estimate</span>
           <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             What would your site actually cost?
           </h2>

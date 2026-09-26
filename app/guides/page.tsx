@@ -40,6 +40,7 @@ export default function GuidesPage() {
               <Link
                 key={g.href}
                 href={g.href}
+                data-spotlight
                 className="group rounded-2xl border border-border bg-card/40 p-7 transition-colors hover:border-blueprint/40"
               >
                 <h2 className="font-display text-2xl font-semibold group-hover:text-blueprint">{g.title}</h2>

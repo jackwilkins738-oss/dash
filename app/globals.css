@@ -373,6 +373,43 @@
       }
     }
 
+    /* Process timeline: the line is drawn down the page at the reader's
+       pace, and each step's node lights as the reader reaches it. */
+    .proc-line::before {
+      content: '';
+      position: absolute;
+      left: -1px;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: linear-gradient(to bottom, var(--blueprint), var(--brass));
+      transform-origin: 50% 0;
+      animation: proc-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 30% exit 60%;
+    }
+    @keyframes proc-draw {
+      from {
+        transform: scaleY(0);
+      }
+    }
+    .proc-node {
+      animation: proc-node linear both;
+      animation-timeline: view();
+      animation-range: entry 100% cover 45%;
+    }
+    @keyframes proc-node {
+      from {
+        background: var(--muted);
+        box-shadow: none;
+        scale: 0.6;
+      }
+      to {
+        box-shadow: 0 0 0 5px color-mix(in oklch, var(--blueprint) 18%, transparent), 0 0 18px var(--blueprint);
+        scale: 1.25;
+      }
+    }
+
     /* The example builds drift at slightly different rates as they pass,
        so the staggered grid reads as physical cards at different depths. */
     @media (min-width: 1024px) {

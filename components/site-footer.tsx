@@ -55,7 +55,7 @@ export function SiteFooter() {
           />
           <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-xl">
-              <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Ready when you are</span>
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Ready when you are</span>
               <h2 className="mt-3 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
                 A site that wins the jobs worth having.
               </h2>

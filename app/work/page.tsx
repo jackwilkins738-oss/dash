@@ -5,7 +5,7 @@ import { DashPitch } from '@/components/dash-pitch'
 import { Pricing } from '@/components/pricing'
 import { CostCalculator } from '@/components/cost-calculator'
 import { CtaBand } from '@/components/cta-band'
-import { PageHeader } from '@/components/page-header'
+import { PageHeader, HeaderActions } from '@/components/page-header'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { Faq, type QA } from '@/components/faq'
 import { TRADES } from '@/lib/trades'
@@ -48,6 +48,7 @@ export default function WorkPage() {
         eyebrow="Services & Pricing"
         title="Built to sell your trade harder than you can."
         body="Every site does the same six things properly, at a price fixed before we start."
+        actions={<HeaderActions secondary={{ href: '#pricing', label: 'See the prices' }} />}
       />
       <Services />
       <DashPitch />
