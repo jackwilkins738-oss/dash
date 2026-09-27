@@ -1,8 +1,12 @@
 """Offline tests for company_lookup - no network. Run: python -m unittest scripts/test_company_lookup.py"""
 
+import io
 import unittest
+import urllib.error
+from unittest import mock
 
-from company_lookup import company_number_on_site, normalise, pick_by_name, result_for
+import company_lookup
+from company_lookup import LookupFailed, company_number_on_site, normalise, pick_by_name, result_for
 
 
 class NumberOnSite(unittest.TestCase):
@@ -63,6 +67,36 @@ class Result(unittest.TestCase):
         self.assertEqual(result_for({"type": "llp", "company_status": "active"}, "x")["company_type"], "LLP")
         self.assertEqual(result_for({"type": "ltd", "company_status": "dissolved"}, "x")["result"], "closed")
         self.assertEqual(result_for({"type": "limited-partnership", "company_status": "active"}, "x")["result"], "unsure")
+
+
+
+class Errors(unittest.TestCase):
+    def fail_with(self, code, body=b""):
+        err = urllib.error.HTTPError("https://x", code, "err", {}, io.BytesIO(body))
+        return mock.patch.object(company_lookup.urllib.request, "urlopen", side_effect=err)
+
+    def setUp(self):
+        patcher = mock.patch.object(company_lookup.time, "sleep")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_not_found_is_empty(self):
+        with self.fail_with(404):
+            self.assertEqual(company_lookup._get("/company/01234567", "k"), {})
+
+    def test_bad_keys_say_what_to_fix(self):
+        with self.fail_with(401), self.assertRaisesRegex(PermissionError, "REST key"):
+            company_lookup._get("/x", "k")
+        with self.fail_with(403, b"IP not allowed"), self.assertRaisesRegex(PermissionError, "IP not allowed"):
+            company_lookup._get("/x", "k")
+
+    def test_other_errors_carry_the_reason(self):
+        with self.fail_with(400, b"bad query"), self.assertRaisesRegex(LookupFailed, "HTTP 400 bad query"):
+            company_lookup._get("/x", "k")
+        err = urllib.error.URLError("CERTIFICATE_VERIFY_FAILED")
+        with mock.patch.object(company_lookup.urllib.request, "urlopen", side_effect=err):
+            with self.assertRaisesRegex(LookupFailed, "CERTIFICATE_VERIFY_FAILED"):
+                company_lookup._get("/x", "k")
 
 
 if __name__ == "__main__":
