@@ -444,19 +444,26 @@ def main() -> None:
         ch_key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
         if not ch_key:
             sys.exit("--lookup-companies needs COMPANIES_HOUSE_API_KEY (free: developer.company-information.service.gov.uk).")
-        from company_lookup import lookup
+        from company_lookup import LookupFailed, lookup
 
         todo = [p for p in selected if not p["_sheet_type"] and (args.recheck or p["website"] not in lookups)]
         print(f"Looking up {len(todo)} firms with no Company type in the sheet on Companies House ...")
         counts: dict[str, int] = {}
+        failures_in_a_row = 0
         for i, p in enumerate(todo, 1):
             try:
                 found = lookup(p["business_name"], p.get("area") or "", homepage(p["website"]), ch_key)
             except PermissionError as e:
-                sys.exit(f"{e} - check COMPANIES_HOUSE_API_KEY.")
-            if found is None:
-                print(f"    {p['business_name']}: Companies House didn't answer - try again later")
+                write_csv(lookups_path, LOOKUP_FIELDS, lookups)
+                sys.exit(f"{e}.")
+            except LookupFailed as e:
+                print(f"    {p['business_name']}: Companies House didn't answer - {e}")
+                failures_in_a_row += 1
+                if failures_in_a_row >= 3:
+                    write_csv(lookups_path, LOOKUP_FIELDS, lookups)
+                    sys.exit(f"Stopped: Companies House failed 3 times in a row ({e}). Nothing is lost - run it again later.")
                 continue
+            failures_in_a_row = 0
             lookups[p["website"]] = {
                 "website": p["website"],
                 "business": p["business_name"],

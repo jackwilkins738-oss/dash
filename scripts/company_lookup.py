@@ -26,11 +26,13 @@ import base64
 import html as htmllib
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 API = "https://api.company-information.service.gov.uk"
+USER_AGENT = "ScalarDigitalProspectCheck/1.0 (+https://www.scalardigital.co.uk)"
 
 # Companies House types that are corporate bodies: cold email allowed.
 CORPORATE_TYPES = {
@@ -95,20 +97,51 @@ def pick_by_name(business: str, area: str, items: list[dict]) -> tuple[dict | No
     return None, f"unsure ({len(live)} same-name compan{'y' if len(live) == 1 else 'ies'}, not confirmed)"
 
 
-def _get(path: str, api_key: str) -> dict | None:
-    auth = base64.b64encode(f"{api_key}:".encode()).decode()
-    req = urllib.request.Request(API + path, headers={"Authorization": f"Basic {auth}"})
-    try:
-        with urllib.request.urlopen(req, timeout=20) as res:
-            return json.loads(res.read())
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return {}
-        if e.code == 401:
-            raise PermissionError("Companies House rejected the API key") from e
-        return None
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
-        return None
+class LookupFailed(Exception):
+    """Companies House couldn't be asked. The message says why, in plain words."""
+
+
+def _get(path: str, api_key: str) -> dict:
+    """The API's JSON; {} for "not found". Raises PermissionError for a bad key, LookupFailed otherwise."""
+    auth = base64.b64encode(f"{api_key.strip()}:".encode()).decode()
+    req = urllib.request.Request(
+        API + path,
+        headers={"Authorization": f"Basic {auth}", "Accept": "application/json", "User-Agent": USER_AGENT},
+    )
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as res:
+                return json.loads(res.read())
+        except urllib.error.HTTPError as e:
+            body = e.read(300).decode("utf-8", errors="replace").strip()
+            if e.code == 404:
+                return {}
+            if e.code == 401:
+                raise PermissionError(
+                    "Companies House rejected the API key (401). Make it a REST key, on an application "
+                    "set to Live (not Test), and paste it with nothing else"
+                ) from e
+            if e.code == 403:
+                raise PermissionError(
+                    f"Companies House refused the key (403: {body or 'forbidden'}). If you filled in "
+                    "'Restricted IPs' on the key, make a new REST key with that left blank"
+                ) from e
+            if e.code == 429 and attempt < 3:
+                time.sleep(60)  # 600 requests per 5 minutes - wait for the window to move on
+                continue
+            if e.code >= 500 and attempt < 3:
+                time.sleep(3)
+                continue
+            raise LookupFailed(f"HTTP {e.code} {body[:200]}") from e
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            if attempt < 2:
+                time.sleep(3)
+                continue
+            reason = getattr(e, "reason", None) or e
+            raise LookupFailed(f"couldn't connect ({reason})") from e
+        except ValueError as e:
+            raise LookupFailed("got something that wasn't JSON back") from e
+    raise LookupFailed("still rate-limited after 3 minutes")
 
 
 def result_for(entry: dict, how: str) -> dict:
@@ -130,19 +163,15 @@ def result_for(entry: dict, how: str) -> dict:
     }
 
 
-def lookup(business: str, area: str, page_html: str | None, api_key: str) -> dict | None:
-    """What the register says about this business, or None if it couldn't be asked."""
+def lookup(business: str, area: str, page_html: str | None, api_key: str) -> dict:
+    """What the register says about this business. Raises LookupFailed / PermissionError if it can't ask."""
     if page_html:
         number = company_number_on_site(page_html)
         if number:
             entry = _get(f"/company/{number}", api_key)
-            if entry is None:
-                return None
             if entry:
                 return result_for(entry, "number on their site")
     search = _get("/search/companies?" + urllib.parse.urlencode({"q": business, "items_per_page": 20}), api_key)
-    if search is None:
-        return None
     entry, how = pick_by_name(business, area, search.get("items") or [])
     if entry:
         return result_for(entry, how)
