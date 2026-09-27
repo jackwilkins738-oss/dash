@@ -7,8 +7,11 @@ that column's blanks from the official register (free API key:
 https://developer.company-information.service.gov.uk/).
 
 Ways to match, most certain first:
-  1. The prospect's own homepage shows a company number. UK company
-     websites must, so this is the usual case - and it's certain.
+  1. The prospect's own site shows a company number (homepage, or its
+     contact / about / privacy / terms pages). UK company websites must,
+     so this is the usual case. The company it points to must also share
+     a name with the firm, so a Gas Safe or NICEIC number that happens to
+     look like one can't match the firm to a stranger.
   2. A name search on the register. Only trusted when the name matches
      exactly (ignoring "Ltd", "&"/"and", punctuation) and one of:
        - a postcode on their homepage is the company's registered postcode
@@ -16,6 +19,9 @@ Ways to match, most certain first:
        - it's the only live exact match, and the firm calls itself Ltd -
          in the sheet or on its own homepage ("(c) 2024 Smith Roofing Ltd").
          A sole trader can't legally do that;
+       - it's the only live exact match and its registered office is
+         local to the firm: the same postcode district as one on their
+         site (both GU1 ...), or a town their site names;
        - it's the only live exact match and its registered address
          mentions the prospect's area.
      A plain "Elite Roofing" with none of these could be a sole trader who
@@ -41,7 +47,7 @@ import urllib.request
 
 API = "https://api.company-information.service.gov.uk"
 # Bump when matching improves: saved "unsure" / "no record" answers from an older version are looked up again.
-LOGIC_VERSION = "2"
+LOGIC_VERSION = "3"
 USER_AGENT = "ScalarDigitalProspectCheck/1.0 (+https://www.scalardigital.co.uk)"
 
 # Companies House types that are corporate bodies: cold email allowed.
@@ -80,10 +86,19 @@ def normalise(name: str) -> str:
     return " ".join(w for w in s.split() if w not in SUFFIX_WORDS)
 
 
+# Trade bodies and tax numbers whose "registration no." isn't a company number.
+NOT_A_COMPANY = re.compile(r"gas\s*safe|niceic|napit|fensa|certass|oftec|hetas|trustmark|chas\b|vat|ico\b|fca\b|charity|waste|carrier|licen[cs]e", re.I)
+
+
 def company_number_on_site(page_html: str) -> str | None:
-    """The company number the homepage itself shows, padded to 8 characters, or None."""
+    """The company number the site shows, padded to 8 characters, or None."""
     text = htmllib.unescape(re.sub(r"<[^>]+>", " ", page_html)).replace("\xa0", " ")
-    numbers = {m.group(1).upper() for m in NUMBER_ON_SITE.finditer(text)}
+    numbers = {
+        m.group(1).upper()
+        for m in NUMBER_ON_SITE.finditer(text)
+        # The words just before it, back to any earlier number: "Gas Safe Reg 123456, Company No. 0765..."
+        if not NOT_A_COMPANY.search(re.split(r"\d", text[max(0, m.start() - 40) : m.start()])[-1] + text[m.start() : m.start() + 12])
+    }
     if len(numbers) != 1:
         return None  # none, or several (a group of companies) - don't guess
     number = numbers.pop()
@@ -135,6 +150,23 @@ def names_called_ltd(text: str) -> set[str]:
     return {normalise(_clean_name(m.group(1))) for m in LTD_NAME.finditer(text)} - {""}
 
 
+USEFUL_PAGE = re.compile(r"contact|about|privacy|terms|legal|cookie|imprint|company", re.I)
+
+
+def useful_links(page_html: str, base_url: str, limit: int = 4) -> list[str]:
+    """Same-site pages likely to carry the company details: contact, about, privacy, terms."""
+    base = urllib.parse.urlparse(base_url)
+    found: list[str] = []
+    for href in re.findall(r"<a\b[^>]*\bhref\s*=\s*[\"']([^\"'#]+)", page_html, re.I):
+        url = urllib.parse.urljoin(base_url, href.strip())
+        parts = urllib.parse.urlparse(url)
+        same_site = parts.hostname and base.hostname and parts.hostname.removeprefix("www.") == base.hostname.removeprefix("www.")
+        if parts.scheme in ("http", "https") and same_site and USEFUL_PAGE.search(parts.path) and url not in found:
+            if not re.search(r"\.(pdf|jpe?g|png|gif|webp|svg|zip|docx?)$", parts.path, re.I):
+                found.append(url)
+    return found[:limit]
+
+
 def owner_names(text: str) -> list[str]:
     """Company names the footer gives as the business itself, e.g. "(c) 2024 J Smith Building Services Ltd"."""
     found: list[str] = []
@@ -149,8 +181,37 @@ def owner_names(text: str) -> list[str]:
     return found[:3]
 
 
+# Words too common in trade names to show two names are the same firm.
+GENERIC_WORDS = {
+    "and", "roofing", "roofers", "roof", "building", "builders", "build", "services", "construction", "contractors",
+    "group", "home", "homes", "property", "properties", "solutions", "uk", "london", "surrey", "kent", "sussex",
+    "landscaping", "landscapes", "gardens", "driveways", "paving", "scaffolding", "plumbing", "heating", "electrical",
+    "lofts", "loft", "conversions", "extensions", "maintenance", "developments", "projects", "south", "north", "east",
+    "west", "holdings", "trade", "trades", "brothers", "sons", "son", "family", "local", "specialists",
+}
+
+
+def names_agree(company_name: str, business: str, text: str) -> bool:
+    """Whether a register entry plausibly is this firm: a distinctive shared word, or the site calls it by name."""
+    reg = normalise(company_name)
+    if reg and reg in names_called_ltd(text):
+        return True
+    words = lambda n: {w for w in normalise(n).split() if len(w) >= 3 and w not in GENERIC_WORDS}
+    return bool(words(company_name) & words(business))
+
+
+def district(postcode: str) -> str:
+    """"GU14RR" -> "GU1": the outward code, a few streets to a small town."""
+    return postcode[:-3] if len(postcode) >= 5 else ""
+
+
 def pick_by_name(
-    business: str, area: str, items: list[dict], says_ltd: bool = False, site_postcodes: set[str] | None = None
+    business: str,
+    area: str,
+    items: list[dict],
+    says_ltd: bool = False,
+    site_postcodes: set[str] | None = None,
+    text: str = "",
 ) -> tuple[dict | None, str]:
     """The register entry this business is, from a name search - or (None, why not)."""
     want = normalise(business)
@@ -168,6 +229,11 @@ def pick_by_name(
         return live[0], "name (calls itself Ltd)"
     if len(live) == 1 and says_ltd:
         return live[0], "name (their site says Ltd)"
+    if len(live) == 1 and site_postcodes and district(registered_postcode(live[0])) in {district(c) for c in site_postcodes}:
+        return live[0], "name + registered office in the same postcode district"
+    town = ((live[0].get("address") or {}).get("locality") or "").strip() if len(live) == 1 else ""
+    if town and len(town) >= 4 and re.search(rf"\b{re.escape(town)}\b", text, re.I):
+        return live[0], f"name + registered town ({town}) on their site"
     if len(live) == 1 and area and area.lower() in (live[0].get("address_snippet") or "").lower():
         return live[0], "name + area"
     return None, f"unsure ({len(live)} same-name compan{'y' if len(live) == 1 else 'ies'}, not confirmed)"
@@ -273,7 +339,7 @@ def lookup(business: str, area: str, page_html: str | None, api_key: str) -> dic
         number = company_number_on_site(page_html)
         if number:
             entry = _get(f"/company/{number}", api_key)
-            if entry:
+            if entry and names_agree(entry.get("company_name") or "", business, text):
                 return result_for(entry, "number on their site")
     codes = postcodes(text)
     says_ltd = normalise(business) in names_called_ltd(text)
@@ -281,14 +347,14 @@ def lookup(business: str, area: str, page_html: str | None, api_key: str) -> dic
     def search(name: str) -> list[dict]:
         return _get("/search/companies?" + urllib.parse.urlencode({"q": name, "items_per_page": 20}), api_key).get("items") or []
 
-    entry, how = pick_by_name(business, area, search(business), says_ltd, codes)
+    entry, how = pick_by_name(business, area, search(business), says_ltd, codes, text)
     if entry:
         return result_for(entry, how)
     # A trading name: the footer says which company is behind it.
     for name in owner_names(text):
         if normalise(name) == normalise(business):
             continue
-        owner, _ = pick_by_name(name + " Ltd", area, search(name), True, codes)
+        owner, _ = pick_by_name(name + " Ltd", area, search(name), True, codes, text)
         if owner:
             return result_for(owner, f"company named on their site: {name} Ltd")
     none = how == "no record"

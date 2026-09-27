@@ -99,6 +99,64 @@ class SiteSignals(unittest.TestCase):
         self.assertIsNotNone(pick_by_name("Elite Roofing", "Surrey", items, says_ltd=True)[0])
 
 
+class Safety(unittest.TestCase):
+    def test_trade_body_numbers_are_not_company_numbers(self):
+        self.assertIsNone(company_number_on_site("<p>Gas Safe Registration No. 123456</p>"))
+        self.assertIsNone(company_number_on_site("<p>NICEIC registered: 1234567</p>"))
+        self.assertEqual(
+            company_number_on_site("<p>Gas Safe Reg 123456</p><p>Company No. 07654321</p>"), "07654321"
+        )
+
+    def test_a_number_must_point_to_a_company_with_the_firms_name(self):
+        from company_lookup import names_agree
+
+        self.assertTrue(names_agree("J SMITH BUILDING SERVICES LTD", "Smith Roofing", ""))
+        self.assertFalse(names_agree("ACME WIDGETS LIMITED", "Smith Roofing", ""))
+        self.assertFalse(names_agree("SURREY ROOFING LTD", "Guildford Roofing Services", ""))  # only trade words shared
+        self.assertTrue(names_agree("MJ HOLDINGS LTD", "Big Mick", "© 2024 MJ Holdings Ltd"))
+
+    def test_a_stranger_behind_a_number_falls_back_to_the_name_search(self):
+        page = "<p>Company No. 01234567</p>"
+
+        def fake_get(path, key):
+            if path.startswith("/company/"):
+                return {"company_name": "ACME WIDGETS LIMITED", "type": "ltd", "company_status": "active"}
+            return {"items": []}
+
+        with mock.patch.object(company_lookup, "_get", fake_get):
+            self.assertEqual(company_lookup.lookup("Smith Roofing", "", page, "k")["result"], "none")
+
+
+class Local(unittest.TestCase):
+    def test_same_postcode_district_confirms_a_single_match(self):
+        from company_lookup import postcodes
+
+        items = [{"title": "ELITE ROOFING LTD", "company_status": "active", "address": {"postal_code": "GU1 3XY"}}]
+        entry, how = pick_by_name("Elite Roofing", "", items, site_postcodes=postcodes("Guildford GU1 4RR"))
+        self.assertIsNotNone(entry)
+        self.assertIn("district", how)
+        self.assertIsNone(pick_by_name("Elite Roofing", "", items, site_postcodes=postcodes("Leeds LS1 1AA"))[0])
+
+    def test_registered_town_named_on_the_site(self):
+        items = [{"title": "ELITE ROOFING LTD", "company_status": "active", "address": {"locality": "Woking"}}]
+        self.assertIsNotNone(pick_by_name("Elite Roofing", "", items, text="Roofers based in Woking, Surrey")[0])
+        self.assertIsNone(pick_by_name("Elite Roofing", "", items, text="Roofers based in Guildford")[0])
+
+
+class Links(unittest.TestCase):
+    def test_finds_the_pages_with_company_details(self):
+        from company_lookup import useful_links
+
+        page = (
+            '<a href="/contact-us">Contact</a><a href="https://www.smith.co.uk/privacy-policy">Privacy</a>'
+            '<a href="/gallery">Gallery</a><a href="https://facebook.com/about">FB</a><a href="/about.pdf">x</a>'
+        )
+        self.assertEqual(
+            useful_links(page, "https://smith.co.uk/"),
+            ["https://smith.co.uk/contact-us", "https://www.smith.co.uk/privacy-policy"],
+        )
+
+
 class LookupFlow(unittest.TestCase):
     def test_a_trading_name_is_found_through_the_company_on_its_site(self):
         page = "<footer>© 2025 Mick Jones Contractors Ltd, Guildford</footer>"
