@@ -46,6 +46,11 @@ Outputs, beside the sheet:
                      House (company_lookup.py) - this decides email or letter. Kept in
                      outreach/company-lookups.csv and reused (--recheck looks again). Firms
                      the register shows as dissolved or in liquidation are left out.
+Never contacted twice, never after a no (contact_rules.py):
+    Anyone whose Status in ANY sheet says not interested / unsubscribed, or who
+    is in outreach/do-not-contact.csv, is left out of every list. A firm already
+    in another sheet (outreach/claims.csv: the first sheet that listed it) is
+    left out of this one - no second preview page, no second email.
 Env:
     PROSPECTS_API_SECRET  required (also used to make the links unguessable)
     DASHBOARD_API_URL     default https://admin.scalardigital.co.uk
@@ -73,7 +78,6 @@ import os
 import re
 import sys
 import urllib.error
-import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -88,6 +92,7 @@ DEFAULT_TENANT = "abdc6408-1fd5-4fb6-9c4c-53600b571a6d"
 SKIP_STATUSES = {"Removed - parked / unsuitable", "Lost / not interested"}
 LETTER_COMPANY_TYPES = {"sole trader", "partnership", "none", "no record", "unsure"}
 EMAIL_RECHECK_DAYS = 30
+TEARDOWN_WORKERS = 4
 
 
 def slugify(text: str) -> str:
@@ -205,16 +210,32 @@ def main() -> None:
     def email_result(email: str) -> str:
         return (email_checks.get(email.strip().lower()) or {}).get("result") or ""
 
+    from contact_rules import Claims, load_blocklist  # same folder as this script
+
+    listed: dict[str, set[str]] = {}
+    blocklist = load_blocklist(args.sheet.parent, domain_of, listed)
+    claims = Claims(args.sheet.parent, listed)
+    left_out: dict[str, list[str]] = {"blocked": [], "elsewhere": []}
+
     def build() -> tuple[list[dict], int, int]:
         """Prospects from the sheet plus the saved notes: (prospects, skipped, closed)."""
         from email_check import is_bad  # same folder as this script
 
         out, seen, skipped, closed = [], set(), 0, 0
+        left_out["blocked"], left_out["elsewhere"] = [], []
         for row in sheet_rows:
             business = str(row.get("Business") or "").strip()
             domain = domain_of(str(row.get("Website") or ""))
             if not business or not domain or str(row.get("Status") or "") in SKIP_STATUSES:
                 skipped += 1
+                continue
+            why = blocklist.why(domain, str(row.get("Email") or ""), business)
+            if why:
+                left_out["blocked"].append(f"{business}: {why}")
+                continue
+            owner = claims.other_owner(domain, args.sheet.name)
+            if owner:
+                left_out["elsewhere"].append(f"{business}: already in {owner}")
                 continue
             slug = make_slug(business, domain, secret)
             if slug in seen:
@@ -255,6 +276,8 @@ def main() -> None:
         return out, skipped, closed
 
     prospects, skipped, closed = build()
+    # This sheet now owns every firm it lists that no other sheet had first.
+    claims.claim([p["website"] for p in prospects], args.sheet.name)
 
     # One set of output files per sheet, so running a second list (e.g. the
     # loft-conversions workbook) never overwrites the master list's links.
@@ -276,11 +299,16 @@ def main() -> None:
                     "result": r.get("result") or "ok",
                     "mobile_score": number(r.get("mobile_score")),
                     "lcp_s": number(r.get("lcp_s")),
+                    # None = not known yet (checked before this column existed); "" = nothing found.
+                    "top_issue": r.get("top_issue") if "top_issue" in r and r.get("top_issue") != "?" else None,
+                    "issue_count": r.get("issue_count") or "",
                 }
 
     def save_log() -> None:
         with log_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["website", "checked_at", "result", "mobile_score", "lcp_s"])
+            writer = csv.DictWriter(
+                f, fieldnames=["website", "checked_at", "result", "mobile_score", "lcp_s", "top_issue", "issue_count"]
+            )
             writer.writeheader()
             for w, e in sorted(log.items()):
                 writer.writerow(
@@ -290,34 +318,51 @@ def main() -> None:
                         "result": e["result"],
                         "mobile_score": "" if e["mobile_score"] is None else int(e["mobile_score"]),
                         "lcp_s": "" if e["lcp_s"] is None else e["lcp_s"],
+                        "top_issue": "?" if e.get("top_issue") is None else e["top_issue"],
+                        "issue_count": e.get("issue_count", ""),
                     }
                 )
 
+    def note_findings(entry: dict, teardown: dict | None, checked_at: str | None) -> None:
+        from findings import all_issues
+
+        year = int((checked_at or datetime.now(timezone.utc).isoformat())[:4])
+        issues = all_issues(teardown, year)
+        entry["top_issue"] = issues[0] if issues else ""
+        entry["issue_count"] = len(issues)
+
     def fill_scores() -> None:
-        # Fill blank scores: first from the log, then - for sites checked before
-        # the log kept scores - from the dashboard's own record.
+        # Fill blanks from the log; for sites checked before the log kept
+        # scores (or findings), fetch them once from the dashboard's record.
         fetched = 0
         for p in prospects:
             entry = log.get(p["website"])
-            if p.get("mobile_score") is not None or not entry or entry["result"] != "ok":
+            if not entry or entry["result"] != "ok":
                 continue
-            if entry["mobile_score"] is None:
+            need_score = p.get("mobile_score") is None and entry["mobile_score"] is None
+            if need_score or entry.get("top_issue") is None:
                 try:
                     req = urllib.request.Request(
                         f"{api}/api/prospects/{p['slug']}", headers={"Authorization": f"Bearer {secret}"}
                     )
                     with urllib.request.urlopen(req, timeout=20) as res:
                         row = json.loads(res.read()).get("prospect") or {}
-                    entry["mobile_score"], entry["lcp_s"] = row.get("mobile_score"), row.get("lcp_s")
+                    if entry["mobile_score"] is None:
+                        entry["mobile_score"], entry["lcp_s"] = row.get("mobile_score"), row.get("lcp_s")
+                    if entry.get("top_issue") is None:
+                        # No saved teardown on the dashboard either: "" so it's never asked again.
+                        note_findings(entry, row.get("teardown"), row.get("teardown_at"))
                     fetched += 1
                 except (urllib.error.URLError, TimeoutError, OSError, ValueError):
-                    continue
-            p["mobile_score"] = entry["mobile_score"]
+                    pass
+            p["_top_issue"] = entry.get("top_issue") or ""
+            if p.get("mobile_score") is None:
+                p["mobile_score"] = entry["mobile_score"]
             if p.get("lcp_s") is None:
                 p["lcp_s"] = entry["lcp_s"]
         if fetched:
             save_log()
-            print(f"Recovered {fetched} scores from the dashboard into {log_path.name}")
+            print(f"Recovered {fetched} scores / findings from the dashboard into {log_path.name}")
 
     fill_scores()
 
@@ -338,7 +383,11 @@ def main() -> None:
         mm = out.parent / f"mailmeteor{suffix}.csv"
         with mm.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
-                f, fieldnames=["business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status"]
+                f,
+                fieldnames=[
+                    "business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status",
+                    "trade", "area", "top_issue",
+                ],
             )
             writer.writeheader()
             for p in prospects:
@@ -354,6 +403,9 @@ def main() -> None:
                         "lcp_s": "" if p.get("lcp_s") is None else p["lcp_s"],
                         "preview_url": preview_url(p),
                         "status": p["_status"],
+                        "trade": (p.get("trade") or "").lower(),
+                        "area": p.get("area") or "",
+                        "top_issue": p.get("_top_issue") or "",
                     }
                 )
         print(f"Wrote {out.name} and {mm.name}")
@@ -366,6 +418,14 @@ def main() -> None:
         by_channel = {c: sum(1 for p in prospects if p["channel"] == c) for c in ("email", "letter")}
         gone = f", {closed} left out (dissolved / in liquidation)" if closed else ""
         print(f"{len(prospects)} prospects ({by_channel['email']} email, {by_channel['letter']} letter), {skipped} skipped{gone}")
+        if left_out["blocked"]:
+            print(f"{len(left_out['blocked'])} left out - they said no (do-not-contact):")
+            for line in left_out["blocked"][:10]:
+                print(f"    {line}")
+        if left_out["elsewhere"]:
+            print(f"{len(left_out['elsewhere'])} left out - already in another list:")
+            for line in left_out["elsewhere"][:10]:
+                print(f"    {line}")
 
     write_outputs()
     report()
@@ -556,28 +616,45 @@ def main() -> None:
         psi_key = os.environ.get("PAGESPEED_API_KEY", "")
         if not psi_key:
             sys.exit("--teardown needs PAGESPEED_API_KEY (the Google key the site's speed test uses).")
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from findings import all_issues
         from site_teardown import teardown  # same folder as this script
 
-        for i, p in enumerate(selected, 1):
-            print(f"[{i}/{len(selected)}] Checking {p['website']} ...", flush=True)
-            result = teardown(p["website"], psi_key)
-            if result is None:
-                print("    couldn't check this one - logged, and skipped next time (--recheck retries it)")
-                p["_teardown_failed"] = True
-                continue
-            # Google's headline score and LCP fill the prospect's own fields
-            # when the sheet has none (new lists); the sheet's figures win.
-            score, lcp = result.pop("_mobile_score", None), result.pop("_lcp_s", None)
-            if p.get("mobile_score") is None and score is not None:
-                p["mobile_score"] = score
-            if p.get("lcp_s") is None and lcp is not None:
-                p["lcp_s"] = lcp
-            p["teardown"] = result
-            p["teardown_at"] = datetime.now(timezone.utc).isoformat()
-            problems = [k for k, v in result["checks"].items() if v is False]
-            extras = {k: v for k, v in result.items() if k not in ("v", "checks")}
-            print(f"    problems: {', '.join(problems) or 'none'} | {extras}")
-            time.sleep(1)
+        # Four at once: each check is mostly waiting on Google, and four stays
+        # well inside the PageSpeed API's limits.
+        print(f"Speed checking {len(selected)} sites, {TEARDOWN_WORKERS} at a time ...", flush=True)
+        with ThreadPoolExecutor(max_workers=TEARDOWN_WORKERS) as pool:
+            futures = {pool.submit(teardown, p["website"], psi_key): p for p in selected}
+            for i, future in enumerate(as_completed(futures), 1):
+                p = futures[future]
+                try:
+                    result = future.result()
+                except Exception as e:  # one broken site never stops the batch
+                    print(f"[{i}/{len(selected)}] {p['website']}: check failed ({type(e).__name__})", flush=True)
+                    result = None
+                if result is None:
+                    print(f"[{i}/{len(selected)}] {p['website']}: couldn't check - logged, skipped next time", flush=True)
+                    p["_teardown_failed"] = True
+                    continue
+                # Google's headline score and LCP fill the prospect's own fields
+                # when the sheet has none (new lists); the sheet's figures win.
+                score, lcp = result.pop("_mobile_score", None), result.pop("_lcp_s", None)
+                if p.get("mobile_score") is None and score is not None:
+                    p["mobile_score"] = score
+                if p.get("lcp_s") is None and lcp is not None:
+                    p["lcp_s"] = lcp
+                p["teardown"] = result
+                p["teardown_at"] = datetime.now(timezone.utc).isoformat()
+                issues = all_issues(result, datetime.now(timezone.utc).year)
+                p["_top_issue"] = issues[0] if issues else ""
+                p["_issue_count"] = len(issues)
+                score_txt = f"{int(p['mobile_score'])}/100" if p.get("mobile_score") is not None else "no score"
+                print(
+                    f"[{i}/{len(selected)}] {p['website']}: {score_txt}, {len(issues)} issue{'s' if len(issues) != 1 else ''}"
+                    + (f" - worst: {issues[0]}" if issues else ""),
+                    flush=True,
+                )
 
     # Rewritten after the teardown, so new scores reach the Mailmeteor file.
     if args.teardown:
@@ -616,10 +693,14 @@ def main() -> None:
                     "result": "ok",
                     "mobile_score": p.get("mobile_score"),
                     "lcp_s": p.get("lcp_s"),
+                    "top_issue": p.get("_top_issue", ""),
+                    "issue_count": p.get("_issue_count", ""),
                 }
                 ok += 1
             elif p.get("_teardown_failed"):
-                log[p["website"]] = {"checked_at": now, "result": "failed", "mobile_score": None, "lcp_s": None}
+                log[p["website"]] = {
+                    "checked_at": now, "result": "failed", "mobile_score": None, "lcp_s": None, "top_issue": "", "issue_count": "",
+                }
                 failed += 1
         save_log()
         remaining = sum(1 for p in prospects if p["website"] not in log)
