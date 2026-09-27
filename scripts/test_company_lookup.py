@@ -6,7 +6,7 @@ import urllib.error
 from unittest import mock
 
 import company_lookup
-from company_lookup import LookupFailed, company_number_on_site, normalise, pick_by_name, result_for
+from company_lookup import LookupFailed, clean_key, company_number_on_site, key_problem, normalise, pick_by_name, result_for
 
 
 class NumberOnSite(unittest.TestCase):
@@ -90,6 +90,11 @@ class Errors(unittest.TestCase):
         with self.fail_with(403, b"IP not allowed"), self.assertRaisesRegex(PermissionError, "IP not allowed"):
             company_lookup._get("/x", "k")
 
+    def test_invalid_authorization_header_is_a_key_problem(self):
+        with self.fail_with(400, b'{"error":"Invalid Authorization header"}'):
+            with self.assertRaisesRegex(PermissionError, "36"):
+                company_lookup._get("/x", "my-application-id")
+
     def test_other_errors_carry_the_reason(self):
         with self.fail_with(400, b"bad query"), self.assertRaisesRegex(LookupFailed, "HTTP 400 bad query"):
             company_lookup._get("/x", "k")
@@ -97,6 +102,21 @@ class Errors(unittest.TestCase):
         with mock.patch.object(company_lookup.urllib.request, "urlopen", side_effect=err):
             with self.assertRaisesRegex(LookupFailed, "CERTIFICATE_VERIFY_FAILED"):
                 company_lookup._get("/x", "k")
+
+
+
+class Key(unittest.TestCase):
+    KEY = "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
+
+    def test_cleans_what_copying_brings_along(self):
+        for pasted in (f" {self.KEY}\n", f'"{self.KEY}"', f"\u200b{self.KEY}", f"COMPANIES_HOUSE_API_KEY={self.KEY}", f"\u2018{self.KEY}\u2019"):
+            self.assertEqual(clean_key(pasted), self.KEY, repr(pasted))
+            self.assertIsNone(key_problem(pasted))
+
+    def test_wrong_shape_is_explained_without_the_key(self):
+        problem = key_problem("abc123secretvalue")
+        self.assertIn("17 characters", problem)
+        self.assertNotIn("abc123secretvalue", problem)
 
 
 if __name__ == "__main__":
