@@ -27,7 +27,10 @@ import secrets
 import subprocess
 import sys
 import threading
+import re
 import time
+import urllib.error
+import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -38,6 +41,8 @@ PUSH = HERE / "push_prospects.py"
 SETTING_KEYS = ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "DASHBOARD_API_URL", "SITE_URL"]
 SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"}
 RUN_ALL_BATCH = 10
+# Shown in the header. Bump it with every change, so an old panel still running is obvious.
+PANEL_VERSION = "3"
 MAX_LOG_LINES = 5000
 
 
@@ -367,7 +372,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, b"Forbidden", "text/plain")
         route = urlparse(self.path).path
         if route == "/":
-            page = PAGE.replace("__TOKEN__", self.token).replace("__OUTREACH__", html.escape(str(OUTREACH)))
+            page = (
+                PAGE.replace("__TOKEN__", self.token)
+                .replace("__OUTREACH__", html.escape(str(OUTREACH)))
+                .replace("__VERSION__", PANEL_VERSION)
+                .replace("__HERE__", html.escape(str(HERE)))
+            )
             return self._send(200, page.encode(), "text/html; charset=utf-8")
         if route == "/api/state":
             settings = load_settings()
@@ -468,7 +478,7 @@ PAGE = r"""<!doctype html>
 </head>
 <body>
 <header>
-  <h1>Prospect Control Panel</h1>
+  <h1>Prospect Control Panel <span style="color:var(--dim); font-weight:400; font-size:12px">v__VERSION__ · __HERE__</span></h1>
   <a id="lnk-dash" href="#" target="_blank" rel="noopener">Dashboard ↗</a>
   <a id="lnk-site" href="#" target="_blank" rel="noopener">Website ↗</a>
   <a href="https://pagespeed.web.dev/" target="_blank" rel="noopener">PageSpeed ↗</a>
@@ -659,6 +669,50 @@ poll();
 """
 
 
+def running_panel_version(port: int) -> str | None:
+    """The version of a panel already on this port: "" for one too old to say, None if it isn't a panel."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as res:
+            page = res.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return None
+    if "Prospect Control Panel" not in page:
+        return None
+    found = re.search(r">v([0-9.]+) ", page)
+    return found.group(1) if found else ""
+
+
+def stop_old_panel(port: int) -> None:
+    """Closes the panel process listening on this port (Windows), so the new version can start."""
+    if sys.platform == "win32":
+        command = (
+            f"Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue | "
+            "ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"
+        )
+        subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, timeout=30)
+    else:
+        subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True, timeout=30)
+    time.sleep(1)
+
+
+def start_server(port: int) -> ThreadingHTTPServer | str | None:
+    """Our server - replacing an older panel still running on the port. "same" if this
+    version is already running (left alone: it may be mid-run), None if something else has the port."""
+    for attempt in range(2):
+        try:
+            return ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        except OSError:
+            version = running_panel_version(port)
+            if version == PANEL_VERSION:
+                return "same"
+            if version is None or attempt:
+                return None
+            label = f"v{version}" if version else "an old version"
+            print(f"Closing the panel that was already running ({label}) and starting v{PANEL_VERSION} ...")
+            stop_old_panel(port)
+    return None
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8765)
@@ -667,15 +721,16 @@ def main() -> None:
 
     Handler.token = secrets.token_urlsafe(24)
     Handler.port = args.port
-    try:
-        server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    except OSError:
-        url = f"http://127.0.0.1:{args.port}/"
-        print(f"Port {args.port} is busy - the panel is probably already open at {url}")
+    server = start_server(args.port)
+    url = f"http://127.0.0.1:{args.port}/"
+    if server == "same":
+        print(f"The panel is already open at {url}")
         if not args.no_browser:
             webbrowser.open(url)
         return
-    url = f"http://127.0.0.1:{args.port}/"
+    if server is None:
+        print(f"Port {args.port} is busy with something that isn't this panel - try --port 8766")
+        return
     print(f"Control panel running at {url}  (close this window to stop it)")
     print(f"Reading sheets from {OUTREACH}")
     if not args.no_browser:
