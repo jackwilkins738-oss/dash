@@ -506,7 +506,6 @@ def main() -> None:
             counts[found["result"]] = counts.get(found["result"], 0) + 1
             label = found["company_type"] or {"none": "no record -> letter", "unsure": "unsure -> letter", "closed": f"{found['status']} -> left out"}[found["result"]]
             print(f"    [{i}/{len(todo)}] {p['business_name']}: {label}  ({found['how']})")
-            time.sleep(0.6)  # Companies House allows 600 requests per 5 minutes
             if i % 25 == 0:
                 write_csv(lookups_path, LOOKUP_FIELDS, lookups)
         write_csv(lookups_path, LOOKUP_FIELDS, lookups)
