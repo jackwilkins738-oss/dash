@@ -170,6 +170,94 @@ class PushRun(unittest.TestCase):
         self.assertIn("broken.co.uk: check failed (RuntimeError)", out)
 
 
+class Review(unittest.TestCase):
+    def setUp(self):
+        import openpyxl
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Outreach"
+        head = ["Business", "Website", "Status", "Email", "Company type", "Company number"]
+        ws.append(head)
+        ws.append(["Unsure Roofing", "unsure.co.uk", "New", "a@unsure.co.uk", "", ""])
+        ws.append(["Bad Email Roofing", "bademail.co.uk", "New", "bob@gmial.com", "Ltd", ""])
+        ws.append(["Down Roofing", "down.co.uk", "New", "", "Ltd", ""])
+        ws.append(["Gone Roofing", "gone.co.uk", "New", "", "", ""])
+        chk = wb.create_sheet("Check website")
+        chk.append(["Business", "Website", "Possible website", "Status", "Email", "Company type", "Company number", "Website found"])
+        chk.append(["Maybe Roofing", "", "mayberoofing.co.uk", "New", "info@mayberoofing.co.uk", "Ltd", "01234567", "name only"])
+        wb.save(self.dir / "list.xlsx")
+        with (self.dir / "company-lookups.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["website", "result", "how", "status", "registered_name", "number"])
+            w.writerow(["unsure.co.uk", "unsure", "unsure (1 same-name company, not confirmed)", "", "", ""])
+            w.writerow(["gone.co.uk", "closed", "number on their site", "dissolved", "GONE ROOFING LTD", "07777777"])
+        with (self.dir / "email-checks.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["email", "result", "checked_at"])
+            w.writerow(["bob@gmial.com", "typo (did they mean gmail.com?)", "2026-09-01"])
+        with (self.dir / "teardown-log.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["website", "checked_at", "result", "mobile_score", "lcp_s"])
+            w.writerow(["down.co.uk", "2026-09-01", "failed", "", ""])
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def push(self):
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40}), redirect_stdout(buf), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "list.xlsx"), "--dry-run"]):
+            import push_prospects
+
+            push_prospects.main()
+        with (self.dir / "preview-links-list.csv").open(encoding="utf-8") as f:
+            return buf.getvalue(), {r["Business"]: r for r in csv.DictReader(f)}
+
+    def test_finds_every_kind(self):
+        import review
+
+        kinds = {(i["kind"], i["business"]) for i in review.items(self.dir, "list.xlsx")}
+        self.assertEqual(kinds, {
+            ("website", "Maybe Roofing"), ("company", "Unsure Roofing"), ("email", "Bad Email Roofing"),
+            ("failed", "Down Roofing"), ("closed", "Gone Roofing"),
+        })
+
+    def test_decisions_change_the_next_run_and_leave_the_review(self):
+        import review
+
+        items = {i["business"]: i for i in review.items(self.dir, "list.xlsx")}
+        _, before = self.push()
+        self.assertEqual(before["Unsure Roofing"]["Channel"], "letter")
+        self.assertNotIn("Maybe Roofing", before)
+
+        review.decide(self.dir, "list.xlsx", items["Unsure Roofing"]["key"], "set_type", "Ltd")
+        review.decide(self.dir, "list.xlsx", items["Maybe Roofing"]["key"], "website_yes", "mayberoofing.co.uk")
+        review.decide(self.dir, "list.xlsx", items["Bad Email Roofing"]["key"], "set_email", "bob@gmail.com")
+        review.decide(self.dir, "list.xlsx", items["Down Roofing"]["key"], "skip")
+        out, after = self.push()
+        self.assertEqual(after["Unsure Roofing"]["Channel"], "email")
+        self.assertEqual(after["Maybe Roofing"]["Channel"], "email")
+        self.assertEqual(after["Bad Email Roofing"]["Email"], "bob@gmail.com")
+        self.assertNotIn("Down Roofing", after)
+        self.assertIn("1 left out in Review", out)
+        left = {i["business"] for i in review.items(self.dir, "list.xlsx")}
+        self.assertEqual(left, {"Gone Roofing"})
+
+        review.decide(self.dir, "list.xlsx", items["Down Roofing"]["key"], "undo")
+        self.assertIn("Down Roofing", self.push()[1])
+
+    def test_do_not_contact_from_review(self):
+        import review
+
+        review.block(self.dir, "Unsure Roofing", "unsure.co.uk", "a@unsure.co.uk")
+        out, rows = self.push()
+        self.assertNotIn("Unsure Roofing", rows)
+        self.assertIn("do not contact (Review)", out)
+
+
 class Panel(unittest.TestCase):
     def test_phone_alert_carries_counts_never_names(self):
         import control_panel
