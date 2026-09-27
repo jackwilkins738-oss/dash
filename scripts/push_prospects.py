@@ -215,6 +215,63 @@ def main() -> None:
     suffix = "" if args.sheet.stem == "outreach-master" else f"-{args.sheet.stem}"
     out = args.out or args.sheet.parent / f"preview-links{suffix}.csv"
 
+    # ---- teardown log: what's been checked, and the scores it found ------
+    # Columns: website, checked_at, result (ok|failed), mobile_score, lcp_s.
+    # The scores are kept here because a new list's sheet has none: without
+    # them every export would blank earlier batches' scores, and every plain
+    # push would overwrite the dashboard's copy with nothing.
+    log_path = args.sheet.parent / "teardown-log.csv"
+    log: dict[str, dict] = {}
+    if log_path.exists():
+        with log_path.open(encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                log[r["website"]] = {
+                    "checked_at": r.get("checked_at") or "",
+                    "result": r.get("result") or "ok",
+                    "mobile_score": number(r.get("mobile_score")),
+                    "lcp_s": number(r.get("lcp_s")),
+                }
+
+    def save_log() -> None:
+        with log_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["website", "checked_at", "result", "mobile_score", "lcp_s"])
+            writer.writeheader()
+            for w, e in sorted(log.items()):
+                writer.writerow(
+                    {
+                        "website": w,
+                        "checked_at": e["checked_at"],
+                        "result": e["result"],
+                        "mobile_score": "" if e["mobile_score"] is None else int(e["mobile_score"]),
+                        "lcp_s": "" if e["lcp_s"] is None else e["lcp_s"],
+                    }
+                )
+
+    # Fill blank scores: first from the log, then - for sites checked before
+    # the log kept scores - from the dashboard's own record.
+    fetched = 0
+    for p in prospects:
+        entry = log.get(p["website"])
+        if p.get("mobile_score") is not None or not entry or entry["result"] != "ok":
+            continue
+        if entry["mobile_score"] is None:
+            try:
+                req = urllib.request.Request(
+                    f"{api}/api/prospects/{p['slug']}", headers={"Authorization": f"Bearer {secret}"}
+                )
+                with urllib.request.urlopen(req, timeout=20) as res:
+                    row = json.loads(res.read()).get("prospect") or {}
+                entry["mobile_score"], entry["lcp_s"] = row.get("mobile_score"), row.get("lcp_s")
+                fetched += 1
+            except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+                continue
+        p["mobile_score"] = entry["mobile_score"]
+        if p.get("lcp_s") is None:
+            p["lcp_s"] = entry["lcp_s"]
+    if fetched:
+        save_log()
+        print(f"Recovered {fetched} scores from the dashboard into {log_path.name}")
+
     def write_outputs() -> None:
         by_slug = {p["slug"]: p for p in prospects}
         with out.open("w", newline="", encoding="utf-8") as f:
@@ -252,18 +309,18 @@ def main() -> None:
 
     # --only / --limit narrow what gets checked and pushed. The links CSV
     # above always covers everyone, so it never loses rows.
-    log_path = args.sheet.parent / "teardown-log.csv"
-    checked: dict[str, str] = {}
-    if log_path.exists():
-        with log_path.open(encoding="utf-8") as f:
-            checked = {r["website"]: r["checked_at"] for r in csv.DictReader(f)}
-
     selected = prospects
     if args.teardown and not args.recheck and not args.only:
         before = len(selected)
-        selected = [p for p in selected if p["website"] not in checked]
+        # Failed sites are skipped too - otherwise every batch would retry
+        # the same unreachable sites and never move on.
+        selected = [p for p in selected if p["website"] not in log]
         if before != len(selected):
-            print(f"Skipping {before - len(selected)} already checked (see {log_path.name}; --recheck to include them)")
+            failed = sum(1 for p in prospects if log.get(p["website"], {}).get("result") == "failed")
+            print(
+                f"Skipping {before - len(selected)} already checked ({failed} of them couldn't be checked; "
+                f"--recheck to try everything again)"
+            )
     if args.only:
         needle = args.only.lower()
         selected = [p for p in selected if needle in p["business_name"].lower() or needle in p["website"]]
@@ -315,7 +372,8 @@ def main() -> None:
             print(f"[{i}/{len(selected)}] Checking {p['website']} ...", flush=True)
             result = teardown(p["website"], psi_key)
             if result is None:
-                print("    couldn't check this one - nothing saved for it")
+                print("    couldn't check this one - logged, and skipped next time (--recheck retries it)")
+                p["_teardown_failed"] = True
                 continue
             # Google's headline score and LCP fill the prospect's own fields
             # when the sheet has none (new lists); the sheet's figures win.
@@ -357,16 +415,25 @@ def main() -> None:
         print(f"Pushed {body.get('upserted')} (rejected: {body.get('rejected')})")
 
     # Only now - after the dashboard has accepted them - are these sites
-    # logged as checked. A dry run or a failed push logs nothing.
-    done = {p["website"]: p["teardown_at"] for p in selected if p.get("teardown_at")}
-    if done:
-        checked.update(done)
-        with log_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["website", "checked_at"])
-            writer.writeheader()
-            writer.writerows({"website": w, "checked_at": t} for w, t in sorted(checked.items()))
-        remaining = sum(1 for p in prospects if p["website"] not in checked)
-        print(f"Logged {len(done)} as checked; {remaining} still to check.")
+    # logged. A dry run or a failed push logs nothing.
+    if args.teardown:
+        now = datetime.now(timezone.utc).isoformat()
+        ok = failed = 0
+        for p in selected:
+            if p.get("teardown_at"):
+                log[p["website"]] = {
+                    "checked_at": p["teardown_at"],
+                    "result": "ok",
+                    "mobile_score": p.get("mobile_score"),
+                    "lcp_s": p.get("lcp_s"),
+                }
+                ok += 1
+            elif p.get("_teardown_failed"):
+                log[p["website"]] = {"checked_at": now, "result": "failed", "mobile_score": None, "lcp_s": None}
+                failed += 1
+        save_log()
+        remaining = sum(1 for p in prospects if p["website"] not in log)
+        print(f"Logged {ok} checked, {failed} couldn't be checked; {remaining} still to check.")
 
 
 if __name__ == "__main__":
