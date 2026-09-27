@@ -183,7 +183,7 @@ def main() -> None:
     guesses_path = args.sheet.parent / "trade-guesses.csv"
     lookups_path = args.sheet.parent / "company-lookups.csv"
     emails_path = args.sheet.parent / "email-checks.csv"
-    LOOKUP_FIELDS = ["website", "business", "result", "company_type", "number", "registered_name", "status", "how", "checked_at"]
+    LOOKUP_FIELDS = ["website", "business", "result", "company_type", "number", "registered_name", "status", "how", "checked_at", "logic"]
     EMAIL_FIELDS = ["email", "result", "checked_at"]
 
     def read_csv(path: Path, key: str) -> dict[str, dict]:
@@ -444,13 +444,20 @@ def main() -> None:
         ch_key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
         if not ch_key:
             sys.exit("--lookup-companies needs COMPANIES_HOUSE_API_KEY (free: developer.company-information.service.gov.uk).")
-        from company_lookup import LookupFailed, key_problem, lookup
+        from company_lookup import LOGIC_VERSION, LookupFailed, key_problem, lookup
 
         problem = key_problem(ch_key)
         if problem:
             sys.exit(f"Can't look up companies: {problem}.")
 
-        todo = [p for p in selected if not p["_sheet_type"] and (args.recheck or p["website"] not in lookups)]
+        def needs_lookup(p: dict) -> bool:
+            saved = lookups.get(p["website"])
+            if args.recheck or not saved:
+                return True
+            # Matching has improved since this answer: try the unsure / not-found ones again.
+            return saved.get("result") in ("unsure", "none") and (saved.get("logic") or "1") != LOGIC_VERSION
+
+        todo = [p for p in selected if not p["_sheet_type"] and needs_lookup(p)]
         print(f"Looking up {len(todo)} firms with no Company type in the sheet on Companies House ...")
         counts: dict[str, int] = {}
         failures_in_a_row = 0
@@ -473,6 +480,7 @@ def main() -> None:
                 "business": p["business_name"],
                 **found,
                 "checked_at": datetime.now(timezone.utc).isoformat(),
+                "logic": LOGIC_VERSION,
             }
             counts[found["result"]] = counts.get(found["result"], 0) + 1
             label = found["company_type"] or {"none": "no record -> letter", "unsure": "unsure -> letter", "closed": f"{found['status']} -> left out"}[found["result"]]

@@ -61,6 +61,65 @@ class ByName(unittest.TestCase):
         self.assertEqual(entry["company_status"], "active")
 
 
+class SiteSignals(unittest.TestCase):
+    def test_owner_names_from_footers(self):
+        from company_lookup import owner_names, site_text
+
+        text = site_text("<footer><p>&copy; 2024 J Smith Building Services Ltd. All rights reserved.</p></footer>")
+        self.assertEqual(owner_names(text), ["J Smith Building Services"])
+        text = site_text("<p>Big Mick Roofing is a trading name of Michael Jones Contractors Limited</p>")
+        self.assertEqual(owner_names(text), ["Michael Jones Contractors"])
+
+    def test_web_designer_credits_are_not_the_owner(self):
+        from company_lookup import owner_names, site_text
+
+        text = site_text("<p>© 2024 Smith Roofing | Website designed by Pixel Web Design Ltd</p>")
+        self.assertEqual(owner_names(text), [])
+
+    def test_scripts_are_not_page_text(self):
+        from company_lookup import names_called_ltd, site_text
+
+        text = site_text('<script>var c = "Tracking Co Ltd";</script><p>Smith Roofing Ltd</p>')
+        self.assertEqual(names_called_ltd(text), {"smith roofing"})
+
+    def test_postcode_on_site_confirms_and_picks_between_namesakes(self):
+        from company_lookup import postcodes
+
+        items = [
+            {"title": "ACE BUILDERS LTD", "company_status": "active", "address": {"postal_code": "LS1 1AA"}},
+            {"title": "ACE BUILDERS LIMITED", "company_status": "active", "address": {"postal_code": "GU1 4RR"}},
+        ]
+        entry, how = pick_by_name("Ace Builders", "", items, site_postcodes=postcodes("Visit us at Guildford GU1 4RR"))
+        self.assertEqual(entry["address"]["postal_code"], "GU1 4RR")
+        self.assertIn("postcode", how)
+
+    def test_site_saying_ltd_confirms_a_single_match(self):
+        items = [{"title": "ELITE ROOFING LIMITED", "company_status": "active", "address_snippet": "Leeds"}]
+        self.assertIsNone(pick_by_name("Elite Roofing", "Surrey", items)[0])
+        self.assertIsNotNone(pick_by_name("Elite Roofing", "Surrey", items, says_ltd=True)[0])
+
+
+class LookupFlow(unittest.TestCase):
+    def test_a_trading_name_is_found_through_the_company_on_its_site(self):
+        page = "<footer>© 2025 Mick Jones Contractors Ltd, Guildford</footer>"
+        answers = {
+            "Big Mick": {"items": []},
+            "Mick Jones Contractors": {"items": [{"title": "MICK JONES CONTRACTORS LTD", "company_number": "07654321",
+                                                   "company_type": "ltd", "company_status": "active"}]},
+        }
+
+        def fake_get(path, key):
+            from urllib.parse import parse_qs, urlparse
+
+            return answers[parse_qs(urlparse(path).query)["q"][0]]
+
+        with mock.patch.object(company_lookup, "_get", fake_get):
+            found = company_lookup.lookup("Big Mick", "Surrey", page, "k")
+        self.assertEqual(found["result"], "company")
+        self.assertEqual(found["number"], "07654321")
+        self.assertIn("Mick Jones Contractors", found["how"])
+
+
 class Result(unittest.TestCase):
     def test_types_and_statuses(self):
         self.assertEqual(result_for({"type": "ltd", "company_status": "active"}, "x")["company_type"], "Ltd")

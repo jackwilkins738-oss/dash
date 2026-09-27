@@ -6,15 +6,23 @@ sole traders and ordinary partnerships only a letter (PECR). This fills
 that column's blanks from the official register (free API key:
 https://developer.company-information.service.gov.uk/).
 
-Two ways to match, most certain first:
+Ways to match, most certain first:
   1. The prospect's own homepage shows a company number. UK company
      websites must, so this is the usual case - and it's certain.
   2. A name search on the register. Only trusted when the name matches
-     exactly (ignoring "Ltd", "&"/"and", punctuation) and either the
-     business calls itself Ltd/Limited/LLP/PLC in the sheet, or it's the
-     only exact match and its registered address mentions the prospect's
-     area. A plain "Elite Roofing" could be a sole trader who happens to
-     share a name with a company 200 miles away.
+     exactly (ignoring "Ltd", "&"/"and", punctuation) and one of:
+       - a postcode on their homepage is the company's registered postcode
+         (this also picks between several same-name companies);
+       - it's the only live exact match, and the firm calls itself Ltd -
+         in the sheet or on its own homepage ("(c) 2024 Smith Roofing Ltd").
+         A sole trader can't legally do that;
+       - it's the only live exact match and its registered address
+         mentions the prospect's area.
+     A plain "Elite Roofing" with none of these could be a sole trader who
+     happens to share a name with a company 200 miles away.
+  3. The homepage names a different company as the business behind it
+     ("(c) 2024 J Smith Building Services Ltd", "a trading name of ...") -
+     the usual case for a trading name. That name is looked up instead.
 
 When in doubt it answers "unsure", which is treated as a letter - the
 safe side of PECR. Nothing found at all is "no record": also a letter.
@@ -32,6 +40,8 @@ import urllib.parse
 import urllib.request
 
 API = "https://api.company-information.service.gov.uk"
+# Bump when matching improves: saved "unsure" / "no record" answers from an older version are looked up again.
+LOGIC_VERSION = "2"
 USER_AGENT = "ScalarDigitalProspectCheck/1.0 (+https://www.scalardigital.co.uk)"
 
 # Companies House types that are corporate bodies: cold email allowed.
@@ -81,7 +91,67 @@ def company_number_on_site(page_html: str) -> str | None:
     return prefix + number[len(prefix) :].zfill(8 - len(prefix))
 
 
-def pick_by_name(business: str, area: str, items: list[dict]) -> tuple[dict | None, str]:
+def site_text(page_html: str) -> str:
+    """The words a visitor sees: no scripts, styles or tags."""
+    text = re.sub(r"<(script|style|noscript)\b.*?</\1>", " ", page_html, flags=re.I | re.S)
+    text = htmllib.unescape(re.sub(r"<[^>]+>", " ", text)).replace("\xa0", " ")
+    return re.sub(r"\s+", " ", text)
+
+
+POSTCODE = re.compile(r"\b([A-Z]{1,2}\d[A-Z\d]?) ?(\d[A-Z]{2})\b")
+
+
+def postcodes(text: str) -> set[str]:
+    return {a + b for a, b in POSTCODE.findall(text.upper())}
+
+
+def registered_postcode(item: dict) -> str:
+    pc = (item.get("address") or {}).get("postal_code") or ""
+    if not pc:
+        found = POSTCODE.findall((item.get("address_snippet") or "").upper())
+        pc = "".join(found[-1]) if found else ""
+    return pc.replace(" ", "").upper()
+
+
+# "Smith Roofing Ltd": up to 7 capitalised words before Ltd/Limited/LLP.
+LTD_NAME = re.compile(r"((?:[A-Z0-9][\w'&.\-]*\s+){0,6}[A-Z0-9][\w'&.\-]*)\s+(?:Ltd|Limited|LLP|L\.L\.P)\b\.?")
+LEADING_JUNK = {"copyright", "c", "by", "of", "as", "all", "rights", "reserved", "is", "a", "an", "trading", "name", "style",
+                "registered", "company", "in", "england", "wales", "and", "scotland", "office", "t", "ta", "t/a"}
+# Where a footer says who the business is.
+OWNER_CONTEXT = re.compile(r"©|\(c\)|copyright|trading (?:name|style) of|trading as|\bt/a\b|registered (?:in|office|company)", re.I)
+# ...and where it credits someone else.
+CREDIT = re.compile(r"design|develop|built by|powered|website by|site by|hosting|seo|marketing|digital|media", re.I)
+
+
+def _clean_name(raw: str) -> str:
+    words = raw.split()
+    while words and (words[0].lower().strip(".,:") in LEADING_JUNK or re.fullmatch(r"[\d\-–]+", words[0])):
+        words.pop(0)
+    return " ".join(words)
+
+
+def names_called_ltd(text: str) -> set[str]:
+    """Every "X Ltd" on the page, normalised - to check whether the firm calls itself Ltd."""
+    return {normalise(_clean_name(m.group(1))) for m in LTD_NAME.finditer(text)} - {""}
+
+
+def owner_names(text: str) -> list[str]:
+    """Company names the footer gives as the business itself, e.g. "(c) 2024 J Smith Building Services Ltd"."""
+    found: list[str] = []
+    for ctx in OWNER_CONTEXT.finditer(text):
+        window = text[ctx.end() : ctx.end() + 140]
+        m = LTD_NAME.search(window)
+        if not m or CREDIT.search(window[: m.end()]):
+            continue
+        name = _clean_name(m.group(1))
+        if name and normalise(name) and name not in found:
+            found.append(name)
+    return found[:3]
+
+
+def pick_by_name(
+    business: str, area: str, items: list[dict], says_ltd: bool = False, site_postcodes: set[str] | None = None
+) -> tuple[dict | None, str]:
     """The register entry this business is, from a name search - or (None, why not)."""
     want = normalise(business)
     if not want:
@@ -90,8 +160,14 @@ def pick_by_name(business: str, area: str, items: list[dict]) -> tuple[dict | No
     if not exact:
         return None, "no record"
     live = [i for i in exact if (i.get("company_status") or "") not in CLOSED_STATUSES] or exact
+    if site_postcodes:
+        same_place = [i for i in live if registered_postcode(i) in site_postcodes]
+        if len(same_place) == 1:
+            return same_place[0], "name + postcode on their site"
     if len(live) == 1 and CORPORATE_IN_NAME.search(business):
         return live[0], "name (calls itself Ltd)"
+    if len(live) == 1 and says_ltd:
+        return live[0], "name (their site says Ltd)"
     if len(live) == 1 and area and area.lower() in (live[0].get("address_snippet") or "").lower():
         return live[0], "name + area"
     return None, f"unsure ({len(live)} same-name compan{'y' if len(live) == 1 else 'ies'}, not confirmed)"
@@ -192,16 +268,29 @@ def result_for(entry: dict, how: str) -> dict:
 
 def lookup(business: str, area: str, page_html: str | None, api_key: str) -> dict:
     """What the register says about this business. Raises LookupFailed / PermissionError if it can't ask."""
+    text = site_text(page_html) if page_html else ""
     if page_html:
         number = company_number_on_site(page_html)
         if number:
             entry = _get(f"/company/{number}", api_key)
             if entry:
                 return result_for(entry, "number on their site")
-    search = _get("/search/companies?" + urllib.parse.urlencode({"q": business, "items_per_page": 20}), api_key)
-    entry, how = pick_by_name(business, area, search.get("items") or [])
+    codes = postcodes(text)
+    says_ltd = normalise(business) in names_called_ltd(text)
+
+    def search(name: str) -> list[dict]:
+        return _get("/search/companies?" + urllib.parse.urlencode({"q": name, "items_per_page": 20}), api_key).get("items") or []
+
+    entry, how = pick_by_name(business, area, search(business), says_ltd, codes)
     if entry:
         return result_for(entry, how)
+    # A trading name: the footer says which company is behind it.
+    for name in owner_names(text):
+        if normalise(name) == normalise(business):
+            continue
+        owner, _ = pick_by_name(name + " Ltd", area, search(name), True, codes)
+        if owner:
+            return result_for(owner, f"company named on their site: {name} Ltd")
     none = how == "no record"
     return {
         "result": "none" if none else "unsure",
