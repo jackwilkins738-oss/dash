@@ -139,6 +139,55 @@ class PushRun(unittest.TestCase):
         self.assertEqual(r["mobile_score"], "41")
         self.assertEqual(r["score_line"], "It scored 41 out of 100 on Google's mobile speed test, which Google itself counts as poor.")
         self.assertEqual(r["issue_line"], "I also noticed your phone number isn't tap-to-call on a mobile.")
+    def test_mailmeteor_only_links_to_previews_that_exist(self):
+        from push_prospects import make_slug
+
+        live_slug = make_slug("Fresh Roofing", "fresh.co.uk", "x" * 40)
+        make_sheet(self.dir / "two.xlsx", [
+            {"Business": "Fresh Roofing", "Website": "fresh.co.uk", "Status": "New", "Email": "info@fresh.co.uk", "Company type": "Ltd"},
+            {"Business": "Unpushed Roofing", "Website": "unpushed.co.uk", "Status": "New", "Email": "a@unpushed.co.uk", "Company type": "Ltd"},
+        ])
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, secret, tenant: {live_slug: {}}), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "two.xlsx"), "--dry-run"]):
+            import push_prospects
+
+            push_prospects.main()
+        with (self.dir / "mailmeteor-two.csv").open(encoding="utf-8") as f:
+            self.assertEqual([r["business"] for r in csv.DictReader(f)], ["Fresh Roofing"])
+        self.assertIn("1 email firms left out of mailmeteor-two.csv", buf.getvalue())
+
+    def test_a_push_adds_its_firms_to_mailmeteor(self):
+        import json as _json
+
+        make_sheet(self.dir / "push.xlsx", [
+            {"Business": "New Roofing", "Website": "newroof.co.uk", "Status": "New", "Email": "info@newroof.co.uk", "Company type": "Ltd"},
+        ])
+
+        class Res(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(req, timeout=0):
+            return Res(_json.dumps({"upserted": 1, "rejected": []}).encode())
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, secret, tenant: {}), \
+                mock.patch("urllib.request.urlopen", fake_urlopen), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "push.xlsx")]):
+            import push_prospects
+
+            push_prospects.main()
+        out = buf.getvalue()
+        self.assertIn("1 email firms left out", out)  # before the push
+        with (self.dir / "mailmeteor-push.csv").open(encoding="utf-8") as f:
+            self.assertEqual([r["business"] for r in csv.DictReader(f)], ["New Roofing"])  # after it
+
     def test_parallel_speed_checks_record_findings(self):
         import threading
 
