@@ -437,6 +437,20 @@ def main() -> None:
 
     fill_scores()
 
+    # ---- which previews actually exist --------------------------------------
+    # A link only goes into the Mailmeteor file once the dashboard has that
+    # firm - otherwise the email points at a 404. Asked of the dashboard each
+    # run (read-only); if it can't be reached, nothing is filtered and it says so.
+    live: set[str] = set()
+    live_known = False
+    try:
+        from calls import DashboardMissing, fetch_activity
+
+        live = set(fetch_activity(api, secret, tenant))
+        live_known = True
+    except DashboardMissing as e:
+        print(f"Couldn't check which previews are live ({e}) - the Mailmeteor file isn't filtered this time.")
+
     def write_outputs() -> None:
         with out.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=["Business", "Email", "Channel", "Status", "preview_url"])
@@ -452,6 +466,7 @@ def main() -> None:
                     }
                 )
         mm = out.parent / f"mailmeteor{suffix}.csv"
+        not_live = {p["slug"] for p in prospects if p["channel"] == "email" and live_known and p["slug"] not in live}
         with mm.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
                 f,
@@ -462,7 +477,7 @@ def main() -> None:
             )
             writer.writeheader()
             for p in prospects:
-                if p["channel"] != "email":
+                if p["channel"] != "email" or p["slug"] in not_live:
                     continue
                 score = p.get("mobile_score")
                 writer.writerow(
@@ -484,6 +499,11 @@ def main() -> None:
                     }
                 )
         print(f"Wrote {out.name} and {mm.name}")
+        if not_live:
+            print(
+                f"  {len(not_live)} email firms left out of {mm.name}: their preview page isn't on your dashboard yet, "
+                f"so the link would 404. Push (Dry run off), and they're added."
+            )
 
     def make_letters() -> None:
         try:
@@ -923,6 +943,10 @@ def main() -> None:
         except urllib.error.HTTPError as e:
             sys.exit(f"Import failed: HTTP {e.code} {e.read().decode(errors='replace')}")
         print(f"Pushed {body.get('upserted')} (rejected: {body.get('rejected')})")
+        rejected = {r.get("index") for r in body.get("rejected") or [] if isinstance(r, dict)}
+        live.update(p["slug"] for i, p in enumerate(batch) if i not in rejected)
+    if live_known:
+        write_outputs()  # the firms just pushed now have a page: add them to the Mailmeteor file
 
     # Only now - after the dashboard has accepted them - are these sites
     # logged. A dry run or a failed push logs nothing.

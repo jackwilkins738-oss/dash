@@ -48,7 +48,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "16"
+PANEL_VERSION = "17"
 MAX_LOG_LINES = 5000
 
 
@@ -921,7 +921,7 @@ PAGE = r"""<!doctype html>
       </div>
       <div class="action">
         <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
-        <p>Rewrites preview-links and mailmeteor CSVs from the sheet. Never sends anything.</p>
+        <p>Rewrites preview-links and mailmeteor CSVs from the sheet. Never sends anything - and the Mailmeteor file only includes firms whose preview page is on your dashboard, so no email links to a 404. Push first to add new firms.</p>
         <details style="margin-top:6px"><summary>Mailmeteor email to paste</summary>
           <p class="hint">Subject</p>
           <textarea id="mm-subject" rows="1" readonly>A quick look at {{business}}'s website</textarea>
