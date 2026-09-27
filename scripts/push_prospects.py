@@ -394,18 +394,36 @@ def main() -> None:
     if not selected:
         sys.exit("Nothing selected.")
 
-    homepages: dict[str, str | None] = {}
+    homepages: dict[str, tuple[str | None, str | None]] = {}
 
-    def homepage(domain: str) -> str | None:
-        """The prospect's homepage HTML, fetched once per run."""
+    def fetch_homepage(domain: str) -> tuple[str | None, str | None]:
+        """The prospect's homepage HTML and where it ended up, fetched once per run."""
         from site_teardown import fetch_html  # same folder as this script
 
         if domain not in homepages:
-            html, _ = fetch_html(f"https://{domain}/")
+            html, final = fetch_html(f"https://{domain}/")
             if html is None:
-                html, _ = fetch_html(f"http://{domain}/")
-            homepages[domain] = html
+                html, final = fetch_html(f"http://{domain}/")
+            homepages[domain] = (html, final)
         return homepages[domain]
+
+    def homepage(domain: str) -> str | None:
+        return fetch_homepage(domain)[0]
+
+    def company_pages(domain: str) -> str | None:
+        """Homepage plus its contact / about / privacy / terms pages - where company details usually sit."""
+        from company_lookup import useful_links
+        from site_teardown import fetch_html
+
+        html, final = fetch_homepage(domain)
+        if html is None:
+            return None
+        pages = [html]
+        for url in useful_links(html, final or f"https://{domain}/"):
+            extra, _ = fetch_html(url, timeout=15)
+            if extra:
+                pages.append(extra)
+        return "\n".join(pages)
 
     if args.check_emails:
         from email_check import check, is_bad
@@ -454,8 +472,11 @@ def main() -> None:
             saved = lookups.get(p["website"])
             if args.recheck or not saved:
                 return True
-            # Matching has improved since this answer: try the unsure / not-found ones again.
-            return saved.get("result") in ("unsure", "none") and (saved.get("logic") or "1") != LOGIC_VERSION
+            if (saved.get("logic") or "1") == LOGIC_VERSION:
+                return False
+            # Matching has improved since this answer: try the unsure / not-found ones again, and
+            # re-confirm company numbers (an older version could take a Gas Safe number for one).
+            return saved.get("result") in ("unsure", "none") or saved.get("how") == "number on their site"
 
         todo = [p for p in selected if not p["_sheet_type"] and needs_lookup(p)]
         print(f"Looking up {len(todo)} firms with no Company type in the sheet on Companies House ...")
@@ -463,7 +484,7 @@ def main() -> None:
         failures_in_a_row = 0
         for i, p in enumerate(todo, 1):
             try:
-                found = lookup(p["business_name"], p.get("area") or "", homepage(p["website"]), ch_key)
+                found = lookup(p["business_name"], p.get("area") or "", company_pages(p["website"]), ch_key)
             except PermissionError as e:
                 write_csv(lookups_path, LOOKUP_FIELDS, lookups)
                 sys.exit(f"{e}.")
