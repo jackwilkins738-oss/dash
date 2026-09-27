@@ -155,6 +155,15 @@ def address_of(row: dict) -> str:
     return ", ".join(str(row[c]).strip() for c in ADDRESS_PARTS if str(row.get(c) or "").strip())
 
 
+def score_line(score) -> str:
+    """Google's own bands - the same words the preview page and the letters use."""
+    if score is None:
+        return ""
+    s = int(score)
+    band = "good" if s >= 90 else "needing improvement" if s >= 50 else "poor"
+    return f"It scored {s} out of 100 on Google's mobile speed test, which Google itself counts as {band}."
+
+
 def number(value):
     try:
         return float(value)
@@ -448,7 +457,7 @@ def main() -> None:
                 f,
                 fieldnames=[
                     "business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status",
-                    "trade", "area", "top_issue",
+                    "trade", "area", "top_issue", "score_line", "issue_line",
                 ],
             )
             writer.writeheader()
@@ -468,6 +477,10 @@ def main() -> None:
                         "trade": (p.get("trade") or "").lower(),
                         "area": p.get("area") or "",
                         "top_issue": p.get("_top_issue") or "",
+                        # Whole sentences, empty when the fact isn't known - so an email template
+                        # using {{score_line}} {{issue_line}} never reads "...and noticed ."
+                        "score_line": score_line(score),
+                        "issue_line": f"I also noticed {p['_top_issue']}." if p.get("_top_issue") else "",
                     }
                 )
         print(f"Wrote {out.name} and {mm.name}")

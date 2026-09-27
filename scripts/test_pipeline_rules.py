@@ -137,6 +137,8 @@ class PushRun(unittest.TestCase):
         self.assertEqual((r["trade"], r["area"], r["greeting_name"]), ("roofing", "Woking", "Ann"))
         self.assertEqual(r["top_issue"], "your phone number isn't tap-to-call on a mobile")
         self.assertEqual(r["mobile_score"], "41")
+        self.assertEqual(r["score_line"], "It scored 41 out of 100 on Google's mobile speed test, which Google itself counts as poor.")
+        self.assertEqual(r["issue_line"], "I also noticed your phone number isn't tap-to-call on a mobile.")
     def test_parallel_speed_checks_record_findings(self):
         import threading
 

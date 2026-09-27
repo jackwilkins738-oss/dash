@@ -48,7 +48,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "15"
+PANEL_VERSION = "16"
 MAX_LOG_LINES = 5000
 
 
@@ -922,6 +922,28 @@ PAGE = r"""<!doctype html>
       <div class="action">
         <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
         <p>Rewrites preview-links and mailmeteor CSVs from the sheet. Never sends anything.</p>
+        <details style="margin-top:6px"><summary>Mailmeteor email to paste</summary>
+          <p class="hint">Subject</p>
+          <textarea id="mm-subject" rows="1" readonly>A quick look at {{business}}'s website</textarea>
+          <p class="hint">Body - {{score_line}} and {{issue_line}} are whole sentences, left empty when a site hasn't been checked, so it always reads right.</p>
+          <textarea id="mm-body" rows="15" readonly>Hi {{greeting_name}},
+
+I had a look at {{business}}'s website on my phone and ran it through Google's own speed test. {{score_line}} {{issue_line}}
+
+I build fast, hand-coded websites for trade firms, and I've put together a short preview of what a new site for {{business}} could look like - next to how your current one measures up:
+
+{{preview_url}}
+
+There's nothing to sign up for. If it's of interest, just reply and I'll happily talk it through.
+
+Kind regards,
+[your name]
+Scalar Digital · 07401 696272 · scalardigital.co.uk
+
+If you'd rather not hear from me again, just reply and say so and I won't get in touch.</textarea>
+          <div class="row"><button id="mm-copy-subject">Copy subject</button><button class="primary" id="mm-copy-body">Copy body</button><span class="saved" id="mm-copied"></span></div>
+          <p class="hint">Replace [your name] once in Mailmeteor. Anyone who replies "no": set their Status to "Lost / not interested" and they're blocked from every list.</p>
+        </details>
       </div>
       <div class="action">
         <button data-action="contacts">Find missing emails &amp; phones</button>
@@ -1139,6 +1161,14 @@ document.querySelectorAll("[data-find]").forEach((b) => b.addEventListener("clic
 try { if (localStorage.getItem("finderOpen") === "0") $("finder-box").open = false; } catch (e) {}
 $("finder-box").addEventListener("toggle", () => { try { localStorage.setItem("finderOpen", $("finder-box").open ? "1" : "0"); } catch (e) {} });
 $("f-areas").addEventListener("keydown", (e) => { if (e.key === "Enter") document.querySelector('[data-find="count"]').click(); });
+// ---- Mailmeteor template
+for (const [btn, box] of [["mm-copy-subject", "mm-subject"], ["mm-copy-body", "mm-body"]]) {
+  $(btn).addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($(box).value); } catch (e) { $(box).select(); document.execCommand("copy"); }
+    $("mm-copied").textContent = "Copied"; setTimeout(() => ($("mm-copied").textContent = ""), 2000);
+  });
+}
+
 // ---- Calls
 const LETTER_WAIT = 7;
 let callData = { viewing: [], letters: [], outcomes: [] };
