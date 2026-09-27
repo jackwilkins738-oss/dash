@@ -42,7 +42,7 @@ SETTING_KEYS = ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_AP
 SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"}
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "4"
+PANEL_VERSION = "5"
 MAX_LOG_LINES = 5000
 
 
@@ -78,6 +78,11 @@ def save_settings(new: dict[str, str]) -> None:
         # A blank secret field means "keep what's saved" - the page never sees the saved value.
         if value or key not in SECRET_KEYS:
             values[key] = value
+    if values.get("COMPANIES_HOUSE_API_KEY"):
+        sys.path.insert(0, str(HERE))
+        from company_lookup import clean_key
+
+        values["COMPANIES_HOUSE_API_KEY"] = clean_key(values["COMPANIES_HOUSE_API_KEY"])
     OUTREACH.mkdir(exist_ok=True)
     SETTINGS_FILE.write_text("".join(f"{k}={values[k]}\n" for k in SETTING_KEYS if values[k]), encoding="utf-8")
 
@@ -420,7 +425,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if route == "/api/settings":
             save_settings(body)
-            return self._json({"ok": True})
+            from company_lookup import key_problem
+
+            ch = load_settings()["COMPANIES_HOUSE_API_KEY"]
+            return self._json({"ok": True, "warning": key_problem(ch) if ch else None})
         if route == "/api/open-folder":
             OUTREACH.mkdir(exist_ok=True)
             open_folder(OUTREACH)
@@ -559,6 +567,7 @@ PAGE = r"""<!doctype html>
         <label>SITE_URL (optional)</label>
         <input type="text" id="SITE_URL" placeholder="https://www.scalardigital.co.uk">
         <div class="row"><button class="primary" id="save">Save</button><span class="saved" id="saved"></span></div>
+        <div class="msg" id="settings-msg"></div>
         <p style="color:var(--dim); font-size:12px">Saved to __OUTREACH__\panel.env on this computer only.</p>
       </details>
     </div>
@@ -658,9 +667,10 @@ $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet"
 $("save").addEventListener("click", async () => {
   const body = {};
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
-  await post("/api/settings", body);
+  const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
+  $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
 });
 poll();
 </script>

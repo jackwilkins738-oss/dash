@@ -444,7 +444,11 @@ def main() -> None:
         ch_key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
         if not ch_key:
             sys.exit("--lookup-companies needs COMPANIES_HOUSE_API_KEY (free: developer.company-information.service.gov.uk).")
-        from company_lookup import LookupFailed, lookup
+        from company_lookup import LookupFailed, key_problem, lookup
+
+        problem = key_problem(ch_key)
+        if problem:
+            sys.exit(f"Can't look up companies: {problem}.")
 
         todo = [p for p in selected if not p["_sheet_type"] and (args.recheck or p["website"] not in lookups)]
         print(f"Looking up {len(todo)} firms with no Company type in the sheet on Companies House ...")

@@ -97,13 +97,35 @@ def pick_by_name(business: str, area: str, items: list[dict]) -> tuple[dict | No
     return None, f"unsure ({len(live)} same-name compan{'y' if len(live) == 1 else 'ies'}, not confirmed)"
 
 
+KEY_SHAPE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def clean_key(api_key: str) -> str:
+    """The key without what copying tends to bring along: quotes, spaces, invisible characters, a 'NAME=' prefix."""
+    key = re.sub(r"[\s\u200b-\u200f\u2060\ufeff]", "", api_key or "")
+    key = key.split("=", 1)[1] if key.upper().startswith("COMPANIES_HOUSE_API_KEY=") else key
+    return key.strip("\"'\u2018\u2019\u201c\u201d")
+
+
+def key_problem(api_key: str) -> str | None:
+    """Why this can't be a Companies House REST key, without repeating the key - or None if it looks right."""
+    key = clean_key(api_key)
+    if KEY_SHAPE.match(key):
+        return None
+    return (
+        f"the saved COMPANIES_HOUSE_API_KEY doesn't look like one: it's {len(key)} characters, and a REST key is 36, "
+        "like 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d. On developer.company-information.service.gov.uk open your "
+        "application and copy the key listed under its keys (not the application ID), then save it in Settings again"
+    )
+
+
 class LookupFailed(Exception):
     """Companies House couldn't be asked. The message says why, in plain words."""
 
 
 def _get(path: str, api_key: str) -> dict:
     """The API's JSON; {} for "not found". Raises PermissionError for a bad key, LookupFailed otherwise."""
-    auth = base64.b64encode(f"{api_key.strip()}:".encode()).decode()
+    auth = base64.b64encode(f"{clean_key(api_key)}:".encode()).decode()
     req = urllib.request.Request(
         API + path,
         headers={"Authorization": f"Basic {auth}", "Accept": "application/json", "User-Agent": USER_AGENT},
@@ -116,6 +138,11 @@ def _get(path: str, api_key: str) -> dict:
             body = e.read(300).decode("utf-8", errors="replace").strip()
             if e.code == 404:
                 return {}
+            if e.code == 400 and "authorization" in body.lower():
+                raise PermissionError(
+                    "Companies House says the key isn't a valid key (400 Invalid Authorization header): "
+                    + (key_problem(api_key) or "it has the right shape, so it may be a Stream key or a deleted one - make a new REST key")
+                ) from e
             if e.code == 401:
                 raise PermissionError(
                     "Companies House rejected the API key (401). Make it a REST key, on an application "
