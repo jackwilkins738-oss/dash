@@ -43,7 +43,7 @@ SETTING_KEYS = ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_AP
 SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"}
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "9"
+PANEL_VERSION = "10"
 MAX_LOG_LINES = 5000
 
 
@@ -241,8 +241,12 @@ def build_find_args(body: dict, settings: dict[str, str]) -> tuple[list[str] | N
     args = ["--trades", ",".join(trades), "--areas", areas, "--age", age, "--max", str(most), "--exclude", exclude]
     if include:
         args += ["--include", include]
+    if (body.get("website_only") or body.get("email_only")) and body.get("no_websites"):
+        return None, "Only firms with an email / a website needs the website search - untick Skip the website search."
     if body.get("website_only"):
         args.append("--website-only")
+    if body.get("email_only"):
+        args.append("--email-only")
     if body.get("no_directors"):
         args.append("--no-directors")
     if body.get("no_websites"):
@@ -599,7 +603,9 @@ PAGE = r"""<!doctype html>
         <input type="text" id="f-include" placeholder="e.g. roof, slate">
         <label for="f-exclude">Leave out names containing</label>
         <input type="text" id="f-exclude" value="holdings, investments, estates, lettings, capital, finance">
+        <label class="check"><input type="checkbox" id="f-email-only"> Only firms with an email found</label>
         <label class="check"><input type="checkbox" id="f-website-only"> Only firms with a website found</label>
+        <p class="hint">With either ticked, Max counts the firms kept - it keeps looking until it has that many.</p>
         <label class="check"><input type="checkbox" id="f-no-directors"> Skip director names (a little faster)</label>
         <label class="check"><input type="checkbox" id="f-no-websites"> Skip the website search (much faster - every firm goes on the No website tab)</label>
       </details>
@@ -784,13 +790,13 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   setTimeout(poll, 150);
 }));
 const FINDER_FIELDS = ["f-areas", "f-age", "f-max", "f-include", "f-exclude"];
-const FINDER_CHECKS = ["f-website-only", "f-no-directors", "f-no-websites"];
+const FINDER_CHECKS = ["f-email-only", "f-website-only", "f-no-directors", "f-no-websites"];
 function finderForm() {
   return {
     trades: [...document.querySelectorAll("#f-trades input:checked")].map((i) => i.value),
     areas: $("f-areas").value, age: $("f-age").value, max: $("f-max").value,
     include: $("f-include").value, exclude: $("f-exclude").value,
-    website_only: $("f-website-only").checked, no_directors: $("f-no-directors").checked, no_websites: $("f-no-websites").checked,
+    email_only: $("f-email-only").checked, website_only: $("f-website-only").checked, no_directors: $("f-no-directors").checked, no_websites: $("f-no-websites").checked,
   };
 }
 function saveFinder() {
@@ -803,7 +809,7 @@ function saveFinder() {
   document.querySelectorAll("#f-trades input").forEach((i) => (i.checked = (f.trades || []).includes(i.value)));
   $("f-areas").value = f.areas || ""; $("f-age").value = f.age || "any"; $("f-max").value = f.max || 100;
   $("f-include").value = f.include || ""; if (f.exclude != null) $("f-exclude").value = f.exclude;
-  $("f-website-only").checked = !!f.website_only; $("f-no-directors").checked = !!f.no_directors; $("f-no-websites").checked = !!f.no_websites;
+  $("f-email-only").checked = !!f.email_only; $("f-website-only").checked = !!f.website_only; $("f-no-directors").checked = !!f.no_directors; $("f-no-websites").checked = !!f.no_websites;
 })();
 document.querySelectorAll("[data-find]").forEach((b) => b.addEventListener("click", async () => {
   saveFinder();

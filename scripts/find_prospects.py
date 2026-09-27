@@ -504,6 +504,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--no-websites", action="store_true", help="skip the website search (much faster)")
     ap.add_argument("--no-directors", action="store_true", help="skip director names")
     ap.add_argument("--website-only", action="store_true", help="leave out firms with no website found")
+    ap.add_argument("--email-only", action="store_true", help="leave out firms with no email found")
     ap.add_argument("--count-only", action="store_true", help="just say how many match")
     args = ap.parse_args(argv)
 
@@ -515,6 +516,8 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit("Give at least one area - a town like Guildford or a postcode district like GU1.")
     if not 1 <= args.max <= 1000:
         sys.exit("--max must be 1-1000.")
+    if (args.email_only or args.website_only) and args.no_websites:
+        sys.exit("Only firms with an email / a website needs the website search - untick Skip the website search.")
     key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
     if not key or key_problem(key):
         sys.exit("Needs a COMPANIES_HOUSE_API_KEY (Settings) - " + (key_problem(key) or "not set") + ".")
@@ -569,8 +572,14 @@ def main(argv: list[str] | None = None) -> None:
         return
     if not keep:
         sys.exit("Nothing new to add - try more areas, another trade, or a wider age range.")
-    keep = keep[: args.max]
-    log(f"Building a list of {len(keep)} ...")
+    filtered = args.email_only or args.website_only
+    if filtered:
+        # "Max" means firms kept: keep checking until there are that many, or no more to check.
+        wants = " and ".join(w for w, on in (("a website", args.website_only), ("an email", args.email_only)) if on)
+        log(f"Checking up to {len(keep)} firms for {args.max} with {wants} ...")
+    else:
+        keep = keep[: args.max]
+        log(f"Building a list of {len(keep)} ...")
 
     from site_teardown import fetch_html
 
@@ -578,25 +587,37 @@ def main(argv: list[str] | None = None) -> None:
     rows: list[dict] = []
     out = output_path(outreach, trades, areas)
     lock = threading.Lock()
-    done = [0]
+    checked = [0]
+    left_out = {"known": 0, "filtered": 0}
 
-    def work(item: dict, trade: str) -> dict | None:
+    def wanted(site: dict, email: str) -> bool:
+        if args.website_only and site["status"] != "confirmed":
+            return False
+        if args.email_only and not email:
+            return False
+        return True
+
+    def work(item: dict, trade: str) -> dict | str:
         try:
             return build_row(item, trade)
         except Exception as e:  # one odd website never costs the whole list
             site = {"status": "none", "website": "", "how": f"website search failed ({type(e).__name__})", "pages": ""}
+            if not wanted(site, ""):
+                return "filtered"
             row = row_for(item, trade, site, "", "", "", 0)
             row["_status"] = "none"
             return row
 
-    def build_row(item: dict, trade: str) -> dict | None:
+    def build_row(item: dict, trade: str) -> dict | str:
         site = {"status": "none", "website": "", "how": "website search skipped", "pages": ""}
         if not args.no_websites:
             site = find_website(item, item["_area"], fetch)
         # Their site is already in a sheet under another name: already known, leave them out.
         if site["website"] and site["website"] in domains:
-            return None
+            return "known"
         email = find_email(site["pages"], site["website"]) if site["pages"] else ""
+        if not wanted(site, email):
+            return "filtered"  # decided before asking for directors - no request wasted
         phone = find_phone(site["pages"]) if site["pages"] else ""
         contact, directors = "", 0
         if not args.no_directors:
@@ -608,29 +629,46 @@ def main(argv: list[str] | None = None) -> None:
         row["_status"] = site["status"]
         return row
 
+    def report(result: dict | str, business: str) -> None:
+        with lock:
+            checked[0] += 1
+            prefix = f"[{len(rows) + (1 if isinstance(result, dict) else 0)}/{args.max if filtered else len(keep)}]"
+            if result == "known":
+                left_out["known"] += 1
+                log(f"{prefix} {business}: skipped - their website is already in your sheets")
+            elif result == "filtered":
+                left_out["filtered"] += 1
+                if not filtered or checked[0] % 10 == 0:
+                    log(f"    ... {checked[0]} checked, {len(rows)} kept so far")
+            else:
+                rows.append(result)
+                site = result["Website"] or (f"maybe {result['Possible website']}" if result["Possible website"] else "no website")
+                bits = [site] + [b for b in (result["Email"], result["Phone"], result["Contact name"]) if b]
+                log(f"{prefix} {result['Business']}: " + " · ".join(bits))
+                if len(rows) % 20 == 0:
+                    write_workbook(out, rows)
+
     try:
         with ThreadPoolExecutor(max_workers=6) as pool:
-            futures = [pool.submit(work, item, trade) for item, trade in keep]
-            for future in as_completed(futures):
-                row = future.result()
-                if row is None:
-                    with lock:
-                        done[0] += 1
-                        log(f"[{done[0]}/{len(keep)}] skipped - their website is already in your sheets")
-                    continue
-                with lock:
-                    rows.append(row)
-                    done[0] += 1
-                    site = row["Website"] or (f"maybe {row['Possible website']}" if row["Possible website"] else "no website")
-                    bits = [site] + [b for b in (row["Email"], row["Phone"], row["Contact name"]) if b]
-                    log(f"[{done[0]}/{len(keep)}] {row['Business']}: " + " · ".join(bits))
-                    if done[0] % 20 == 0:
-                        write_workbook(out, [r for r in rows if not (args.website_only and r["_status"] != "confirmed")])
+            pending = {}
+            queue = iter(keep)
+            while True:
+                # Keep six firms in flight; stop starting new ones once there are enough.
+                while len(pending) < 6 and len(rows) < args.max:
+                    nxt = next(queue, None)
+                    if nxt is None:
+                        break
+                    pending[pool.submit(work, *nxt)] = nxt[0].get("company_name") or ""
+                if not pending:
+                    break
+                done_now = next(as_completed(pending))
+                business = display_name(pending.pop(done_now))
+                if len(rows) >= args.max:
+                    continue  # enough already: this one's work is dropped
+                report(done_now.result(), business)
     except KeyboardInterrupt:
         log("Stopped - saving what's done.")
 
-    if args.website_only:
-        rows = [r for r in rows if r["_status"] == "confirmed"]
     rows.sort(key=lambda r: r["Business"])
     write_workbook(out, rows)
     tally = {s: sum(1 for r in rows if r["_status"] == s) for s in TABS}
@@ -640,6 +678,10 @@ def main(argv: list[str] | None = None) -> None:
     log(f"  Outreach       {tally['confirmed']:>4}  website confirmed ({with_email} with an email found overall)")
     log(f"  Check website  {tally['possible']:>4}  a site with their name but nothing local - confirm, then move to Outreach")
     log(f"  No website     {tally['none']:>4}  letter prospects - their registered address is in the sheet")
+    if filtered:
+        log(f"  ({checked[0]} firms checked; {left_out['filtered']} left out for having no {wants.replace('a ', '').replace('an ', '')})")
+        if len(rows) < args.max:
+            log(f"  Only {len(rows)} of the {args.max} you asked for - that's every match. Try more areas or trades for more.")
     log("Next: pick it in the List box and press Run the whole list.")
 
 
