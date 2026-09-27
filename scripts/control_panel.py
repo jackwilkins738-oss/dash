@@ -41,14 +41,14 @@ PUSH = HERE / "push_prospects.py"
 FIND = HERE / "find_prospects.py"
 SETTING_KEYS = [
     "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
-    "DASHBOARD_API_URL", "SITE_URL",
+    "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "DASHBOARD_API_URL", "SITE_URL",
 ]
 SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN"}
 # A run this long gets a phone alert when it ends (if Telegram is set up).
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "13"
+PANEL_VERSION = "14"
 MAX_LOG_LINES = 5000
 
 
@@ -189,6 +189,8 @@ ACTIONS = {
     "companies": "Look up company types",
     "trades": "Guess missing trades",
     "push": "Push to dashboard",
+    "letters": "Make letters",
+    "install_segno": "Install segno (for letters)",
 }
 
 
@@ -277,6 +279,8 @@ def build_steps(body: dict, settings: dict[str, str]):
     action = body.get("action")
     if action not in ACTIONS:
         return None, "Unknown action."
+    if action == "install_segno":
+        return (lambda job: [("pip", ["install", "segno"])]), ""
     if action in ("find", "count"):
         args, error = build_find_args(body, settings)
         if args is None:
@@ -323,6 +327,10 @@ def build_steps(body: dict, settings: dict[str, str]):
         args.append("--lookup-companies")
     elif action == "trades":
         args.append("--guess-trades")
+    elif action == "letters":
+        args.append("--letters")
+        if body.get("letters_all"):
+            args.append("--letters-all")
     if dry and action != "links":
         args.append("--dry-run")
     return (lambda job: [args]), ""
@@ -375,11 +383,15 @@ class Job:
                 if self.stopping:
                     break
                 script, args = step if isinstance(step, tuple) else (PUSH, step)
-                self.note(f"> python {script.name} {' '.join(a if ' ' not in a else repr(a) for a in args)}")
+                if script == "pip":
+                    argv, shown = [sys.executable, "-m", "pip", *args], "pip " + " ".join(args)
+                else:
+                    argv, shown = [sys.executable, "-u", str(script), *args], script.name + " " + " ".join(a if " " not in a else repr(a) for a in args)
+                self.note(f"> python {shown}")
                 self.note("")
                 with self.lock:
                     self.proc = subprocess.Popen(
-                        [sys.executable, "-u", str(script), *args],
+                        argv,
                         cwd=str(HERE),
                         env=env,
                         stdout=subprocess.PIPE,
@@ -423,6 +435,31 @@ class Job:
                 "lines": list(self.lines),
                 "seq": self.seq,
             }
+
+
+def mark_posted(sheet: str) -> tuple[dict, int]:
+    """Moves the last letters batch for this sheet into letters-sent.csv, dated today."""
+    from datetime import date
+
+    batch = OUTREACH / f"letters-batch-{Path(sheet).stem}.csv"
+    if not batch.exists():
+        return {"error": "No letters batch to mark - make letters first."}, 400
+    with batch.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    sent_path = OUTREACH / "letters-sent.csv"
+    sent: dict[str, dict] = {}
+    if sent_path.exists():
+        with sent_path.open(encoding="utf-8") as f:
+            sent = {r["key"]: r for r in csv.DictReader(f) if r.get("key")}
+    today = date.today().isoformat()
+    for r in rows:
+        sent[r["key"]] = {"key": r["key"], "business": r.get("business", ""), "sheet": r.get("sheet", sheet), "posted": today}
+    with sent_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["key", "business", "sheet", "posted"])
+        writer.writeheader()
+        writer.writerows(sent.values())
+    batch.unlink()
+    return {"ok": True, "message": f"{len(rows)} letter{'s' if len(rows) != 1 else ''} marked as posted today."}, 200
 
 
 REVIEW_KEY = re.compile(r"^(no:[A-Z0-9]{8}|name:[a-z0-9 ]{0,150})$")
@@ -559,6 +596,39 @@ class Handler(BaseHTTPRequestHandler):
                     "site": (settings["SITE_URL"] or "https://www.scalardigital.co.uk").rstrip("/"),
                 }
             )
+        if route.startswith("/letters/"):
+            from urllib.parse import unquote
+
+            name = unquote(route[len("/letters/") :])
+            path = OUTREACH / name
+            if not re.fullmatch(r"letters-[A-Za-z0-9._ -]+\.html", name) or not path.is_file():
+                return self._send(404, b"Not found", "text/plain")
+            return self._send(200, path.read_bytes(), "text/html; charset=utf-8")
+        if route.startswith("/api/letters/"):
+            from urllib.parse import unquote
+
+            name = unquote(route[len("/api/letters/") :])
+            if not sheet_path(name):
+                return self._json({})
+            stem = Path(name).stem
+            batch = OUTREACH / f"letters-batch-{stem}.csv"
+            n = 0
+            if batch.exists():
+                with batch.open(encoding="utf-8") as f:
+                    n = sum(1 for _ in csv.DictReader(f))
+            page = OUTREACH / f"letters-{stem}.html"
+            try:
+                import importlib.util
+
+                has_segno = importlib.util.find_spec("segno") is not None
+            except (ImportError, ValueError):
+                has_segno = False
+            return self._json({"page": page.name if page.exists() else "", "batch": n, "segno": has_segno})
+        if route == "/api/letter-template":
+            import letters
+
+            with_site, no_site = letters.load_templates(OUTREACH)
+            return self._json({"with_site": with_site, "no_site": no_site})
         if route.startswith("/api/review/"):
             from urllib.parse import unquote
 
@@ -593,8 +663,24 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": error}, 400)
             finder = body["action"] in ("find", "count")
             label = ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") and not finder else "")
-            error = JOB.start(label, steps, settings, needs_secret=not finder)
+            error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] != "install_segno")
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
+        if route == "/api/letters/posted":
+            name = str(body.get("sheet") or "")
+            if not sheet_path(name):
+                return self._json({"error": "Pick a sheet first."}, 400)
+            return self._json(*mark_posted(name))
+        if route == "/api/letter-template":
+            import letters
+
+            if body.get("reset"):
+                letters.save_templates(OUTREACH, letters.DEFAULT_TEMPLATE, letters.DEFAULT_TEMPLATE_NO_WEBSITE)
+            else:
+                with_site, no_site = str(body.get("with_site") or ""), str(body.get("no_site") or "")
+                if not with_site.strip() or not no_site.strip() or len(with_site) > 5000 or len(no_site) > 5000:
+                    return self._json({"error": "Both letters need some text (5,000 characters at most)."}, 400)
+                letters.save_templates(OUTREACH, with_site, no_site)
+            return self._json({"ok": True})
         if route == "/api/review":
             return self._json(*review_action(body))
         if route == "/api/stop":
@@ -631,6 +717,7 @@ PAGE = r"""<!doctype html>
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:16px; }
   .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0 0 10px; }
   label { display:block; color:var(--dim); font-size:12px; margin:8px 0 4px; }
+  textarea { width:100%; padding:7px 9px; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; font:12.5px/1.45 ui-monospace, Consolas, monospace; resize:vertical; }
   input[type=text], input[type=password], input[type=number], select { width:100%; padding:7px 9px; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; font:inherit; }
   .row { display:flex; gap:8px; align-items:center; margin-top:8px; }
   .row input[type=number] { width:80px; }
@@ -795,6 +882,17 @@ PAGE = r"""<!doctype html>
         <p>Reads each homepage with no Trade in the sheet, guesses one, and pushes it.</p>
       </div>
       <div class="action">
+        <div class="row" style="margin:0"><button data-action="letters">Make letters</button><span id="letters-links" class="hint"></span></div>
+        <label class="check"><input type="checkbox" id="letters-all"> Include firms already sent one</label>
+        <p>A print-ready A4 letter for every letter-channel firm (and a finder sheet's No website tab): their address in the envelope window, their speed score and worst problem, and a QR code to their preview page. Also pushes, so every code works.</p>
+        <details style="margin-top:6px"><summary>Edit letter text</summary>
+          <p class="hint">Filled in per firm: {greeting} {business} {website} {score_sentence} {issue_sentence} {trade_plural} {area} {sender_email} {sender_phone} {signoff}</p>
+          <label>Firms with a website</label><textarea id="tpl-site" rows="12"></textarea>
+          <label>Firms with no website</label><textarea id="tpl-nosite" rows="10"></textarea>
+          <div class="row"><button class="primary" id="tpl-save">Save text</button><button id="tpl-reset">Back to the original</button><span class="saved" id="tpl-saved"></span></div>
+        </details>
+      </div>
+      <div class="action">
         <button data-action="push">Push to dashboard</button>
         <p>Sends the sheet's changes (names, trades, areas, scores) to the dashboard.</p>
       </div>
@@ -820,6 +918,9 @@ PAGE = r"""<!doctype html>
         <label>TELEGRAM_CHAT_ID</label>
         <input type="text" id="TELEGRAM_CHAT_ID" placeholder="same as in Vercel">
         <p class="hint">Optional: a phone alert when a run longer than 3 minutes finishes. Use the same bot and chat as the website's preview alerts.</p>
+        <label>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</label>
+        <div class="grid2" style="grid-template-columns:1fr 1fr 1fr"><input type="text" id="LETTER_SIGNOFF" placeholder="Scalar Digital"><input type="text" id="LETTER_EMAIL" placeholder="hello@scalardigital.co.uk"><input type="text" id="LETTER_PHONE" placeholder="07401 696272"></div>
+        <p class="hint">Who the letters are from: the name they're signed with, and the email and phone they give.</p>
         <label>DASHBOARD_API_URL (optional)</label>
         <input type="text" id="DASHBOARD_API_URL" placeholder="https://admin.scalardigital.co.uk">
         <label>SITE_URL (optional)</label>
@@ -886,6 +987,7 @@ function render() {
     if (s.sheets.includes(current)) sel.value = current;
     loadProgress();
     loadReview();
+    loadLetters();
   }
   $("files").innerHTML = s.files.map((f) => `<li>${f.name.replace(/</g, "&lt;")}<span>${ago(f.modified)}</span></li>`).join("") || "<li><span>None yet</span></li>";
   if (!settingsLoaded) {
@@ -893,6 +995,7 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE"]) $(k).value = s.settings[k] || "";
     if (!s.settings.PROSPECTS_API_SECRET) $("settings-box").open = true;
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
@@ -919,7 +1022,7 @@ function render() {
     lastLines = j.seq;
   }
   if ((wasRunning && !j.running) || (j.running && ++polls % 15 === 0)) loadProgress();
-  if (wasRunning && !j.running) loadReview();
+  if (wasRunning && !j.running) { loadReview(); loadLetters(); }
   wasRunning = j.running;
 }
 
@@ -934,7 +1037,7 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "push" && !dry && !confirm("Push this sheet to the dashboard?")) return;
   if (action === "all" && !confirm("Run the whole list? It pushes to the dashboard as it goes and can take hours on a long list.")) return;
   $("run-msg").textContent = "";
-  const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value });
+  const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked });
   if (r.error) $("run-msg").textContent = r.error;
   lastLines = -1;
   setTimeout(poll, 150);
@@ -972,6 +1075,42 @@ document.querySelectorAll("[data-find]").forEach((b) => b.addEventListener("clic
 try { if (localStorage.getItem("finderOpen") === "0") $("finder-box").open = false; } catch (e) {}
 $("finder-box").addEventListener("toggle", () => { try { localStorage.setItem("finderOpen", $("finder-box").open ? "1" : "0"); } catch (e) {} });
 $("f-areas").addEventListener("keydown", (e) => { if (e.key === "Enter") document.querySelector('[data-find="count"]').click(); });
+// ---- Letters
+async function loadLetters() {
+  const name = $("sheet").value;
+  if (!name) return;
+  const r = await (await fetch("/api/letters/" + encodeURIComponent(name))).json();
+  const bits = [];
+  if (r.segno === false) bits.push('<button data-action-install>Install segno first</button>');
+  if (r.page) bits.push(`<a href="/letters/${encodeURIComponent(r.page)}" target="_blank" rel="noopener" style="color:var(--accent)">Open letters ↗</a>`);
+  if (r.batch) bits.push(`<button data-posted>Mark ${r.batch} as posted</button>`);
+  $("letters-links").innerHTML = bits.join(" ");
+  const inst = document.querySelector("[data-action-install]");
+  if (inst) inst.addEventListener("click", async () => { await post("/api/run", { action: "install_segno" }); lastLines = -1; showTab("output"); setTimeout(poll, 150); });
+  const posted = document.querySelector("[data-posted]");
+  if (posted) posted.addEventListener("click", async () => {
+    if (!confirm(`Mark these ${r.batch} letters as posted today? They'll be left out of future batches.`)) return;
+    const res = await post("/api/letters/posted", { sheet: name });
+    $("run-msg").style.color = res.error ? "var(--bad)" : "var(--ok)";
+    $("run-msg").textContent = res.error || res.message;
+    loadLetters();
+  });
+}
+(async function loadTemplates() {
+  const t = await (await fetch("/api/letter-template")).json();
+  $("tpl-site").value = t.with_site || ""; $("tpl-nosite").value = t.no_site || "";
+})();
+$("tpl-save").addEventListener("click", async () => {
+  const r = await post("/api/letter-template", { with_site: $("tpl-site").value, no_site: $("tpl-nosite").value });
+  $("tpl-saved").textContent = r.error || "Saved"; setTimeout(() => ($("tpl-saved").textContent = ""), 2500);
+});
+$("tpl-reset").addEventListener("click", async () => {
+  if (!confirm("Put both letters back to the original text?")) return;
+  await post("/api/letter-template", { reset: true });
+  const t = await (await fetch("/api/letter-template")).json();
+  $("tpl-site").value = t.with_site; $("tpl-nosite").value = t.no_site;
+});
+
 // ---- Review tab
 let reviewItems = [], reviewKinds = {}, reviewFilter = "all";
 function esc(t) { return String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -1042,10 +1181,10 @@ async function reviewDecide(b) {
 }
 $("stop").addEventListener("click", () => post("/api/stop"));
 $("open-folder").addEventListener("click", () => post("/api/open-folder"));
-$("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); });
+$("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
