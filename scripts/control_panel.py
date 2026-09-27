@@ -42,7 +42,7 @@ SETTING_KEYS = ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_AP
 SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"}
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "5"
+PANEL_VERSION = "6"
 MAX_LOG_LINES = 5000
 
 
@@ -697,6 +697,7 @@ def stop_old_panel(port: int) -> None:
     if sys.platform == "win32":
         command = (
             f"Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue | "
+            f"Where-Object {{ $_.OwningProcess -ne {os.getpid()} }} | "
             "ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"
         )
         subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, timeout=30)
@@ -705,20 +706,35 @@ def stop_old_panel(port: int) -> None:
     time.sleep(1)
 
 
+class PanelServer(ThreadingHTTPServer):
+    # On Windows, "reuse address" lets a second server share a port that's in use, and the
+    # browser keeps talking to the old one - so an update never showed. Claim the port alone.
+    allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self) -> None:
+        if sys.platform == "win32":
+            import socket
+
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def start_server(port: int) -> ThreadingHTTPServer | str | None:
     """Our server - replacing an older panel still running on the port. "same" if this
     version is already running (left alone: it may be mid-run), None if something else has the port."""
-    for attempt in range(2):
+    # Ask first, rather than rely on the port being refused.
+    version = running_panel_version(port)
+    if version == PANEL_VERSION:
+        return "same"
+    if version is not None:
+        print(f"Closing the panel that was already running ({'v' + version if version else 'an old version'}) and starting v{PANEL_VERSION} ...")
+        stop_old_panel(port)
+    for attempt in range(3):
         try:
-            return ThreadingHTTPServer(("127.0.0.1", port), Handler)
+            return PanelServer(("127.0.0.1", port), Handler)
         except OSError:
-            version = running_panel_version(port)
-            if version == PANEL_VERSION:
-                return "same"
-            if version is None or attempt:
-                return None
-            label = f"v{version}" if version else "an old version"
-            print(f"Closing the panel that was already running ({label}) and starting v{PANEL_VERSION} ...")
+            if running_panel_version(port) is None:
+                return None  # not a panel - never close someone else's program
             stop_old_panel(port)
     return None
 
