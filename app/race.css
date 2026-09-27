@@ -169,8 +169,14 @@
 }
 .race-name {
   flex: 1;
+  min-width: 0;
   font: 700 10.5px/1 var(--font-display);
   letter-spacing: 0.06em;
+  /* A real prospect's name (preview pages) can be far longer than
+     "YOUR FIRM" - keep it on one line inside the phone's header. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .race-burger {
   width: 14px;

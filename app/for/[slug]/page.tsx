@@ -7,8 +7,10 @@ import { Pricing } from '@/components/pricing'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { PreviewBeacon } from '@/components/preview-beacon'
+import { PreviewRace } from '@/components/preview-race'
+import { MIN_RACE_GAP_MS, SCALAR_BUILD } from '@/lib/speedRace'
 import { getProspect, type Prospect } from '@/lib/prospect-api'
-import { showcaseIdForTradeText } from '@/lib/showcase'
+import { SHOWCASE_TRADES, showcaseIdForTradeText } from '@/lib/showcase'
 import { teardownFindings, teardownPasses } from '@/lib/teardown'
 
 // A private page for one business Scalar is reaching out to: their real
@@ -70,6 +72,15 @@ export default async function ProspectPreviewPage({ params }: Props) {
   const checkedAt = p.teardown_at ? new Date(p.teardown_at) : null
   const findings = checkedAt ? teardownFindings(p.teardown, checkedAt.getUTCFullYear()) : []
   const passes = teardownPasses(p.teardown)
+
+  // The personal race only renders on measured figures, and only when it's a
+  // clear win: a Scalar build that's been measured, their LCP known, and at
+  // least MIN_RACE_GAP_MS slower. Otherwise the section simply isn't there.
+  const theirLcpMs = p.lcp_s != null ? Math.round(p.lcp_s * 1000) : null
+  const scene = SHOWCASE_TRADES.find((t) => t.id === sceneId)
+  const raceCopy = scene ? { eyebrow: scene.eyebrow, headline: scene.headline, cta: scene.cta } : undefined
+  const showRace =
+    SCALAR_BUILD.lcpMs != null && theirLcpMs != null && p.website != null && theirLcpMs - SCALAR_BUILD.lcpMs >= MIN_RACE_GAP_MS
   const checkedOn = checkedAt
     ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).format(checkedAt)
     : null
@@ -136,6 +147,18 @@ export default async function ProspectPreviewPage({ params }: Props) {
           </div>
         </div>
       </section>
+
+      {showRace && (
+        <PreviewRace
+          firmName={p.business_name}
+          website={p.website!}
+          theirLcpMs={theirLcpMs!}
+          scalarLcpMs={SCALAR_BUILD.lcpMs!}
+          scalarPage={SCALAR_BUILD.page}
+          scalarMeasuredOn={SCALAR_BUILD.measuredOn}
+          copy={raceCopy}
+        />
+      )}
 
       {findings.length > 0 && p.website && (
         <section className="border-t border-border py-20 sm:py-24">

@@ -139,13 +139,19 @@ export function SpeedRace() {
   )
 }
 
-function RacePhone({
+// Exported for the personal race on prospect preview pages
+// (components/preview-race.tsx), which reuses the same phone.
+export function RacePhone({
   kind,
   stage,
   t,
   doneAt,
   label,
   finished,
+  firmName = 'YOUR FIRM',
+  doneLabel = 'Loaded',
+  showBanner = true,
+  copy = { eyebrow: 'Loft conversions', headline: 'More room, without the move.', cta: 'Book a survey' },
 }: {
   kind: 'slow' | 'fast'
   stage: Stage
@@ -153,8 +159,16 @@ function RacePhone({
   doneAt: number
   label: string
   finished: boolean
+  firmName?: string
+  doneLabel?: string
+  /** The homepage illustration's late cookie banner. Never shown for a real
+      prospect's site - reaching "done" counts as passing the banner stage,
+      so without this switch it would appear on every finished phone. */
+  showBanner?: boolean
+  copy?: { eyebrow: string; headline: string; cta: string }
 }) {
   const on = (s: Stage) => reached(stage, s)
+  const bannerOn = showBanner && kind === 'slow' && on('banner')
   const complete = on('done')
   // A stopwatch that stops when its own page finishes: the fast one freezes
   // at its result while the other carries on counting.
@@ -168,15 +182,15 @@ function RacePhone({
           <span className="race-spinner" data-on={stage === 'blank'} />
 
           {/* The cookie banner that arrives late and shoves the page down. */}
-          <div className="race-banner" data-on={kind === 'slow' && on('banner')}>
+          <div className="race-banner" data-on={bannerOn}>
             <span>We value your privacy</span>
             <span className="race-banner-btn">Accept all</span>
           </div>
 
-          <div className="race-content" data-shifted={kind === 'slow' && on('banner')}>
+          <div className="race-content" data-shifted={bannerOn}>
             <div className="race-head" data-on={on('header')}>
               <span className="race-mark" />
-              <span className="race-name">YOUR FIRM</span>
+              <span className="race-name">{firmName}</span>
               <span className="race-burger" />
             </div>
 
@@ -187,9 +201,9 @@ function RacePhone({
                 <span />
               </div>
               <div className="race-copy" data-on={on('hero')}>
-                <span className="race-eyebrow">Loft conversions</span>
-                <span className="race-h">More room, without the move.</span>
-                <span className="race-cta">Book a survey</span>
+                <span className="race-eyebrow">{copy.eyebrow}</span>
+                <span className="race-h">{copy.headline}</span>
+                <span className="race-cta">{copy.cta}</span>
               </div>
             </div>
 
@@ -208,7 +222,7 @@ function RacePhone({
           {formatSeconds(shown)}
         </span>
         <span className="race-status" data-done={complete}>
-          {complete ? 'Loaded' : finished ? '' : 'Loading…'}
+          {complete ? doneLabel : finished ? '' : 'Loading…'}
         </span>
       </div>
     </div>

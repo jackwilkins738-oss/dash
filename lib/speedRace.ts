@@ -50,3 +50,44 @@ export function progressAt(t: number, doneAt: number): number {
 export function formatSeconds(ms: number): string {
   return `${(Math.round(Math.max(0, ms) / 100) / 10).toFixed(1)}s`
 }
+
+// ---------------------------------------------------------------------
+// The personal race on a prospect's preview page (app/for/[slug]): a
+// Scalar build against their own site, both on MEASURED figures from the
+// same Google PageSpeed mobile test - Largest Contentful Paint, the moment
+// the main content appears.
+// ---------------------------------------------------------------------
+
+/**
+ * A real Scalar build, measured on Google's mobile test. `lcpMs` stays null
+ * until it has actually been measured, and the personal race doesn't render
+ * while it's null - so no unmeasured number can ever appear on a page.
+ * Re-measure (median of 3 runs) whenever the example build changes.
+ */
+export const SCALAR_BUILD: { lcpMs: number | null; page: string; measuredOn: string } = {
+  lcpMs: null,
+  page: 'the Verdigris Roofing example build',
+  measuredOn: '',
+}
+
+/** Only race when it's a clear win - a near-tie would work against the page. */
+export const MIN_RACE_GAP_MS = 1000
+
+/**
+ * A load timeline shaped around one measured figure (LCP): the header
+ * shows partway, and the main content and images land at LCP. No cookie
+ * banner - that's only in the homepage's illustration, never assumed
+ * about a real prospect's site.
+ */
+export function timelineFromLcp(lcpMs: number): Timeline {
+  const lcp = Math.max(100, Math.round(lcpMs))
+  return { header: Math.round(lcp * 0.4), hero: lcp, images: lcp, done: lcp }
+}
+
+/**
+ * How much faster than real time to play the race so it never runs longer
+ * than `capMs`. 1 = real time. The clocks always show the true seconds.
+ */
+export function raceSpeedFactor(slowestMs: number, capMs = 8000): number {
+  return slowestMs > capMs ? slowestMs / capMs : 1
+}

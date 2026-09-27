@@ -1,6 +1,15 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { RACE, STAGE_ORDER, formatSeconds, progressAt, reached, stageAt } from './speedRace.ts'
+import {
+  RACE,
+  STAGE_ORDER,
+  formatSeconds,
+  progressAt,
+  raceSpeedFactor,
+  reached,
+  stageAt,
+  timelineFromLcp,
+} from './speedRace.ts'
 
 describe('stageAt', () => {
   it('starts blank, before anything has loaded', () => {
@@ -101,5 +110,31 @@ describe('formatSeconds', () => {
 
   it('never shows a negative time', () => {
     assert.equal(formatSeconds(-500), '0.0s')
+  })
+})
+
+describe('timelineFromLcp', () => {
+  it('lands the main content and images at the measured LCP', () => {
+    const t = timelineFromLcp(5400)
+    assert.equal(t.hero, 5400)
+    assert.equal(t.done, 5400)
+    assert.equal(t.header, 2160)
+    assert.equal(stageAt(t, 5399), 'header')
+    assert.equal(stageAt(t, 5400), 'done')
+  })
+
+  it('never invents a cookie banner for a real site', () => {
+    assert.equal(timelineFromLcp(5400).banner, undefined)
+  })
+})
+
+describe('raceSpeedFactor', () => {
+  it('plays in real time when the slow side is short enough', () => {
+    assert.equal(raceSpeedFactor(5400), 1)
+    assert.equal(raceSpeedFactor(8000), 1)
+  })
+
+  it('speeds up long races so they finish in the cap', () => {
+    assert.equal(raceSpeedFactor(27800), 27800 / 8000)
   })
 })
