@@ -222,6 +222,28 @@ class EndToEnd(unittest.TestCase):
         # Known firm, holding company, partnership and non-roofer all left out.
         self.assertIn("1 already in your sheets", out)
 
+    def test_email_only_keeps_just_firms_with_an_email(self):
+        import openpyxl
+
+        out = self.run_finder("--email-only")
+        wb = openpyxl.load_workbook(next(self.outreach.glob("roofing-guildford-*.xlsx")))
+        names = [r[0].value for tab in wb.worksheets for r in tab.iter_rows(min_row=2)]
+        self.assertEqual(names, ["Smith Roofing"])
+        self.assertIn("left out for having no email", out)
+        self.assertIn("Only 1 of the 100", out)
+
+    def test_max_counts_kept_firms_when_filtering(self):
+        import openpyxl
+
+        self.run_finder("--email-only", "--max", "1")
+        wb = openpyxl.load_workbook(next(self.outreach.glob("roofing-guildford-*.xlsx")))
+        self.assertEqual(sum(ws.max_row - 1 for ws in wb.worksheets), 1)
+
+    def test_email_only_needs_the_website_search(self):
+        with self.assertRaises(SystemExit) as e:
+            self.run_finder("--email-only", "--no-websites")
+        self.assertIn("website search", str(e.exception))
+
     def test_count_only_writes_nothing(self):
         out = self.run_finder("--count-only")
         self.assertIn("3 new to you", out)
