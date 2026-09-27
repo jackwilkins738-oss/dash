@@ -168,6 +168,37 @@ class PushRun(unittest.TestCase):
         self.assertEqual(peak[0], 4, out)  # four at a time, never more
         self.assertIn("55/100, 1 issue - worst: there's no enquiry form on your homepage", out)
         self.assertIn("broken.co.uk: check failed (RuntimeError)", out)
+    def test_find_contacts_fills_blanks_and_never_overrides_the_sheet(self):
+        make_sheet(self.dir / "c.xlsx", [
+            {"Business": "Blank Roofing", "Website": "blank.co.uk", "Status": "New", "Company type": "Ltd"},
+            {"Business": "Has Email Roofing", "Website": "hasemail.co.uk", "Status": "New", "Email": "mine@hasemail.co.uk", "Company type": "Ltd", "Contact name": "Sue Bell"},
+        ])
+        with (self.dir / "company-lookups.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["website", "result", "number", "company_type"])
+            w.writerow(["blank.co.uk", "company", "01234567", "Ltd"])
+        pages = {
+            "https://blank.co.uk/": ('<a href="tel:01483 222333">x</a><a href="/contact">c</a>', "https://blank.co.uk/"),
+            "https://blank.co.uk/contact": ("<p>office@blank.co.uk</p>", "https://blank.co.uk/contact"),
+            "https://hasemail.co.uk/": ("<p>other@hasemail.co.uk 01483 999000</p>", "https://hasemail.co.uk/"),
+        }
+        officers = {"items": [{"name": "BLANK, Tom", "officer_role": "director", "appointed_on": "2010-01-01"}]}
+        buf = io.StringIO()
+        env = {"PROSPECTS_API_SECRET": "x" * 40, "COMPANIES_HOUSE_API_KEY": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"}
+        with mock.patch.dict(os.environ, env), redirect_stdout(buf), \
+                mock.patch("site_teardown.fetch_html", lambda url, timeout=20: pages.get(url, (None, None))), \
+                mock.patch("company_lookup._get", lambda path, key: officers), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "c.xlsx"), "--find-contacts", "--dry-run"]):
+            import push_prospects
+
+            push_prospects.main()
+        out = buf.getvalue()
+        self.assertIn("Blank Roofing: office@blank.co.uk · 01483 222333 · Tom Blank", out)
+        with (self.dir / "mailmeteor-c.csv").open(encoding="utf-8") as f:
+            rows = {r["business"]: r for r in csv.DictReader(f)}
+        self.assertEqual((rows["Blank Roofing"]["email"], rows["Blank Roofing"]["greeting_name"]), ("office@blank.co.uk", "Tom"))
+        # The sheet's own email and contact win over anything found.
+        self.assertEqual((rows["Has Email Roofing"]["email"], rows["Has Email Roofing"]["greeting_name"]), ("mine@hasemail.co.uk", "Sue"))
 
 
 class Review(unittest.TestCase):

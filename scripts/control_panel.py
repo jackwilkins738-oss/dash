@@ -48,7 +48,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "12"
+PANEL_VERSION = "13"
 MAX_LOG_LINES = 5000
 
 
@@ -184,6 +184,7 @@ ACTIONS = {
     "links": "Refresh preview links + Mailmeteor CSV",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
+    "contacts": "Find missing emails & phones",
     "emails": "Check emails",
     "companies": "Look up company types",
     "trades": "Guess missing trades",
@@ -195,7 +196,7 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
     """Everything the list needs, in order: the quick checks for everyone, then
     speed checks in batches - each batch pushed and logged, so stopping part-way
     loses nothing."""
-    first = ["--sheet", sheet, "--check-emails", "--guess-trades"]
+    first = ["--sheet", sheet, "--find-contacts", "--check-emails", "--guess-trades"]
     if settings.get("COMPANIES_HOUSE_API_KEY"):
         first.append("--lookup-companies")
     else:
@@ -312,6 +313,8 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not only:
             return None, "Type part of the business name or website."
         args += ["--teardown", "--only", only]
+    elif action == "contacts":
+        args.append("--find-contacts")
     elif action == "emails":
         args.append("--check-emails")
     elif action == "companies":
@@ -758,7 +761,7 @@ PAGE = r"""<!doctype html>
       <h2>Run</h2>
       <div class="action">
         <button class="primary" data-action="all">Run the whole list</button>
-        <p>Checks emails, looks up company types, guesses trades, then speed checks every site left (4 at once, pushed every 10). Keeps the PC awake; start it and walk away - Stop loses nothing.</p>
+        <p>Looks up company types, finds missing emails &amp; phones, checks emails, guesses trades, then speed checks every site left (4 at once, pushed every 10). Keeps the PC awake; start it and walk away - Stop loses nothing.</p>
       </div>
       <label class="check" style="margin:14px 0 4px; border-top:1px solid var(--line); padding-top:10px"><input type="checkbox" id="dry"> Dry run - write the CSVs, send nothing to the dashboard</label>
 
@@ -774,6 +777,10 @@ PAGE = r"""<!doctype html>
       <div class="action">
         <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
         <p>Rewrites preview-links and mailmeteor CSVs from the sheet. Never sends anything.</p>
+      </div>
+      <div class="action">
+        <button data-action="contacts">Find missing emails &amp; phones</button>
+        <p>For firms with a blank email, phone or contact name: reads their own site, and takes the contact from their directors once Look up company types has confirmed them. Your sheet is never changed.</p>
       </div>
       <div class="action">
         <button data-action="emails">Check emails</button>
