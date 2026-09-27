@@ -48,7 +48,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "14"
+PANEL_VERSION = "15"
 MAX_LOG_LINES = 5000
 
 
@@ -437,6 +437,54 @@ class Job:
             }
 
 
+def calls_for(sheet: str) -> dict:
+    import calls
+
+    settings = load_settings()
+    secret = settings["PROSPECTS_API_SECRET"]
+    if len(secret) < 32:
+        return {"viewing": [], "letters": [], "message": "Add PROSPECTS_API_SECRET in Settings first."}
+    api = (settings["DASHBOARD_API_URL"] or "https://admin.scalardigital.co.uk").rstrip("/")
+    site = (settings["SITE_URL"] or "https://www.scalardigital.co.uk").rstrip("/")
+    tenant = os.environ.get("SCALAR_TENANT_ID", "abdc6408-1fd5-4fb6-9c4c-53600b571a6d")
+    message = ""
+    try:
+        activity = calls.fetch_activity(api, secret, tenant)
+    except calls.DashboardMissing as e:
+        activity, message = None, str(e)
+    try:
+        out = calls.call_list(OUTREACH, sheet, secret, site, activity)
+    except Exception as e:  # a sheet open in Excel, an odd file
+        return {"viewing": [], "letters": [], "message": f"Couldn't read {sheet}: {e}"}
+    out["message"] = message
+    out["outcomes"] = calls.OUTCOMES
+    return out
+
+
+def call_action(body: dict) -> tuple[dict, int]:
+    import calls
+    from contact_rules import add_to_blocklist
+
+    sheet = str(body.get("sheet") or "")
+    key = str(body.get("key") or "")
+    outcome = str(body.get("outcome") or "")
+    business = str(body.get("business") or "")[:150]
+    if not sheet_path(sheet) or not REVIEW_KEY.match(key) or outcome not in calls.OUTCOMES or not business:
+        return {"error": "That doesn't look right."}, 400
+    note = str(body.get("note") or "")[:300]
+    calls.log_call(OUTREACH, sheet, key, business, outcome, note)
+    if outcome == "Not interested":
+        website, email = str(body.get("website") or "").lower(), str(body.get("email") or "").strip()
+        entries = [("name", business)]
+        if DOMAIN.match(website):
+            entries.append(("website", website))
+        if EMAIL.match(email):
+            entries.append(("email", email))
+        add_to_blocklist(OUTREACH, entries, "not interested (call)")
+        return {"ok": True, "message": f"{business}: logged, and they won't be contacted again"}, 200
+    return {"ok": True, "message": f"{business}: {outcome} logged"}, 200
+
+
 def mark_posted(sheet: str) -> tuple[dict, int]:
     """Moves the last letters batch for this sheet into letters-sent.csv, dated today."""
     from datetime import date
@@ -624,6 +672,13 @@ class Handler(BaseHTTPRequestHandler):
             except (ImportError, ValueError):
                 has_segno = False
             return self._json({"page": page.name if page.exists() else "", "batch": n, "segno": has_segno})
+        if route.startswith("/api/calls/"):
+            from urllib.parse import unquote
+
+            name = unquote(route[len("/api/calls/") :])
+            if not sheet_path(name):
+                return self._json({"viewing": [], "letters": []})
+            return self._json(calls_for(name))
         if route == "/api/letter-template":
             import letters
 
@@ -681,6 +736,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"error": "Both letters need some text (5,000 characters at most)."}, 400)
                 letters.save_templates(OUTREACH, with_site, no_site)
             return self._json({"ok": True})
+        if route == "/api/calls":
+            return self._json(*call_action(body))
         if route == "/api/review":
             return self._json(*review_action(body))
         if route == "/api/stop":
@@ -708,6 +765,7 @@ PAGE = r"""<!doctype html>
 <style>
   :root { --bg:#0f1115; --card:#171a21; --line:#262b35; --text:#e7e9ee; --dim:#8b93a3; --accent:#4f8cff; --ok:#3ecf8e; --bad:#ff6b6b; --warn:#f5b84b; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
   header { display:flex; align-items:center; gap:16px; padding:14px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
   header h1 { font-size:16px; margin:0; margin-right:auto; }
@@ -936,10 +994,15 @@ PAGE = r"""<!doctype html>
     <div class="tabs">
       <button class="tab on" data-tab="output">Output</button>
       <button class="tab" data-tab="review">Review<span class="badge" id="review-count" hidden></span></button>
+      <button class="tab" data-tab="calls">Calls<span class="badge" id="calls-count" hidden style="background:var(--ok)"></span></button>
     </div>
     <div id="pane-output">
       <div class="status"><span class="dot" id="dot"></span><b id="job-label">Nothing running</b><span id="job-time" style="color:var(--dim)"></span><span style="margin-left:auto"></span><button class="danger" id="stop" disabled>Stop</button></div>
       <pre id="log">Pick a button on the left. Output appears here.</pre>
+    </div>
+    <div id="pane-calls" hidden>
+      <div class="toast" id="calls-toast"></div>
+      <div id="calls" style="height:calc(100vh - 230px); min-height:320px; overflow:auto"></div>
     </div>
     <div id="pane-review" hidden>
       <div class="chips" id="review-filters" style="margin-bottom:8px"></div>
@@ -988,6 +1051,7 @@ function render() {
     loadProgress();
     loadReview();
     loadLetters();
+    if (!$("pane-calls").hidden) loadCalls();
   }
   $("files").innerHTML = s.files.map((f) => `<li>${f.name.replace(/</g, "&lt;")}<span>${ago(f.modified)}</span></li>`).join("") || "<li><span>None yet</span></li>";
   if (!settingsLoaded) {
@@ -1075,6 +1139,57 @@ document.querySelectorAll("[data-find]").forEach((b) => b.addEventListener("clic
 try { if (localStorage.getItem("finderOpen") === "0") $("finder-box").open = false; } catch (e) {}
 $("finder-box").addEventListener("toggle", () => { try { localStorage.setItem("finderOpen", $("finder-box").open ? "1" : "0"); } catch (e) {} });
 $("f-areas").addEventListener("keydown", (e) => { if (e.key === "Enter") document.querySelector('[data-find="count"]').click(); });
+// ---- Calls
+const LETTER_WAIT = 7;
+let callData = { viewing: [], letters: [], outcomes: [] };
+function agoIso(iso) { return iso ? ago(new Date(iso).getTime() / 1000) : ""; }
+async function loadCalls() {
+  const name = $("sheet").value;
+  if (!name) return;
+  callData = await (await fetch("/api/calls/" + encodeURIComponent(name))).json();
+  renderCalls();
+}
+function callRow(i, section) {
+  const phone = i.phone ? `<a href="tel:${esc(i.phone.replace(/\s/g, ""))}" style="font-size:14px">📞 ${esc(i.phone)}</a>` : '<span class="hint">no phone - check their site</span>';
+  const seen = section === "viewing"
+    ? `<b style="color:var(--ok)">${i.views} visit${i.views === 1 ? "" : "s"}</b> · last ${esc(agoIso(i.last_viewed))}`
+    : `letter posted ${i.waited} days ago · not opened yet`;
+  const last = i.last_call ? ` · last call: ${esc(i.last_call)} ${esc(agoIso(i.last_call_at))}` : "";
+  return `<div class="ritem" data-key="${esc(i.key)}" data-sec="${section}">
+    <div class="top"><b>${esc(i.business)}</b>${i.contact ? `<span class="hint">${esc(i.contact)}</span>` : ""}${phone}
+      <a href="${esc(i.preview)}" target="_blank" rel="noopener">their preview ↗</a>
+      <a href="https://${esc(i.website)}" target="_blank" rel="noopener">${esc(i.website)} ↗</a></div>
+    <div class="why">${seen}${last}</div>
+    <div class="btns">${(callData.outcomes || []).map((o) => `<button data-outcome="${esc(o)}" ${o === "Not interested" ? 'class="danger"' : o === "Interested" || o === "Won" ? 'class="primary"' : ""}>${esc(o)}</button>`).join("")}
+      <input type="text" placeholder="note (optional)" data-note></div>
+  </div>`;
+}
+function renderCalls() {
+  const n = (callData.viewing || []).length;
+  $("calls-count").hidden = !n; $("calls-count").textContent = n;
+  const msg = callData.message
+    ? `<div class="ritem"><b>${esc(callData.message)}</b><div class="why">The call list needs one small, read-only addition to your dashboard: a list of who opened their preview. Until it's live the call list stays empty - nothing else is affected.</div></div>` : "";
+  const tps = '<p class="hint">Check each number against <a href="https://www.tpsonline.org.uk/" target="_blank" rel="noopener" style="color:var(--accent)">TPS / CTPS</a> before you call.</p>';
+  const v = (callData.viewing || []).map((i) => callRow(i, "viewing")).join("") || '<p class="hint">Nobody new has opened their preview since your last calls.</p>';
+  const l = (callData.letters || []).map((i) => callRow(i, "letters")).join("") || '<p class="hint">No letters waiting on a follow-up.</p>';
+  $("calls").innerHTML = msg + tps + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em">Looking at their preview - hottest first</h2>` + v
+    + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:18px">Letter follow-ups (${LETTER_WAIT} days+, not opened)</h2>` + l;
+  document.querySelectorAll("#calls [data-outcome]").forEach((b) => b.addEventListener("click", () => callOutcome(b)));
+}
+async function callOutcome(b) {
+  const card = b.closest(".ritem");
+  const list = callData[card.dataset.sec === "viewing" ? "viewing" : "letters"];
+  const item = list.find((x) => x.key === card.dataset.key);
+  const outcome = b.dataset.outcome;
+  if (outcome === "Not interested" && !confirm(`${item.business}: not interested? They won't be contacted again, from any list.`)) return;
+  const r = await post("/api/calls", { sheet: $("sheet").value, key: item.key, business: item.business, outcome,
+    note: card.querySelector("[data-note]").value, website: item.website, email: item.email });
+  $("calls-toast").style.color = r.error ? "var(--bad)" : "var(--ok)";
+  $("calls-toast").textContent = r.error || r.message;
+  if (!r.error) loadCalls();
+}
+setInterval(() => { if (!$("pane-calls").hidden) loadCalls(); }, 60000);
+
 // ---- Letters
 async function loadLetters() {
   const name = $("sheet").value;
@@ -1116,8 +1231,9 @@ let reviewItems = [], reviewKinds = {}, reviewFilter = "all";
 function esc(t) { return String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function showTab(name) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("on", t.dataset.tab === name));
-  $("pane-output").hidden = name !== "output"; $("pane-review").hidden = name !== "review";
+  $("pane-output").hidden = name !== "output"; $("pane-review").hidden = name !== "review"; $("pane-calls").hidden = name !== "calls";
   if (name === "review") loadReview();
+  if (name === "calls") loadCalls();
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
 async function loadReview() {
@@ -1181,7 +1297,7 @@ async function reviewDecide(b) {
 }
 $("stop").addEventListener("click", () => post("/api/stop"));
 $("open-folder").addEventListener("click", () => post("/api/open-folder"));
-$("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); });
+$("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (!$("pane-calls").hidden) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
@@ -1191,6 +1307,7 @@ $("save").addEventListener("click", async () => {
   $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
 });
 if (location.hash === "#tab-review") showTab("review");
+if (location.hash === "#tab-calls") showTab("calls");
 poll();
 </script>
 </body>
