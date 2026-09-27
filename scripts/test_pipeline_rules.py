@@ -268,6 +268,63 @@ class Letters(unittest.TestCase):
                 self.assertEqual(len(list(csv.DictReader(f))), 3)
 
 
+class CallList(unittest.TestCase):
+    def test_joins_views_with_local_phones_and_letter_dates(self):
+        import calls
+        import overrides
+        from datetime import datetime, timezone
+        from push_prospects import make_slug
+
+        secret = "x" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Outreach"
+            ws.append(["Business", "Website", "Status", "Phone", "Contact name"])
+            ws.append(["Hot Roofing", "hot.co.uk", "New", "01483 111111", "Amy Hot"])
+            ws.append(["Warm Roofing", "warm.co.uk", "New", "01483 222222", ""])
+            ws.append(["Quiet Roofing", "quiet.co.uk", "New", "", ""])
+            ws.append(["Called Roofing", "called.co.uk", "New", "01483 444444", ""])
+            ws.append(["No Roofing", "no.co.uk", "New", "01483 555555", ""])
+            wb.save(d / "s.xlsx")
+            with (d / "contacts-found.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["website", "email", "phone", "contact", "address", "checked_at"])
+                w.writerow(["quiet.co.uk", "", "07700 900000", "", "", ""])
+            with (d / "letters-sent.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["key", "business", "sheet", "posted"])
+                w.writerow([overrides.row_key({"Business": "Quiet Roofing"}), "Quiet Roofing", "s.xlsx", "2026-09-10"])
+            calls.log_call(d, "s.xlsx", overrides.row_key({"Business": "No Roofing"}), "No Roofing", "Not interested")
+            now = datetime(2026, 9, 27, 12, tzinfo=timezone.utc)
+            act = {
+                make_slug("Hot Roofing", "hot.co.uk", secret): {"view_count": 3, "last_viewed_at": "2026-09-27T11:00:00Z"},
+                make_slug("Warm Roofing", "warm.co.uk", secret): {"view_count": 1, "last_viewed_at": "2026-09-20T11:00:00Z"},
+                make_slug("No Roofing", "no.co.uk", secret): {"view_count": 5, "last_viewed_at": "2026-09-27T11:00:00Z"},
+            }
+            out = calls.call_list(d, "s.xlsx", secret, "https://site", act, now)
+            self.assertEqual([i["business"] for i in out["viewing"]], ["Hot Roofing", "Warm Roofing"])
+            hot = out["viewing"][0]
+            self.assertEqual((hot["phone"], hot["contact"], hot["views"]), ("01483 111111", "Amy Hot", 3))
+            self.assertTrue(hot["preview"].endswith("?src=dashboard"))  # your own look isn't counted as theirs
+            self.assertEqual([(i["business"], i["phone"], i["waited"]) for i in out["letters"]], [("Quiet Roofing", "07700 900000", 17)])
+            # Called after their last visit: off the list until they look again.
+            with (d / "calls.csv").open("a", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerow([overrides.row_key({"Business": "Hot Roofing"}), "s.xlsx", "Hot Roofing", "No answer", "", "2026-09-27T12:30:00+00:00"])
+            later = datetime(2026, 9, 27, 13, tzinfo=timezone.utc)
+            self.assertEqual([i["business"] for i in calls.call_list(d, "s.xlsx", secret, "https://site", act, later)["viewing"]], ["Warm Roofing"])
+
+    def test_dashboard_without_the_endpoint(self):
+        import calls
+        import urllib.error
+
+        err = urllib.error.HTTPError("u", 404, "nf", {}, io.BytesIO(b""))
+        with mock.patch.object(calls.urllib.request, "urlopen", side_effect=err):
+            with self.assertRaisesRegex(calls.DashboardMissing, "activity update"):
+                calls.fetch_activity("https://x", "s", "t")
+
+
 class Review(unittest.TestCase):
     def setUp(self):
         import openpyxl
