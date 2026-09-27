@@ -47,6 +47,9 @@ Outputs, beside the sheet:
                      firm (and a finder sheet's No website tab), each with a QR code to their
                      preview page. Skips firms already posted one (--letters-all includes them).
                      Needs: python -m pip install segno
+    --verify-links   last step: open every preview link in the Mailmeteor file (server-side, so it
+                     isn't counted as a visit) and remove any that don't show the firm's preview.
+                     Ends with "safe to import" when every link loads.
     --check-emails   check every email address can receive mail (email_check.py): typo'd,
                      dead or mail-less domains. Bad ones go by letter instead. Results are
                      kept in outreach/email-checks.csv and reused; rechecked after 30 days.
@@ -164,6 +167,23 @@ def score_line(score) -> str:
     return f"It scored {s} out of 100 on Google's mobile speed test, which Google itself counts as {band}."
 
 
+def link_loads(url: str, timeout: int = 20) -> str | None:
+    """None if the preview page loads with the firm on it, else what went wrong.
+
+    Fetched server-side, with ?src=dashboard: the visit counter only runs in a
+    browser, and ignores the owner's own "dashboard" visits anyway."""
+    check = re.sub(r"([?&])src=[^&]*", r"\1src=dashboard", url)
+    req = urllib.request.Request(check, headers={"User-Agent": "ScalarDigitalLinkCheck/1.0", "Accept": "text/html"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            page = res.read(400_000).decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        return f"HTTP {e.code}"
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        return f"couldn't connect ({getattr(e, 'reason', e)})"
+    return None if "Prepared for" in page else "page loaded but isn't their preview"
+
+
 def number(value):
     try:
         return float(value)
@@ -195,6 +215,7 @@ def main() -> None:
     ap.add_argument("--retry-failed", action="store_true", help="with --teardown: only the sites that couldn't be checked before")
     ap.add_argument("--find-contacts", action="store_true")
     ap.add_argument("--letters", action="store_true")
+    ap.add_argument("--verify-links", action="store_true", help="open every Mailmeteor link and drop any that don't load")
     ap.add_argument("--letters-all", action="store_true", help="with --letters: include firms already posted a letter")
     ap.add_argument("--check-emails", action="store_true")
     ap.add_argument("--lookup-companies", action="store_true")
@@ -923,8 +944,40 @@ def main() -> None:
     if args.letters:
         make_letters()
 
+    def verify_links() -> None:
+        """Opens every link in the Mailmeteor file; keeps only the ones that load."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        mm = out.parent / f"mailmeteor{suffix}.csv"
+        if not mm.exists():
+            return
+        with mm.open(encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            fields, rows = reader.fieldnames or [], list(reader)
+        if not rows:
+            print(f"{mm.name} is empty - nothing to check.")
+            return
+        print(f"Checking all {len(rows)} preview links in {mm.name} ...", flush=True)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            problems = list(pool.map(lambda r: link_loads(r["preview_url"]), rows))
+        bad = [(r, why) for r, why in zip(rows, problems) if why]
+        if bad:
+            good = [r for r, why in zip(rows, problems) if not why]
+            with mm.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fields)
+                writer.writeheader()
+                writer.writerows(good)
+            print(f"  {len(bad)} links didn't load and were taken out of {mm.name}:")
+            for r, why in bad[:15]:
+                print(f"    {r['business']}: {why}")
+            print(f"READY: {len(good)} links checked and loading - {mm.name} is safe to import into Mailmeteor.")
+        else:
+            print(f"READY: all {len(rows)} links checked and loading - {mm.name} is safe to import into Mailmeteor.")
+
     if args.dry_run:
         print("Dry run: nothing sent.")
+        if args.verify_links:
+            verify_links()
         return
 
     for start in range(0, len(selected), 500):
@@ -972,6 +1025,9 @@ def main() -> None:
         save_log()
         remaining = sum(1 for p in prospects if p["website"] not in log)
         print(f"Logged {ok} checked, {failed} couldn't be checked; {remaining} still to check.")
+
+    if args.verify_links:
+        verify_links()
 
 
 if __name__ == "__main__":

@@ -48,7 +48,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "17"
+PANEL_VERSION = "18"
 MAX_LOG_LINES = 5000
 
 
@@ -182,6 +182,7 @@ ACTIONS = {
     "all": "Run the whole list",
     "retry": "Retry failed speed checks",
     "links": "Refresh preview links + Mailmeteor CSV",
+    "prepare": "Prepare Mailmeteor send",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
     "contacts": "Find missing emails & phones",
@@ -206,12 +207,16 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
     yield first
     if not settings.get("PAGESPEED_API_KEY"):
         job.note("No PAGESPEED_API_KEY in Settings - skipping the speed checks.")
+        yield ["--sheet", sheet, "--verify-links"]
         return
     last = None
     while True:
         now = progress(name)
         remaining = now.get("remaining")
         if not remaining:
+            # Last step: make sure every link in the Mailmeteor file actually loads.
+            yield ["--sheet", sheet, "--verify-links"]
+            now = progress(name)
             failed = now.get("failed") or 0
             job.note(
                 f"List done: {now.get('checked', 0)} speed checked"
@@ -298,6 +303,10 @@ def build_steps(body: dict, settings: dict[str, str]):
     args = ["--sheet", str(path)]
     if action == "links":
         args.append("--dry-run")
+    elif action == "prepare":
+        if dry:
+            return None, "Prepare Mailmeteor send pushes for real, so every link exists - untick Dry run."
+        args.append("--verify-links")
     elif action == "speed":
         try:
             n = int(body.get("limit") or 10)
@@ -559,7 +568,7 @@ def keep_awake(on: bool) -> None:
 
 
 # Only these lines go in a phone alert: counts and outcomes, never names or emails.
-ALERT_LINE = re.compile(r"^(List done|Logged|Pushed|Wrote|\d+ prospects|\d+ companies|Only \d+|Stopped|  (Outreach|Check website|No website) )")
+ALERT_LINE = re.compile(r"^(READY|List done|Logged|Pushed|Wrote|\d+ prospects|\d+ companies|Only \d+|Stopped|  (Outreach|Check website|No website) )")
 
 
 def phone_alert(label: str, code: int, stopped: bool, seconds: float, lines: list[str], env: dict[str, str]) -> None:
@@ -918,6 +927,10 @@ PAGE = r"""<!doctype html>
       <div class="action">
         <div class="row" style="margin:0"><input type="text" id="only" placeholder="Business name or website"><button data-action="one">Check one</button></div>
         <p>Speed check + teardown on just the firms matching this text.</p>
+      </div>
+      <div class="action">
+        <button class="primary" data-action="prepare">Prepare Mailmeteor send</button>
+        <p>Pushes this sheet, then opens every link in the Mailmeteor file (not counted as a visit) and takes out any that don't load. When the log ends with <b>READY</b>, import the file into Mailmeteor and schedule.</p>
       </div>
       <div class="action">
         <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
