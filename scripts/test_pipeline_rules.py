@@ -430,6 +430,56 @@ class CallList(unittest.TestCase):
                 calls.fetch_activity("https://x", "s", "t")
 
 
+class ExportResults(unittest.TestCase):
+    def test_dated_groups_notes_kept_and_one_file(self):
+        import export_results
+        from datetime import date
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            make_sheet(d / "roofing-guildford.xlsx", [
+                {"Business": "Kerr Roofing", "Website": "kerr.co.uk", "Status": "New", "Email": "info@kerr.co.uk", "Company type": "Ltd", "Contact name": "Bill Kerr"},
+                {"Business": "Sole Roofer", "Website": "sole.co.uk", "Status": "New", "Company type": "Sole trader"},
+            ])
+            env = {"PROSPECTS_API_SECRET": "x" * 40, "DASHBOARD_API_URL": "http://127.0.0.1:9"}
+            with mock.patch.dict(os.environ, env), mock.patch.object(export_results, "outreach_dir", lambda: d), redirect_stdout(io.StringIO()):
+                export_results.main()
+                # A later list, and a note typed into the workbook in between.
+                make_sheet(d / "lofts-woking.xlsx", [{"Business": "Loft Co", "Website": "loftco.co.uk", "Status": "New", "Company type": "Ltd", "Email": "a@loftco.co.uk"}])
+                wb = openpyxl.load_workbook(d / "outreach-results.xlsx")
+                ws = wb["Results"]
+                header = [c.value for c in ws[1]]
+                for row in ws.iter_rows(min_row=2):
+                    if row[header.index("Business")].value == "Kerr Roofing":
+                        row[header.index("Notes")].value = "Rang - call back Tuesday"
+                wb.save(d / "outreach-results.xlsx")
+                # The first list was exported "earlier": its firms keep that date.
+                idx = (d / "results-index.csv").read_text(encoding="utf-8").replace(date.today().isoformat(), "2026-09-20")
+                (d / "results-index.csv").write_text(idx, encoding="utf-8")
+                export_results.main()
+
+            wb = openpyxl.load_workbook(d / "outreach-results.xlsx")
+            ws = wb["Results"]
+            header = [c.value for c in ws[1]]
+            values = [[c.value for c in r] for r in ws.iter_rows(min_row=2)]
+            headings = [r[0] for r in values if isinstance(r[0], str) and "·" in r[0]]
+            self.assertEqual(len(headings), 2)
+            self.assertIn("1 firm", headings[0])  # newest group first: today's lofts list
+            self.assertIn("lofts-woking", headings[0])
+            self.assertTrue(headings[1].startswith("Sunday 20 September 2026"))
+            self.assertIn("2 firms", headings[1])
+            self.assertIn(None, [r[0] for r in values])  # a blank spacer row between date groups
+            kerr = next(r for r in values if len(r) > 2 and r[header.index("Business")] == "Kerr Roofing")
+            self.assertEqual(kerr[header.index("Notes")], "Rang - call back Tuesday")
+            self.assertEqual(kerr[header.index("Contact")], "Bill Kerr")
+            self.assertEqual(kerr[header.index("Channel")], "Email")
+            self.assertEqual(kerr[header.index("Added")].date(), date(2026, 9, 20))
+            self.assertTrue(ws.column_dimensions["W"].hidden)  # the Key column
+            summary = [[c.value for c in r] for r in wb["Summary"].iter_rows()]
+            self.assertEqual(sum(1 for r in summary if r[0] == "Export"), 2)
+            self.assertIn(["All lists", 3, 2, 1], [r[:4] for r in summary])
+
+
 class Review(unittest.TestCase):
     def setUp(self):
         import openpyxl

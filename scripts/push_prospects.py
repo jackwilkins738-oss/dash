@@ -215,6 +215,7 @@ def main() -> None:
     ap.add_argument("--retry-failed", action="store_true", help="with --teardown: only the sites that couldn't be checked before")
     ap.add_argument("--find-contacts", action="store_true")
     ap.add_argument("--letters", action="store_true")
+    ap.add_argument("--export-json", type=Path, default=None, help=argparse.SUPPRESS)  # for export_results.py
     ap.add_argument("--verify-links", action="store_true", help="open every Mailmeteor link and drop any that don't load")
     ap.add_argument("--letters-all", action="store_true", help="with --letters: include firms already posted a letter")
     ap.add_argument("--check-emails", action="store_true")
@@ -360,6 +361,7 @@ def main() -> None:
                     "_status": row.get("Status") or "",
                     "_greeting": contact.split()[0] if contact else "there",
                     "_contact": contact,
+                    "_company_type": sheet_type or (looked_up_type or ""),
                     "_key": overrides.row_key(row),
                     "_address": address_of(row) or (found.get("address") or "").strip(),
                     "_phone": str(row.get("Phone") or "").strip() or (found.get("phone") or "").strip(),
@@ -464,10 +466,12 @@ def main() -> None:
     # run (read-only); if it can't be reached, nothing is filtered and it says so.
     live: set[str] = set()
     live_known = False
+    activity: dict[str, dict] = {}
     try:
         from calls import DashboardMissing, fetch_activity
 
-        live = set(fetch_activity(api, secret, tenant))
+        activity = fetch_activity(api, secret, tenant)
+        live = set(activity)
         live_known = True
     except DashboardMissing as e:
         print(f"Couldn't check which previews are live ({e}) - the Mailmeteor file isn't filtered this time.")
@@ -654,6 +658,36 @@ def main() -> None:
 
     write_outputs()
     report()
+
+    if args.export_json:
+        # Everything known about every firm on this sheet, for export_results.py.
+        rows_out = []
+        for p in prospects:
+            act = activity.get(p["slug"]) or {}
+            rows_out.append({
+                "key": p["_key"], "business": p["business_name"], "contact": p["_contact"], "email": p["_email"],
+                "phone": p["_phone"], "channel": p["channel"], "company_type": p["_company_type"],
+                "trade": p.get("trade") or "", "area": p.get("area") or "", "website": p["website"],
+                "address": p["_address"], "mobile_score": p.get("mobile_score"), "top_issue": p.get("_top_issue") or "",
+                "preview_url": preview_url(p), "live": (p["slug"] in live) if live_known else None,
+                "views": act.get("view_count"), "last_viewed": act.get("last_viewed_at") or "",
+                "status": p["_status"],
+            })
+        for row in no_website_rows:
+            business = str(row.get("Business") or "").strip()
+            fixed = overrides.apply(row, decisions.get(overrides.row_key(row), {}))
+            if fixed is None or not business or blocklist.why(None, str(row.get("Email") or ""), business):
+                continue
+            rows_out.append({
+                "key": overrides.row_key(row), "business": business, "contact": str(row.get("Contact name") or "").strip(),
+                "email": str(row.get("Email") or "").strip(), "phone": str(row.get("Phone") or "").strip(),
+                "channel": "letter (no website)", "company_type": str(row.get("Company type") or "").strip(),
+                "trade": str(row.get("Trade") or ""), "area": str(row.get("Area") or ""), "website": "",
+                "address": address_of(row), "mobile_score": None, "top_issue": "", "preview_url": "", "live": None,
+                "views": None, "last_viewed": "", "status": str(row.get("Status") or ""),
+            })
+        args.export_json.write_text(json.dumps(rows_out), encoding="utf-8")
+        return
 
     # --only / --limit narrow what gets checked and pushed. The links CSV
     # above always covers everyone, so it never loses rows.
