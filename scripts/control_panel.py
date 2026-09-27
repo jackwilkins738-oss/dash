@@ -48,7 +48,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "11"
+PANEL_VERSION = "12"
 MAX_LOG_LINES = 5000
 
 
@@ -180,6 +180,7 @@ ACTIONS = {
     "find": "Find new prospects",
     "count": "Count matching firms",
     "all": "Run the whole list",
+    "retry": "Retry failed speed checks",
     "links": "Refresh preview links + Mailmeteor CSV",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
@@ -304,6 +305,8 @@ def build_steps(body: dict, settings: dict[str, str]):
             args.append("--yes-all")
         if body.get("recheck"):
             args.append("--recheck")
+    elif action == "retry":
+        args += ["--teardown", "--retry-failed", "--yes-all"]
     elif action == "one":
         only = str(body.get("only") or "").strip()
         if not only:
@@ -419,6 +422,44 @@ class Job:
             }
 
 
+REVIEW_KEY = re.compile(r"^(no:[A-Z0-9]{8}|name:[a-z0-9 ]{0,150})$")
+REVIEW_TYPES = {"Ltd", "LLP", "PLC", "Sole trader", "Partnership"}
+DOMAIN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
+EMAIL = re.compile(r"^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+
+
+def review_action(body: dict) -> tuple[dict, int]:
+    """One Review button: every value checked before it's written."""
+    import review
+
+    sheet = str(body.get("sheet") or "")
+    if not sheet_path(sheet):
+        return {"error": "Pick a sheet first."}, 400
+    action = str(body.get("action") or "")
+    if action == "block":
+        business = str(body.get("business") or "")[:150]
+        website = str(body.get("website") or "").lower()
+        email = str(body.get("email") or "").strip()
+        if (website and not DOMAIN.match(website)) or (email and not EMAIL.match(email)) or not business:
+            return {"error": "That doesn't look right."}, 400
+        return {"ok": True, "message": review.block(OUTREACH, business, website, email)}, 200
+    key = str(body.get("key") or "")
+    if not REVIEW_KEY.match(key):
+        return {"error": "Unknown firm."}, 400
+    value = str(body.get("value") or "").strip()
+    if action == "set_type" and value not in REVIEW_TYPES:
+        return {"error": "Unknown company type."}, 400
+    if action == "website_yes":
+        value = value.lower().removeprefix("https://").removeprefix("http://").removeprefix("www.").strip("/")
+        if not DOMAIN.match(value):
+            return {"error": "That isn't a website address."}, 400
+    if action == "set_email" and value and not EMAIL.match(value):
+        return {"error": "That isn't an email address."}, 400
+    if action not in ("set_type", "keep_closed", "website_yes", "website_no", "set_email", "skip", "undo"):
+        return {"error": "Unknown action."}, 400
+    return {"ok": True, "message": review.decide(OUTREACH, sheet, key, action, value)}, 200
+
+
 def keep_awake(on: bool) -> None:
     """Stops Windows sleeping mid-run (the screen may still turn off). Called on the run's own thread."""
     if sys.platform != "win32":
@@ -515,6 +556,18 @@ class Handler(BaseHTTPRequestHandler):
                     "site": (settings["SITE_URL"] or "https://www.scalardigital.co.uk").rstrip("/"),
                 }
             )
+        if route.startswith("/api/review/"):
+            from urllib.parse import unquote
+
+            name = unquote(route[len("/api/review/") :])
+            if not sheet_path(name):
+                return self._json({"items": []})
+            try:
+                import review
+
+                return self._json({"items": review.items(OUTREACH, name), "kinds": review.KINDS})
+            except Exception as e:  # a sheet open in Excel, an odd file
+                return self._json({"items": [], "error": f"Couldn't read {name}: {e}"})
         if route.startswith("/api/progress/"):
             from urllib.parse import unquote
 
@@ -539,6 +592,8 @@ class Handler(BaseHTTPRequestHandler):
             label = ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") and not finder else "")
             error = JOB.start(label, steps, settings, needs_secret=not finder)
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
+        if route == "/api/review":
+            return self._json(*review_action(body))
         if route == "/api/stop":
             JOB.stop()
             return self._json({"ok": True})
@@ -608,6 +663,20 @@ PAGE = r"""<!doctype html>
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .hint { color:var(--dim); font-size:12px; margin:4px 0 0; }
   .card.find { border-color:rgba(79,140,255,.45); }
+  .tabs { display:flex; gap:4px; margin-bottom:10px; border-bottom:1px solid var(--line); }
+  .tab { background:none; border:0; border-bottom:2px solid transparent; border-radius:0; padding:8px 12px; color:var(--dim); }
+  .tab.on { color:var(--text); border-bottom-color:var(--accent); }
+  .badge { display:inline-block; min-width:18px; padding:0 6px; margin-left:6px; border-radius:9px; background:var(--warn); color:#111; font-size:11px; font-weight:700; }
+  #review { height:calc(100vh - 260px); min-height:320px; overflow:auto; }
+  .ritem { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#0f1115; }
+  .ritem .top { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .ritem b { font-size:14px; } .ritem a { color:var(--accent); font-size:12px; text-decoration:none; }
+  .ritem .why { color:var(--dim); font-size:12px; margin:4px 0 8px; }
+  .ritem .btns { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .ritem .btns button { padding:5px 9px; font-size:12px; }
+  .ritem input { width:auto; flex:1; min-width:180px; padding:5px 8px; }
+  .kind { font-size:11px; color:var(--warn); text-transform:uppercase; letter-spacing:.05em; }
+  .toast { color:var(--ok); font-size:12px; min-height:1em; margin-bottom:6px; }
   summary.card-title { font-size:12px; font-weight:700; color:var(--dim); list-style-position:inside; }
 </style>
 </head>
@@ -756,8 +825,19 @@ PAGE = r"""<!doctype html>
   </div>
 
   <div class="card" style="margin-bottom:0">
-    <div class="status"><span class="dot" id="dot"></span><b id="job-label">Nothing running</b><span id="job-time" style="color:var(--dim)"></span><span style="margin-left:auto"></span><button class="danger" id="stop" disabled>Stop</button></div>
-    <pre id="log">Pick a button on the left. Output appears here.</pre>
+    <div class="tabs">
+      <button class="tab on" data-tab="output">Output</button>
+      <button class="tab" data-tab="review">Review<span class="badge" id="review-count" hidden></span></button>
+    </div>
+    <div id="pane-output">
+      <div class="status"><span class="dot" id="dot"></span><b id="job-label">Nothing running</b><span id="job-time" style="color:var(--dim)"></span><span style="margin-left:auto"></span><button class="danger" id="stop" disabled>Stop</button></div>
+      <pre id="log">Pick a button on the left. Output appears here.</pre>
+    </div>
+    <div id="pane-review" hidden>
+      <div class="chips" id="review-filters" style="margin-bottom:8px"></div>
+      <div class="toast" id="review-toast"></div>
+      <div id="review"></div>
+    </div>
   </div>
 </main>
 <script>
@@ -798,6 +878,7 @@ function render() {
     sel.innerHTML = s.sheets.map((n) => `<option>${n.replace(/</g, "&lt;")}</option>`).join("") || "<option value=''>No .xlsx in outreach/</option>";
     if (s.sheets.includes(current)) sel.value = current;
     loadProgress();
+    loadReview();
   }
   $("files").innerHTML = s.files.map((f) => `<li>${f.name.replace(/</g, "&lt;")}<span>${ago(f.modified)}</span></li>`).join("") || "<li><span>None yet</span></li>";
   if (!settingsLoaded) {
@@ -831,6 +912,7 @@ function render() {
     lastLines = j.seq;
   }
   if ((wasRunning && !j.running) || (j.running && ++polls % 15 === 0)) loadProgress();
+  if (wasRunning && !j.running) loadReview();
   wasRunning = j.running;
 }
 
@@ -883,9 +965,77 @@ document.querySelectorAll("[data-find]").forEach((b) => b.addEventListener("clic
 try { if (localStorage.getItem("finderOpen") === "0") $("finder-box").open = false; } catch (e) {}
 $("finder-box").addEventListener("toggle", () => { try { localStorage.setItem("finderOpen", $("finder-box").open ? "1" : "0"); } catch (e) {} });
 $("f-areas").addEventListener("keydown", (e) => { if (e.key === "Enter") document.querySelector('[data-find="count"]').click(); });
+// ---- Review tab
+let reviewItems = [], reviewKinds = {}, reviewFilter = "all";
+function esc(t) { return String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function showTab(name) {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("on", t.dataset.tab === name));
+  $("pane-output").hidden = name !== "output"; $("pane-review").hidden = name !== "review";
+  if (name === "review") loadReview();
+}
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+async function loadReview() {
+  const name = $("sheet").value;
+  if (!name) return;
+  const r = await (await fetch("/api/review/" + encodeURIComponent(name))).json();
+  reviewItems = r.items || []; reviewKinds = r.kinds || reviewKinds;
+  if (r.error) $("review-toast").textContent = r.error;
+  renderReview();
+}
+function renderReview() {
+  const n = reviewItems.length;
+  $("review-count").hidden = !n; $("review-count").textContent = n;
+  const counts = {};
+  reviewItems.forEach((i) => (counts[i.kind] = (counts[i.kind] || 0) + 1));
+  if (reviewFilter !== "all" && !counts[reviewFilter]) reviewFilter = "all";
+  $("review-filters").innerHTML = [["all", "All", n], ...Object.keys(reviewKinds).filter((k) => counts[k]).map((k) => [k, reviewKinds[k], counts[k]])]
+    .map(([k, label, c]) => `<label class="chip"><input type="radio" name="rf" value="${k}" ${k === reviewFilter ? "checked" : ""}> ${esc(label)} (${c})</label>`).join("");
+  document.querySelectorAll('#review-filters input').forEach((i) => i.addEventListener("change", () => { reviewFilter = i.value; renderReview(); }));
+  const shown = reviewItems.filter((i) => reviewFilter === "all" || i.kind === reviewFilter);
+  if (!shown.length) { $("review").innerHTML = '<p class="hint">Nothing needs a decision on this list.</p>'; return; }
+  const failed = counts.failed ? `<div class="ritem"><div class="btns"><button data-rall="retry">Retry all ${counts.failed} failed speed checks</button><span class="hint">Sites are often just down for a while.</span></div></div>` : "";
+  $("review").innerHTML = (reviewFilter === "all" || reviewFilter === "failed" ? failed : "") + shown.map((i, idx) => {
+    const site = i.website ? `<a href="https://${esc(i.website)}" target="_blank" rel="noopener">${esc(i.website)} ↗</a>` : "";
+    const ch = `<a href="${esc(i.ch_search)}" target="_blank" rel="noopener">Companies House ↗</a>`;
+    let btns = "";
+    if (i.kind === "website") btns = `<a href="https://${esc(i.possible)}" target="_blank" rel="noopener">${esc(i.possible)} ↗</a> <button class="primary" data-act="website_yes" data-value="${esc(i.possible)}">Yes, it's theirs</button><button data-act="website_no">Not theirs</button>`;
+    if (i.kind === "company") btns = ["Ltd", "LLP", "Sole trader", "Partnership"].map((t) => `<button data-act="set_type" data-value="${t}">${t}</button>`).join("");
+    if (i.kind === "email") btns = `<input type="text" value="${esc(i.email)}" data-email><button data-act="set_email">Save email</button><button data-act="set_email" data-value="">No email - send a letter</button>`;
+    if (i.kind === "closed") btns = `<button data-act="keep_closed">Still trading - keep them</button>`;
+    return `<div class="ritem" data-idx="${reviewItems.indexOf(i)}">
+      <div class="top"><span class="kind">${esc(reviewKinds[i.kind] || i.kind)}</span><b>${esc(i.business)}</b>${site}${ch}</div>
+      <div class="why">${esc(i.detail)}${i.email && i.kind !== "email" ? " · " + esc(i.email) : ""}${i.phone ? " · " + esc(i.phone) : ""}</div>
+      <div class="btns">${btns}<button data-act="skip">Leave out</button><button class="danger" data-act="block">Do not contact</button></div>
+    </div>`;
+  }).join("");
+  document.querySelectorAll("#review [data-act]").forEach((b) => b.addEventListener("click", () => reviewDecide(b)));
+  document.querySelectorAll("#review [data-rall]").forEach((b) => b.addEventListener("click", async () => {
+    const r = await post("/api/run", { action: "retry", sheet: $("sheet").value });
+    if (r.error) $("review-toast").textContent = r.error; else { showTab("output"); lastLines = -1; setTimeout(poll, 150); }
+  }));
+}
+async function reviewDecide(b) {
+  const card = b.closest(".ritem"), item = reviewItems[+card.dataset.idx];
+  const act = b.dataset.act;
+  if (act === "block" && !confirm(`Never contact ${item.business} again, from any list?`)) return;
+  let value = b.dataset.value;
+  if (act === "set_email" && value === undefined) value = card.querySelector("[data-email]").value.trim();
+  const body = act === "block"
+    ? { sheet: $("sheet").value, action: "block", business: item.business, website: item.website, email: item.email }
+    : { sheet: $("sheet").value, action: act, key: item.key, value: value ?? "" };
+  const r = await post("/api/review", body);
+  $("review-toast").textContent = r.error ? r.error : `${item.business}: ${r.message}`;
+  $("review-toast").style.color = r.error ? "var(--bad)" : "var(--ok)";
+  if (!r.error) {
+    // One decision settles the firm: drop every item for it (block also covers other lists).
+    reviewItems = reviewItems.filter((x) => x.key !== item.key);
+    renderReview();
+    loadProgress();
+  }
+}
 $("stop").addEventListener("click", () => post("/api/stop"));
 $("open-folder").addEventListener("click", () => post("/api/open-folder"));
-$("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); });
+$("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); });
 $("save").addEventListener("click", async () => {
   const body = {};
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
@@ -894,6 +1044,7 @@ $("save").addEventListener("click", async () => {
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
   $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
 });
+if (location.hash === "#tab-review") showTab("review");
 poll();
 </script>
 </body>

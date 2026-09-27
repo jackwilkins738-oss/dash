@@ -31,6 +31,7 @@ Outputs, beside the sheet:
                      push its findings - off by default. Takes ~20-60s per site, so it
                      refuses to run on more than 10 prospects unless --yes-all is given.
     --yes-all        allow --teardown on more than 10 prospects
+    --retry-failed   with --teardown: only the sites that couldn't be checked last time.
     --recheck        with --teardown: include sites already checked. Without it, sites
                      listed in outreach/teardown-log.csv are skipped, so repeated
                      `--teardown --limit 10` runs work through the list 10 at a time.
@@ -163,6 +164,7 @@ def main() -> None:
     ap.add_argument("--yes-all", action="store_true")
     ap.add_argument("--guess-trades", action="store_true")
     ap.add_argument("--recheck", action="store_true")
+    ap.add_argument("--retry-failed", action="store_true", help="with --teardown: only the sites that couldn't be checked before")
     ap.add_argument("--check-emails", action="store_true")
     ap.add_argument("--lookup-companies", action="store_true")
     args = ap.parse_args()
@@ -177,10 +179,36 @@ def main() -> None:
     if not args.sheet.exists():
         sys.exit(f"Can't find the sheet at {args.sheet} - pass --sheet PATH")
 
+    import overrides  # same folder as this script
+
     wb = openpyxl.load_workbook(args.sheet, read_only=True, data_only=True)
-    rows = list(wb["Outreach"].iter_rows(values_only=True))
-    header = [str(h).strip() if h else "" for h in rows[0]]
-    sheet_rows = [dict(zip(header, values)) for values in rows[1:]]
+
+    def tab_rows(tab: str) -> list[dict]:
+        if tab not in wb.sheetnames:
+            return []
+        rows = list(wb[tab].iter_rows(values_only=True))
+        if not rows:
+            return []
+        header = [str(h).strip() if h else "" for h in rows[0]]
+        return [dict(zip(header, values)) for values in rows[1:]]
+
+    # Decisions from the panel's Review tab, applied without touching the sheet.
+    decisions = overrides.load(args.sheet.parent, args.sheet.name)
+    sheet_rows, reviewed_out = [], 0
+    for row in tab_rows("Outreach"):
+        fixed = overrides.apply(row, decisions.get(overrides.row_key(row), {}))
+        if fixed is None:
+            reviewed_out += 1
+        else:
+            sheet_rows.append(fixed)
+    # A finder sheet's "Check website" rows join once their website is confirmed in Review.
+    for row in tab_rows("Check website"):
+        d = decisions.get(overrides.row_key(row), {})
+        if d.get("website"):
+            fixed = overrides.apply(row, d)
+            if fixed is not None:
+                sheet_rows.append(fixed)
+    wb.close()
 
     # ---- this machine's notes: saved results reused on every run ---------
     # Each is keyed on the website (or email domain), filled by an option,
@@ -417,6 +445,7 @@ def main() -> None:
     def report() -> None:
         by_channel = {c: sum(1 for p in prospects if p["channel"] == c) for c in ("email", "letter")}
         gone = f", {closed} left out (dissolved / in liquidation)" if closed else ""
+        gone += f", {reviewed_out} left out in Review" if reviewed_out else ""
         print(f"{len(prospects)} prospects ({by_channel['email']} email, {by_channel['letter']} letter), {skipped} skipped{gone}")
         if left_out["blocked"]:
             print(f"{len(left_out['blocked'])} left out - they said no (do-not-contact):")
@@ -433,7 +462,10 @@ def main() -> None:
     # --only / --limit narrow what gets checked and pushed. The links CSV
     # above always covers everyone, so it never loses rows.
     selected = prospects
-    if args.teardown and not args.recheck and not args.only:
+    if args.teardown and args.retry_failed:
+        selected = [p for p in selected if log.get(p["website"], {}).get("result") == "failed"]
+        print(f"Retrying {len(selected)} sites that couldn't be checked before")
+    elif args.teardown and not args.recheck and not args.only:
         before = len(selected)
         # Failed sites are skipped too - otherwise every batch would retry
         # the same unreachable sites and never move on.
