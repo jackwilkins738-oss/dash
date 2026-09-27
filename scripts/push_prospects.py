@@ -38,6 +38,14 @@ Outputs, beside the sheet:
                      description and headings and guess one (trade_guess.py). Guesses are
                      kept in outreach/trade-guesses.csv and reused on every later run, so a
                      normal re-run never blanks them. Your sheet is never changed.
+    --check-emails   check every email address can receive mail (email_check.py): typo'd,
+                     dead or mail-less domains. Bad ones go by letter instead. Results are
+                     kept in outreach/email-checks.csv and reused; rechecked after 30 days.
+    --lookup-companies
+                     for prospects with no Company type in the sheet, look it up on Companies
+                     House (company_lookup.py) - this decides email or letter. Kept in
+                     outreach/company-lookups.csv and reused (--recheck looks again). Firms
+                     the register shows as dissolved or in liquidation are left out.
 Env:
     PROSPECTS_API_SECRET  required (also used to make the links unguessable)
     DASHBOARD_API_URL     default https://admin.scalardigital.co.uk
@@ -46,6 +54,8 @@ Env:
     SITE_URL              default https://www.scalardigital.co.uk
     PAGESPEED_API_KEY     required for --teardown (the same Google key the site's
                           speed test uses, NEXT_PUBLIC_PAGESPEED_API_KEY in Vercel)
+    COMPANIES_HOUSE_API_KEY  required for --lookup-companies (free, from
+                          https://developer.company-information.service.gov.uk/)
 
 Try the teardown on one firm first, and check its preview page, before anything else:
     python scripts/push_prospects.py --teardown --only "Smith Roofing" --dry-run
@@ -76,7 +86,8 @@ except ImportError:
 
 DEFAULT_TENANT = "abdc6408-1fd5-4fb6-9c4c-53600b571a6d"
 SKIP_STATUSES = {"Removed - parked / unsuitable", "Lost / not interested"}
-LETTER_COMPANY_TYPES = {"sole trader", "partnership", "none", "no record"}
+LETTER_COMPANY_TYPES = {"sole trader", "partnership", "none", "no record", "unsure"}
+EMAIL_RECHECK_DAYS = 30
 
 
 def slugify(text: str) -> str:
@@ -102,12 +113,14 @@ def make_slug(business: str, key: str, secret: str) -> str:
     return f"{slugify(business)}-{tag}"
 
 
-def channel_for(row: dict) -> str:
-    company_type = str(row.get("Company type") or "").strip().lower()
+def channel_for(row: dict, company_type: str | None = None, email_bad: bool = False) -> str:
+    """email or letter. company_type fills a blank sheet column; email_bad is our own email check."""
+    company_type = str(row.get("Company type") or company_type or "").strip().lower()
     email = str(row.get("Email") or "").strip()
     status = str(row.get("Status") or "").lower()
     email_ok = (
         "@" in email
+        and not email_bad
         and "invalid" not in str(row.get("Email check") or "").lower()
         and "wrong email" not in status
         and "invalid email" not in status
@@ -145,6 +158,8 @@ def main() -> None:
     ap.add_argument("--yes-all", action="store_true")
     ap.add_argument("--guess-trades", action="store_true")
     ap.add_argument("--recheck", action="store_true")
+    ap.add_argument("--check-emails", action="store_true")
+    ap.add_argument("--lookup-companies", action="store_true")
     args = ap.parse_args()
 
     secret = os.environ.get("PROSPECTS_API_SECRET", "")
@@ -160,55 +175,86 @@ def main() -> None:
     wb = openpyxl.load_workbook(args.sheet, read_only=True, data_only=True)
     rows = list(wb["Outreach"].iter_rows(values_only=True))
     header = [str(h).strip() if h else "" for h in rows[0]]
+    sheet_rows = [dict(zip(header, values)) for values in rows[1:]]
 
+    # ---- this machine's notes: saved results reused on every run ---------
+    # Each is keyed on the website (or email domain), filled by an option,
+    # and saved even on a dry run. The sheet's own column always wins.
     guesses_path = args.sheet.parent / "trade-guesses.csv"
-    guesses: dict[str, str] = {}
-    if guesses_path.exists():
-        with guesses_path.open(encoding="utf-8") as f:
-            guesses = {r["website"]: r["trade"] for r in csv.DictReader(f) if r.get("trade")}
+    lookups_path = args.sheet.parent / "company-lookups.csv"
+    emails_path = args.sheet.parent / "email-checks.csv"
+    LOOKUP_FIELDS = ["website", "business", "result", "company_type", "number", "registered_name", "status", "how", "checked_at"]
+    EMAIL_FIELDS = ["email", "result", "checked_at"]
 
-    prospects, links, skipped = [], [], 0
-    seen = set()
-    for values in rows[1:]:
-        row = dict(zip(header, values))
-        business = str(row.get("Business") or "").strip()
-        domain = domain_of(str(row.get("Website") or ""))
-        if not business or not domain or str(row.get("Status") or "") in SKIP_STATUSES:
-            skipped += 1
-            continue
-        slug = make_slug(business, domain, secret)
-        if slug in seen:
-            skipped += 1
-            continue
-        seen.add(slug)
-        channel = channel_for(row)
-        prospects.append(
-            {
-                "slug": slug,
-                "business_name": business,
-                # The sheet's own Trade always wins; a saved guess only fills a blank.
-                "trade": row.get("Trade") or guesses.get(domain) or None,
-                "_sheet_trade": bool(row.get("Trade")),
-                "area": row.get("Area") or None,
-                "website": domain,
-                "mobile_score": number(row.get("Mobile score")),
-                "lcp_s": number(row.get("LCP (s)")),
-                "channel": channel,
-            }
-        )
-        src = "email" if channel == "email" else "letter"
-        contact = str(row.get("Contact name") or "").strip()
-        links.append(
-            {
-                "Business": business,
-                "Email": row.get("Email") or "",
-                "Channel": channel,
-                "Status": row.get("Status") or "",
-                "preview_url": f"{site}/for/{slug}?src={src}",
-                "_slug": slug,
-                "_greeting": contact.split()[0] if contact else "there",
-            }
-        )
+    def read_csv(path: Path, key: str) -> dict[str, dict]:
+        if not path.exists():
+            return {}
+        with path.open(encoding="utf-8") as f:
+            return {r[key]: r for r in csv.DictReader(f) if r.get(key)}
+
+    def write_csv(path: Path, fields: list[str], rows: dict[str, dict]) -> None:
+        with path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(r for _, r in sorted(rows.items()))
+
+    guesses: dict[str, str] = {w: r["trade"] for w, r in read_csv(guesses_path, "website").items() if r.get("trade")}
+    lookups = read_csv(lookups_path, "website")
+    email_checks = read_csv(emails_path, "email")
+
+    def email_result(email: str) -> str:
+        return (email_checks.get(email.strip().lower()) or {}).get("result") or ""
+
+    def build() -> tuple[list[dict], int, int]:
+        """Prospects from the sheet plus the saved notes: (prospects, skipped, closed)."""
+        from email_check import is_bad  # same folder as this script
+
+        out, seen, skipped, closed = [], set(), 0, 0
+        for row in sheet_rows:
+            business = str(row.get("Business") or "").strip()
+            domain = domain_of(str(row.get("Website") or ""))
+            if not business or not domain or str(row.get("Status") or "") in SKIP_STATUSES:
+                skipped += 1
+                continue
+            slug = make_slug(business, domain, secret)
+            if slug in seen:
+                skipped += 1
+                continue
+            seen.add(slug)
+            sheet_type = str(row.get("Company type") or "").strip()
+            lookup = lookups.get(domain) if not sheet_type else None
+            if lookup and lookup.get("result") == "closed":
+                closed += 1
+                continue
+            looked_up_type = None
+            if lookup:
+                looked_up_type = {"company": lookup.get("company_type"), "none": "no record", "unsure": "unsure"}.get(
+                    lookup.get("result") or ""
+                )
+            email = str(row.get("Email") or "").strip()
+            channel = channel_for(row, looked_up_type, is_bad(email_result(email)) if email else False)
+            contact = str(row.get("Contact name") or "").strip()
+            out.append(
+                {
+                    "slug": slug,
+                    "business_name": business,
+                    # The sheet's own Trade always wins; a saved guess only fills a blank.
+                    "trade": row.get("Trade") or guesses.get(domain) or None,
+                    "area": row.get("Area") or None,
+                    "website": domain,
+                    "mobile_score": number(row.get("Mobile score")),
+                    "lcp_s": number(row.get("LCP (s)")),
+                    "channel": channel,
+                    "_sheet_trade": bool(row.get("Trade")),
+                    "_sheet_type": bool(sheet_type),
+                    "_email": email,
+                    "_status": row.get("Status") or "",
+                    "_greeting": contact.split()[0] if contact else "there",
+                }
+            )
+        return out, skipped, closed
+
+    prospects, skipped, closed = build()
 
     # One set of output files per sheet, so running a second list (e.g. the
     # loft-conversions workbook) never overwrites the master list's links.
@@ -247,65 +293,82 @@ def main() -> None:
                     }
                 )
 
-    # Fill blank scores: first from the log, then - for sites checked before
-    # the log kept scores - from the dashboard's own record.
-    fetched = 0
-    for p in prospects:
-        entry = log.get(p["website"])
-        if p.get("mobile_score") is not None or not entry or entry["result"] != "ok":
-            continue
-        if entry["mobile_score"] is None:
-            try:
-                req = urllib.request.Request(
-                    f"{api}/api/prospects/{p['slug']}", headers={"Authorization": f"Bearer {secret}"}
-                )
-                with urllib.request.urlopen(req, timeout=20) as res:
-                    row = json.loads(res.read()).get("prospect") or {}
-                entry["mobile_score"], entry["lcp_s"] = row.get("mobile_score"), row.get("lcp_s")
-                fetched += 1
-            except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+    def fill_scores() -> None:
+        # Fill blank scores: first from the log, then - for sites checked before
+        # the log kept scores - from the dashboard's own record.
+        fetched = 0
+        for p in prospects:
+            entry = log.get(p["website"])
+            if p.get("mobile_score") is not None or not entry or entry["result"] != "ok":
                 continue
-        p["mobile_score"] = entry["mobile_score"]
-        if p.get("lcp_s") is None:
-            p["lcp_s"] = entry["lcp_s"]
-    if fetched:
-        save_log()
-        print(f"Recovered {fetched} scores from the dashboard into {log_path.name}")
+            if entry["mobile_score"] is None:
+                try:
+                    req = urllib.request.Request(
+                        f"{api}/api/prospects/{p['slug']}", headers={"Authorization": f"Bearer {secret}"}
+                    )
+                    with urllib.request.urlopen(req, timeout=20) as res:
+                        row = json.loads(res.read()).get("prospect") or {}
+                    entry["mobile_score"], entry["lcp_s"] = row.get("mobile_score"), row.get("lcp_s")
+                    fetched += 1
+                except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+                    continue
+            p["mobile_score"] = entry["mobile_score"]
+            if p.get("lcp_s") is None:
+                p["lcp_s"] = entry["lcp_s"]
+        if fetched:
+            save_log()
+            print(f"Recovered {fetched} scores from the dashboard into {log_path.name}")
+
+    fill_scores()
 
     def write_outputs() -> None:
-        by_slug = {p["slug"]: p for p in prospects}
         with out.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=["Business", "Email", "Channel", "Status", "preview_url"])
             writer.writeheader()
-            writer.writerows({k: v for k, v in r.items() if not k.startswith("_")} for r in links)
+            for p in prospects:
+                writer.writerow(
+                    {
+                        "Business": p["business_name"],
+                        "Email": p["_email"],
+                        "Channel": p["channel"],
+                        "Status": p["_status"],
+                        "preview_url": preview_url(p),
+                    }
+                )
         mm = out.parent / f"mailmeteor{suffix}.csv"
         with mm.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
                 f, fieldnames=["business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status"]
             )
             writer.writeheader()
-            for r in links:
-                p = by_slug[r["_slug"]]
+            for p in prospects:
                 if p["channel"] != "email":
                     continue
                 score = p.get("mobile_score")
                 writer.writerow(
                     {
-                        "business": r["Business"],
-                        "greeting_name": r["_greeting"],
-                        "email": r["Email"],
+                        "business": p["business_name"],
+                        "greeting_name": p["_greeting"],
+                        "email": p["_email"],
                         "mobile_score": "" if score is None else int(score),
                         "lcp_s": "" if p.get("lcp_s") is None else p["lcp_s"],
-                        "preview_url": r["preview_url"],
-                        "status": r["Status"],
+                        "preview_url": preview_url(p),
+                        "status": p["_status"],
                     }
                 )
         print(f"Wrote {out.name} and {mm.name}")
 
-    write_outputs()
+    def preview_url(p: dict) -> str:
+        src = "email" if p["channel"] == "email" else "letter"
+        return f"{site}/for/{p['slug']}?src={src}"
 
-    by_channel = {c: sum(1 for p in prospects if p["channel"] == c) for c in ("email", "letter")}
-    print(f"{len(prospects)} prospects ({by_channel['email']} email, {by_channel['letter']} letter), {skipped} skipped")
+    def report() -> None:
+        by_channel = {c: sum(1 for p in prospects if p["channel"] == c) for c in ("email", "letter")}
+        gone = f", {closed} left out (dissolved / in liquidation)" if closed else ""
+        print(f"{len(prospects)} prospects ({by_channel['email']} email, {by_channel['letter']} letter), {skipped} skipped{gone}")
+
+    write_outputs()
+    report()
 
     # --only / --limit narrow what gets checked and pushed. The links CSV
     # above always covers everyone, so it never loses rows.
@@ -331,8 +394,89 @@ def main() -> None:
     if not selected:
         sys.exit("Nothing selected.")
 
-    if args.guess_trades:
+    homepages: dict[str, str | None] = {}
+
+    def homepage(domain: str) -> str | None:
+        """The prospect's homepage HTML, fetched once per run."""
         from site_teardown import fetch_html  # same folder as this script
+
+        if domain not in homepages:
+            html, _ = fetch_html(f"https://{domain}/")
+            if html is None:
+                html, _ = fetch_html(f"http://{domain}/")
+            homepages[domain] = html
+        return homepages[domain]
+
+    if args.check_emails:
+        from email_check import check, is_bad
+
+        now = datetime.now(timezone.utc)
+        domain_cache: dict[str, str] = {}
+        todo = []
+        for p in selected:
+            email = p["_email"].strip().lower()
+            if not email or "@" not in email:
+                continue
+            saved = email_checks.get(email)
+            if saved and not args.recheck:
+                try:
+                    age = now - datetime.fromisoformat(saved.get("checked_at") or "")
+                    if age.days < EMAIL_RECHECK_DAYS:
+                        continue
+                except ValueError:
+                    pass
+            todo.append((p, email))
+        print(f"Checking {len(todo)} email addresses ...")
+        bad = 0
+        for p, email in todo:
+            result = check(email, domain_cache)
+            if result == "unknown":
+                print(f"    {email}: couldn't check just now - left as it was")
+                continue
+            email_checks[email] = {"email": email, "result": result, "checked_at": now.isoformat()}
+            if is_bad(result):
+                bad += 1
+                print(f"    {p['business_name']}: {email} - {result}")
+        write_csv(emails_path, EMAIL_FIELDS, email_checks)
+        print(f"{bad} won't take mail - they'll go by letter. Saved to {emails_path.name}")
+
+    if args.lookup_companies:
+        ch_key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
+        if not ch_key:
+            sys.exit("--lookup-companies needs COMPANIES_HOUSE_API_KEY (free: developer.company-information.service.gov.uk).")
+        from company_lookup import lookup
+
+        todo = [p for p in selected if not p["_sheet_type"] and (args.recheck or p["website"] not in lookups)]
+        print(f"Looking up {len(todo)} firms with no Company type in the sheet on Companies House ...")
+        counts: dict[str, int] = {}
+        for i, p in enumerate(todo, 1):
+            try:
+                found = lookup(p["business_name"], p.get("area") or "", homepage(p["website"]), ch_key)
+            except PermissionError as e:
+                sys.exit(f"{e} - check COMPANIES_HOUSE_API_KEY.")
+            if found is None:
+                print(f"    {p['business_name']}: Companies House didn't answer - try again later")
+                continue
+            lookups[p["website"]] = {
+                "website": p["website"],
+                "business": p["business_name"],
+                **found,
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+            }
+            counts[found["result"]] = counts.get(found["result"], 0) + 1
+            label = found["company_type"] or {"none": "no record -> letter", "unsure": "unsure -> letter", "closed": f"{found['status']} -> left out"}[found["result"]]
+            print(f"    [{i}/{len(todo)}] {p['business_name']}: {label}  ({found['how']})")
+            time.sleep(0.6)  # Companies House allows 600 requests per 5 minutes
+            if i % 25 == 0:
+                write_csv(lookups_path, LOOKUP_FIELDS, lookups)
+        write_csv(lookups_path, LOOKUP_FIELDS, lookups)
+        print(
+            f"{counts.get('company', 0)} companies, {counts.get('none', 0)} not on the register, "
+            f"{counts.get('unsure', 0)} unsure (letter - put the real type in the sheet if you know it), "
+            f"{counts.get('closed', 0)} dissolved. Saved to {lookups_path.name}"
+        )
+
+    if args.guess_trades:
         from trade_guess import guess_trade, page_text_for_guess
 
         # Every prospect without a Trade in the sheet - including ones guessed
@@ -341,24 +485,31 @@ def main() -> None:
         print(f"Guessing trades for {len(blanks)} prospects with none in the sheet ...")
         new_guesses = 0
         for p in blanks:
-            html, _ = fetch_html(f"https://{p['website']}/")
-            if html is None:
-                html, _ = fetch_html(f"http://{p['website']}/")
+            html = homepage(p["website"])
             guess = guess_trade(page_text_for_guess(html), p["business_name"]) if html else guess_trade("", p["business_name"])
             previous = guesses.get(p["website"])
             changed = f"  (was: {previous})" if previous and guess and previous != guess else ""
             print(f"    {p['business_name']}: {guess or 'no guess'}{changed}")
             if guess:
-                p["trade"] = guess
                 guesses[p["website"]] = guess
                 new_guesses += 1
         # Saved even on a dry run: it's only this machine's notes, and it
         # means the real run doesn't have to read every homepage again.
-        with guesses_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["website", "trade"])
-            writer.writeheader()
-            writer.writerows({"website": w, "trade": t} for w, t in sorted(guesses.items()))
+        write_csv(guesses_path, ["website", "trade"], {w: {"website": w, "trade": t} for w, t in guesses.items()})
         print(f"{new_guesses} guessed; saved to {guesses_path}")
+
+    if args.check_emails or args.lookup_companies or args.guess_trades:
+        # Rebuild from the updated notes, so channels, trades and the CSVs
+        # reflect what was just found. Dissolved firms drop out here.
+        chosen = [p["slug"] for p in selected]
+        prospects, skipped, closed = build()
+        fill_scores()
+        by_slug = {p["slug"]: p for p in prospects}
+        selected = [by_slug[s] for s in chosen if s in by_slug]
+        write_outputs()
+        report()
+        if not selected:
+            sys.exit("Nothing left to push.")
 
     if args.teardown:
         if len(selected) > 10 and not args.yes_all:

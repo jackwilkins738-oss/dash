@@ -2,7 +2,9 @@
 
 Double-click scripts/control_panel.bat (or run `python scripts/control_panel.py`)
 and it opens http://127.0.0.1:8765 in your browser. Every button runs
-push_prospects.py with the right options and streams its output onto the page.
+push_prospects.py with the right options and streams its output onto the page;
+"Run the whole list" chains them: email checks, company types and trades for
+everyone, then speed checks 10 at a time until the list is done.
 
 Everything stays on this machine, same as before: it only listens on
 127.0.0.1, reads the sheet from outreach/, and keeps your keys in
@@ -33,8 +35,9 @@ from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 PUSH = HERE / "push_prospects.py"
-SETTING_KEYS = ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "DASHBOARD_API_URL", "SITE_URL"]
-SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY"}
+SETTING_KEYS = ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "DASHBOARD_API_URL", "SITE_URL"]
+SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"}
+RUN_ALL_BATCH = 10
 MAX_LOG_LINES = 5000
 
 
@@ -111,13 +114,22 @@ def progress(name: str) -> dict:
         wb.close()
     except Exception as e:  # a sheet open in Excel, or no Outreach tab
         return {"error": f"Couldn't read {name}: {e}"}
+    closed: set[str] = set()
+    lookups_path = OUTREACH / "company-lookups.csv"
+    if lookups_path.exists():
+        with lookups_path.open(encoding="utf-8") as f:
+            closed = {r["website"] for r in csv.DictReader(f) if r.get("result") == "closed"}
     header = [str(h).strip() if h else "" for h in rows[0]] if rows else []
     domains = set()
     for values in rows[1:]:
         row = dict(zip(header, values))
         domain = domain_of(str(row.get("Website") or ""))
-        if str(row.get("Business") or "").strip() and domain and str(row.get("Status") or "") not in SKIP_STATUSES:
-            domains.add(domain)
+        if not (str(row.get("Business") or "").strip() and domain) or str(row.get("Status") or "") in SKIP_STATUSES:
+            continue
+        # Dissolved firms are left out of every run (only when the sheet leaves the type blank).
+        if domain in closed and not str(row.get("Company type") or "").strip():
+            continue
+        domains.add(domain)
     ok = sum(1 for d in domains if log.get(d) == "ok")
     failed = sum(1 for d in domains if log.get(d) == "failed")
     return {"total": len(domains), "checked": ok, "failed": failed, "remaining": len(domains) - ok - failed}
@@ -135,23 +147,64 @@ def output_files() -> list[dict]:
 
 # Every button maps to fixed push_prospects.py options - the page never sends a command line.
 ACTIONS = {
+    "all": "Run the whole list",
     "links": "Refresh preview links + Mailmeteor CSV",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
+    "emails": "Check emails",
+    "companies": "Look up company types",
     "trades": "Guess missing trades",
     "push": "Push to dashboard",
 }
 
 
-def build_args(body: dict) -> tuple[list[str] | None, str]:
+def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
+    """Everything the list needs, in order: the quick checks for everyone, then
+    speed checks in batches - each batch pushed and logged, so stopping part-way
+    loses nothing."""
+    first = ["--sheet", sheet, "--check-emails", "--guess-trades"]
+    if settings.get("COMPANIES_HOUSE_API_KEY"):
+        first.append("--lookup-companies")
+    else:
+        job.note("No COMPANIES_HOUSE_API_KEY in Settings - skipping the company type lookup.")
+    yield first
+    if not settings.get("PAGESPEED_API_KEY"):
+        job.note("No PAGESPEED_API_KEY in Settings - skipping the speed checks.")
+        return
+    last = None
+    while True:
+        now = progress(name)
+        remaining = now.get("remaining")
+        if not remaining:
+            failed = now.get("failed") or 0
+            job.note(
+                f"List done: {now.get('checked', 0)} speed checked"
+                + (f", {failed} couldn't be checked (site down or blocking Google - Speed check next with 'Include sites already checked' retries them)." if failed else ".")
+            )
+            return
+        if remaining == last:
+            job.note(f"{remaining} still to check but the last batch made no progress - stopping.")
+            return
+        last = remaining
+        job.note(f"{remaining} sites still to speed check.")
+        yield ["--sheet", sheet, "--teardown", "--limit", str(RUN_ALL_BATCH)]
+
+
+def build_steps(body: dict, settings: dict[str, str]):
+    """(steps, error): steps is an iterable of push_prospects.py argument lists."""
     action = body.get("action")
     if action not in ACTIONS:
         return None, "Unknown action."
-    path = sheet_path(str(body.get("sheet") or ""))
+    name = str(body.get("sheet") or "")
+    path = sheet_path(name)
     if not path:
         return None, "Pick a sheet in outreach/ first."
-    args = ["--sheet", str(path)]
     dry = bool(body.get("dry_run"))
+    if action == "all":
+        if dry:
+            return None, "Run the whole list can't be a dry run - a dry run never logs, so it would repeat the first batch. Untick Dry run."
+        return (lambda job: run_all_steps(job, str(path), name, settings)), ""
+    args = ["--sheet", str(path)]
     if action == "links":
         args.append("--dry-run")
     elif action == "speed":
@@ -171,63 +224,95 @@ def build_args(body: dict) -> tuple[list[str] | None, str]:
         if not only:
             return None, "Type part of the business name or website."
         args += ["--teardown", "--only", only]
+    elif action == "emails":
+        args.append("--check-emails")
+    elif action == "companies":
+        if not settings.get("COMPANIES_HOUSE_API_KEY"):
+            return None, "Add COMPANIES_HOUSE_API_KEY in Settings first (free from developer.company-information.service.gov.uk)."
+        args.append("--lookup-companies")
     elif action == "trades":
         args.append("--guess-trades")
     if dry and action != "links":
         args.append("--dry-run")
-    return args, ""
+    return (lambda job: [args]), ""
 
 
 class Job:
+    """One run at a time: a single push_prospects.py call, or a chain of them."""
+
     def __init__(self) -> None:
         self.lock = threading.Lock()
         self.proc: subprocess.Popen | None = None
+        self.thread: threading.Thread | None = None
+        self.stopping = False
         self.lines: list[str] = []
+        self.seq = 0  # lines ever added, so the page notices new output after the log is trimmed
         self.label = ""
         self.started = 0.0
         self.exit_code: int | None = None
 
     def running(self) -> bool:
-        return self.proc is not None and self.proc.poll() is None
+        return self.thread is not None and self.thread.is_alive()
 
-    def start(self, label: str, args: list[str]) -> str:
+    def note(self, line: str) -> None:
+        with self.lock:
+            self.seq += 1
+            self.lines.append(line)
+            if len(self.lines) > MAX_LOG_LINES:
+                del self.lines[: len(self.lines) - MAX_LOG_LINES]
+
+    def start(self, label: str, steps, settings: dict[str, str]) -> str:
         with self.lock:
             if self.running():
                 return "Something is already running - wait for it or press Stop."
-            settings = load_settings()
             if len(settings["PROSPECTS_API_SECRET"]) < 32:
                 return "Add PROSPECTS_API_SECRET in Settings first (32+ characters, same value as in Vercel)."
             env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
             env.update({k: v for k, v in settings.items() if v})
-            self.lines = [f"> {label}", f"> python push_prospects.py {' '.join(a if ' ' not in a else repr(a) for a in args)}", ""]
-            self.label, self.started, self.exit_code = label, time.time(), None
-            self.proc = subprocess.Popen(
-                [sys.executable, "-u", str(PUSH), *args],
-                cwd=str(HERE),
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-            )
-            threading.Thread(target=self._read, args=(self.proc,), daemon=True).start()
+            self.lines = [f"> {label}"]
+            self.seq += 1
+            self.label, self.started, self.exit_code, self.stopping = label, time.time(), None, False
+            self.thread = threading.Thread(target=self._run, args=(steps, env), daemon=True)
+            self.thread.start()
             return ""
 
-    def _read(self, proc: subprocess.Popen) -> None:
-        assert proc.stdout
-        for raw in proc.stdout:
-            line = raw.decode("utf-8", errors="replace").rstrip()
-            with self.lock:
-                self.lines.append(line)
-                if len(self.lines) > MAX_LOG_LINES:
-                    del self.lines[: len(self.lines) - MAX_LOG_LINES]
-        code = proc.wait()
+    def _run(self, steps, env: dict[str, str]) -> None:
+        code = 0
+        try:
+            for args in steps(self):
+                if self.stopping:
+                    break
+                self.note(f"> python push_prospects.py {' '.join(a if ' ' not in a else repr(a) for a in args)}")
+                self.note("")
+                with self.lock:
+                    self.proc = subprocess.Popen(
+                        [sys.executable, "-u", str(PUSH), *args],
+                        cwd=str(HERE),
+                        env=env,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        stdin=subprocess.DEVNULL,
+                    )
+                    proc = self.proc
+                assert proc.stdout
+                for raw in proc.stdout:
+                    self.note(raw.decode("utf-8", errors="replace").rstrip())
+                code = proc.wait()
+                self.note("")
+                if code != 0 or self.stopping:
+                    break
+        except Exception as e:  # never leave the panel stuck on "running"
+            self.note(f"Panel error: {e}")
+            code = 1
         with self.lock:
-            self.exit_code = code
-            self.lines += ["", "Done." if code == 0 else f"Stopped (exit code {code})."]
+            self.exit_code = code if not self.stopping else -1
+            self.seq += 1
+            self.lines.append("Stopped." if self.stopping else "Done." if code == 0 else f"Stopped (exit code {code}).")
 
     def stop(self) -> None:
         with self.lock:
-            if self.running():
+            self.stopping = True
+            if self.proc is not None and self.proc.poll() is None:
                 self.proc.terminate()
 
     def state(self) -> dict:
@@ -238,6 +323,7 @@ class Job:
                 "started": self.started,
                 "exit_code": self.exit_code,
                 "lines": list(self.lines),
+                "seq": self.seq,
             }
 
 
@@ -313,10 +399,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "Bad request."}, 400)
         route = urlparse(self.path).path
         if route == "/api/run":
-            args, error = build_args(body)
-            if args is None:
+            settings = load_settings()
+            steps, error = build_steps(body, settings)
+            if steps is None:
                 return self._json({"error": error}, 400)
-            error = JOB.start(ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") else ""), args)
+            error = JOB.start(ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") else ""), steps, settings)
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
         if route == "/api/stop":
             JOB.stop()
@@ -405,10 +492,14 @@ PAGE = r"""<!doctype html>
 
     <div class="card">
       <h2>Run</h2>
-      <label class="check" style="margin:0 0 10px"><input type="checkbox" id="dry"> Dry run - write the CSVs, send nothing to the dashboard</label>
+      <div class="action">
+        <button class="primary" data-action="all">Run the whole list</button>
+        <p>Checks emails, looks up company types, guesses trades, then speed checks every site left, 10 at a time - each batch pushed as it goes. Start it and walk away; Stop loses nothing.</p>
+      </div>
+      <label class="check" style="margin:14px 0 4px; border-top:1px solid var(--line); padding-top:10px"><input type="checkbox" id="dry"> Dry run - write the CSVs, send nothing to the dashboard</label>
 
       <div class="action">
-        <div class="row" style="margin:0"><button class="primary" data-action="speed">Speed check next</button><input type="number" id="limit" value="10" min="1" max="100"><span style="color:var(--dim)">sites</span></div>
+        <div class="row" style="margin:0"><button data-action="speed">Speed check next</button><input type="number" id="limit" value="10" min="1" max="100"><span style="color:var(--dim)">sites</span></div>
         <label class="check"><input type="checkbox" id="recheck"> Include sites already checked</label>
         <p>Google mobile score + LCP and the website teardown, then pushed to their preview pages. ~20-60s a site.</p>
       </div>
@@ -419,6 +510,14 @@ PAGE = r"""<!doctype html>
       <div class="action">
         <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
         <p>Rewrites preview-links and mailmeteor CSVs from the sheet. Never sends anything.</p>
+      </div>
+      <div class="action">
+        <button data-action="emails">Check emails</button>
+        <p>Finds addresses that can't take mail (typos, dead domains) and moves them to a letter. Free, a second or two each.</p>
+      </div>
+      <div class="action">
+        <button data-action="companies">Look up company types</button>
+        <p>Fills blank Company types from Companies House: Ltd/LLP can be emailed, the rest get a letter. Unsure = letter. Dissolved firms are left out.</p>
       </div>
       <div class="action">
         <button data-action="trades">Guess missing trades</button>
@@ -443,6 +542,8 @@ PAGE = r"""<!doctype html>
         <input type="password" id="PROSPECTS_API_SECRET" placeholder="leave blank to keep the saved one" autocomplete="off">
         <label>PAGESPEED_API_KEY <span id="set-psi"></span></label>
         <input type="password" id="PAGESPEED_API_KEY" placeholder="leave blank to keep the saved one" autocomplete="off">
+        <label>COMPANIES_HOUSE_API_KEY <span id="set-ch"></span></label>
+        <input type="password" id="COMPANIES_HOUSE_API_KEY" placeholder="leave blank to keep the saved one" autocomplete="off">
         <label>DASHBOARD_API_URL (optional)</label>
         <input type="text" id="DASHBOARD_API_URL" placeholder="https://admin.scalardigital.co.uk">
         <label>SITE_URL (optional)</label>
@@ -461,7 +562,7 @@ PAGE = r"""<!doctype html>
 <script>
 const TOKEN = "__TOKEN__";
 const $ = (id) => document.getElementById(id);
-let state = null, settingsLoaded = false, lastLines = -1, wasRunning = false;
+let state = null, settingsLoaded = false, lastLines = -1, wasRunning = false, polls = 0;
 
 async function post(path, body) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Panel-Token": TOKEN }, body: JSON.stringify(body || {}) });
@@ -506,6 +607,7 @@ function render() {
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
   $("set-psi").textContent = s.settings.PAGESPEED_API_KEY ? "(saved)" : "(not set - needed for speed checks)";
+  $("set-ch").textContent = s.settings.COMPANIES_HOUSE_API_KEY ? "(saved)" : "(not set - free at developer.company-information.service.gov.uk)";
 
   const j = s.job;
   $("dot").className = "dot " + (j.running ? "run" : j.exit_code === 0 ? "ok" : j.exit_code != null ? "bad" : "");
@@ -513,14 +615,14 @@ function render() {
   $("job-time").textContent = j.started ? (j.running ? "started " : "ran ") + ago(j.started) : "";
   $("stop").disabled = !j.running;
   document.querySelectorAll("[data-action]").forEach((b) => (b.disabled = j.running));
-  if (j.lines.length && j.lines.length !== lastLines) {
+  if (j.lines.length && j.seq !== lastLines) {
     const log = $("log");
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
     log.textContent = j.lines.join("\n");
     if (atBottom || lastLines === -1) log.scrollTop = log.scrollHeight;
-    lastLines = j.lines.length;
+    lastLines = j.seq;
   }
-  if (wasRunning && !j.running) loadProgress();
+  if ((wasRunning && !j.running) || (j.running && ++polls % 15 === 0)) loadProgress();
   wasRunning = j.running;
 }
 
@@ -533,6 +635,7 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   const action = b.dataset.action;
   const dry = $("dry").checked;
   if (action === "push" && !dry && !confirm("Push this sheet to the dashboard?")) return;
+  if (action === "all" && !confirm("Run the whole list? It pushes to the dashboard as it goes and can take hours on a long list.")) return;
   $("run-msg").textContent = "";
   const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value });
   if (r.error) $("run-msg").textContent = r.error;
@@ -544,9 +647,9 @@ $("open-folder").addEventListener("click", () => post("/api/open-folder"));
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
   await post("/api/settings", body);
-  $("PROSPECTS_API_SECRET").value = ""; $("PAGESPEED_API_KEY").value = "";
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
 });
 poll();
