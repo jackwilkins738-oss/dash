@@ -39,13 +39,16 @@ from __future__ import annotations
 import base64
 import html as htmllib
 import json
+import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-API = "https://api.company-information.service.gov.uk"
+# COMPANIES_HOUSE_API_URL is only for tests (a pretend register); leave it unset.
+API = os.environ.get("COMPANIES_HOUSE_API_URL", "https://api.company-information.service.gov.uk")
 # Bump when matching improves: saved "unsure" / "no record" answers from an older version are looked up again.
 LOGIC_VERSION = "3"
 USER_AGENT = "ScalarDigitalProspectCheck/1.0 (+https://www.scalardigital.co.uk)"
@@ -261,6 +264,20 @@ def key_problem(api_key: str) -> str | None:
     )
 
 
+# Companies House allows 600 requests per 5 minutes: one every 0.5s, shared by every caller.
+_THROTTLE = threading.Lock()
+_last_request = [0.0]
+MIN_GAP_S = 0.5
+
+
+def _wait_turn() -> None:
+    with _THROTTLE:
+        wait = _last_request[0] + MIN_GAP_S - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_request[0] = time.monotonic()
+
+
 class LookupFailed(Exception):
     """Companies House couldn't be asked. The message says why, in plain words."""
 
@@ -273,6 +290,7 @@ def _get(path: str, api_key: str) -> dict:
         headers={"Authorization": f"Basic {auth}", "Accept": "application/json", "User-Agent": USER_AGENT},
     )
     for attempt in range(4):
+        _wait_turn()
         try:
             with urllib.request.urlopen(req, timeout=20) as res:
                 return json.loads(res.read())

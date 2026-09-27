@@ -38,11 +38,12 @@ from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 PUSH = HERE / "push_prospects.py"
+FIND = HERE / "find_prospects.py"
 SETTING_KEYS = ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "DASHBOARD_API_URL", "SITE_URL"]
 SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"}
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "8"
+PANEL_VERSION = "9"
 MAX_LOG_LINES = 5000
 
 
@@ -96,6 +97,11 @@ def sheets() -> list[str]:
     names = sorted(p.name for p in OUTREACH.glob("*.xlsx") if not p.name.startswith("~$"))
     # The master list first, as it's the default.
     return sorted(names, key=lambda n: n != "outreach-master.xlsx")
+
+
+def latest_sheet() -> str:
+    names = sheets()
+    return max(names, key=lambda n: (OUTREACH / n).stat().st_mtime) if names else ""
 
 
 def sheet_path(name: str) -> Path | None:
@@ -157,6 +163,8 @@ def output_files() -> list[dict]:
 
 # Every button maps to fixed push_prospects.py options - the page never sends a command line.
 ACTIONS = {
+    "find": "Find new prospects",
+    "count": "Count matching firms",
     "all": "Run the whole list",
     "links": "Refresh preview links + Mailmeteor CSV",
     "speed": "Speed check the next batch",
@@ -200,11 +208,60 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
         yield ["--sheet", sheet, "--teardown", "--limit", str(RUN_ALL_BATCH)]
 
 
+SAFE_TEXT = re.compile(r"^[A-Za-z0-9 ,;'&.\-]*$")
+
+
+def build_find_args(body: dict, settings: dict[str, str]) -> tuple[list[str] | None, str]:
+    """find_prospects.py options from the finder form - every value checked, nothing passed through raw."""
+    from find_prospects import AGE_BANDS, DEFAULT_EXCLUDE, TRADES
+
+    if not settings.get("COMPANIES_HOUSE_API_KEY"):
+        return None, "Add COMPANIES_HOUSE_API_KEY in Settings first (free from developer.company-information.service.gov.uk)."
+    trades = [t for t in body.get("trades") or [] if t in TRADES]
+    if not trades:
+        return None, "Tick at least one trade."
+    areas = str(body.get("areas") or "").strip()
+    if not areas or not re.search(r"[A-Za-z0-9]", areas):
+        return None, "Type at least one area - a town like Guildford, or a postcode district like GU1."
+    include = str(body.get("include") or "").strip()
+    # Missing means "the usual"; an emptied box means "leave nothing out".
+    exclude = str(body["exclude"] if "exclude" in body else DEFAULT_EXCLUDE).strip()
+    for label, text in (("Areas", areas), ("Name must include", include), ("Leave out names with", exclude)):
+        if len(text) > 300 or not SAFE_TEXT.match(text):
+            return None, f"{label}: letters, numbers and commas only."
+    age = str(body.get("age") or "any")
+    if age not in AGE_BANDS:
+        return None, "Unknown company age."
+    try:
+        most = int(body.get("max") or 100)
+    except ValueError:
+        return None, "Max firms must be a number."
+    if not 1 <= most <= 1000:
+        return None, "Max firms must be 1-1000."
+    args = ["--trades", ",".join(trades), "--areas", areas, "--age", age, "--max", str(most), "--exclude", exclude]
+    if include:
+        args += ["--include", include]
+    if body.get("website_only"):
+        args.append("--website-only")
+    if body.get("no_directors"):
+        args.append("--no-directors")
+    if body.get("no_websites"):
+        args.append("--no-websites")
+    if body.get("action") == "count":
+        args.append("--count-only")
+    return args, ""
+
+
 def build_steps(body: dict, settings: dict[str, str]):
-    """(steps, error): steps is an iterable of push_prospects.py argument lists."""
+    """(steps, error): steps yields argument lists for push_prospects.py, or (script, args) pairs."""
     action = body.get("action")
     if action not in ACTIONS:
         return None, "Unknown action."
+    if action in ("find", "count"):
+        args, error = build_find_args(body, settings)
+        if args is None:
+            return None, error
+        return (lambda job: [(FIND, args)]), ""
     name = str(body.get("sheet") or "")
     path = sheet_path(name)
     if not path:
@@ -271,11 +328,11 @@ class Job:
             if len(self.lines) > MAX_LOG_LINES:
                 del self.lines[: len(self.lines) - MAX_LOG_LINES]
 
-    def start(self, label: str, steps, settings: dict[str, str]) -> str:
+    def start(self, label: str, steps, settings: dict[str, str], needs_secret: bool = True) -> str:
         with self.lock:
             if self.running():
                 return "Something is already running - wait for it or press Stop."
-            if len(settings["PROSPECTS_API_SECRET"]) < 32:
+            if needs_secret and len(settings["PROSPECTS_API_SECRET"]) < 32:
                 return "Add PROSPECTS_API_SECRET in Settings first (32+ characters, same value as in Vercel)."
             env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
             env.update({k: v for k, v in settings.items() if v})
@@ -289,14 +346,15 @@ class Job:
     def _run(self, steps, env: dict[str, str]) -> None:
         code = 0
         try:
-            for args in steps(self):
+            for step in steps(self):
                 if self.stopping:
                     break
-                self.note(f"> python push_prospects.py {' '.join(a if ' ' not in a else repr(a) for a in args)}")
+                script, args = step if isinstance(step, tuple) else (PUSH, step)
+                self.note(f"> python {script.name} {' '.join(a if ' ' not in a else repr(a) for a in args)}")
                 self.note("")
                 with self.lock:
                     self.proc = subprocess.Popen(
-                        [sys.executable, "-u", str(PUSH), *args],
+                        [sys.executable, "-u", str(script), *args],
                         cwd=str(HERE),
                         env=env,
                         stdout=subprocess.PIPE,
@@ -390,6 +448,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "job": JOB.state(),
                     "sheets": sheets(),
+                    "latest_sheet": latest_sheet(),
                     "files": output_files(),
                     "settings": {
                         k: (bool(settings[k]) if k in SECRET_KEYS else settings[k]) for k in SETTING_KEYS
@@ -418,7 +477,9 @@ class Handler(BaseHTTPRequestHandler):
             steps, error = build_steps(body, settings)
             if steps is None:
                 return self._json({"error": error}, 400)
-            error = JOB.start(ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") else ""), steps, settings)
+            finder = body["action"] in ("find", "count")
+            label = ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") and not finder else "")
+            error = JOB.start(label, steps, settings, needs_secret=not finder)
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
         if route == "/api/stop":
             JOB.stop()
@@ -482,6 +543,14 @@ PAGE = r"""<!doctype html>
   .msg { color:var(--bad); font-size:13px; margin-top:8px; min-height:1em; }
   .saved { color:var(--ok); font-size:12px; }
   details summary { cursor:pointer; color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { display:inline-flex; align-items:center; gap:5px; margin:0; padding:5px 9px; border:1px solid var(--line); border-radius:999px; color:var(--text); font-size:13px; cursor:pointer; user-select:none; }
+  .chip:has(input:checked) { border-color:var(--accent); background:rgba(79,140,255,.14); }
+  .chip input { margin:0; accent-color:var(--accent); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .hint { color:var(--dim); font-size:12px; margin:4px 0 0; }
+  .card.find { border-color:rgba(79,140,255,.45); }
+  summary.card-title { font-size:12px; font-weight:700; color:var(--dim); list-style-position:inside; }
 </style>
 </head>
 <body>
@@ -495,6 +564,54 @@ PAGE = r"""<!doctype html>
 </header>
 <main>
   <div>
+    <div class="card find">
+      <details id="finder-box" open>
+      <summary class="card-title">Find new prospects</summary>
+      <label>Trades</label>
+      <div class="chips" id="f-trades">
+        <label class="chip"><input type="checkbox" value="roofing" checked> Roofing</label>
+        <label class="chip"><input type="checkbox" value="lofts"> Loft conversions</label>
+        <label class="chip"><input type="checkbox" value="driveways"> Driveways &amp; patios</label>
+        <label class="chip"><input type="checkbox" value="landscaping"> Landscaping</label>
+        <label class="chip"><input type="checkbox" value="building"> Building &amp; extensions</label>
+      </div>
+      <label for="f-areas">Areas</label>
+      <input type="text" id="f-areas" placeholder="Guildford, Woking, GU21">
+      <p class="hint">Towns or postcode districts, separated by commas. Matched against where the company is registered.</p>
+      <div class="grid2">
+        <div>
+          <label for="f-age">Company age</label>
+          <select id="f-age">
+            <option value="any">Any age</option>
+            <option value="under2">Under 2 years</option>
+            <option value="2to10">2 to 10 years</option>
+            <option value="over10">Over 10 years</option>
+          </select>
+        </div>
+        <div>
+          <label for="f-max">Max new firms</label>
+          <input type="number" id="f-max" value="100" min="1" max="1000">
+        </div>
+      </div>
+      <details style="margin-top:10px">
+        <summary>More filters</summary>
+        <label for="f-include">Name must include (any of)</label>
+        <input type="text" id="f-include" placeholder="e.g. roof, slate">
+        <label for="f-exclude">Leave out names containing</label>
+        <input type="text" id="f-exclude" value="holdings, investments, estates, lettings, capital, finance">
+        <label class="check"><input type="checkbox" id="f-website-only"> Only firms with a website found</label>
+        <label class="check"><input type="checkbox" id="f-no-directors"> Skip director names (a little faster)</label>
+        <label class="check"><input type="checkbox" id="f-no-websites"> Skip the website search (much faster - every firm goes on the No website tab)</label>
+      </details>
+      <div class="row" style="margin-top:12px">
+        <button data-find="count">Count matches</button>
+        <button class="primary" data-find="find" style="flex:1">Find &amp; build list</button>
+      </div>
+      <p class="hint">Makes a new sheet in outreach/ - your existing sheets are never changed, and firms already in any of them are skipped, so running the same search again gives you the next batch.</p>
+      <div class="msg" id="find-msg"></div>
+      </details>
+    </div>
+
     <div class="card">
       <h2>List</h2>
       <select id="sheet"></select>
@@ -633,7 +750,12 @@ function render() {
   $("job-label").textContent = j.label || "Nothing running";
   $("job-time").textContent = j.started ? (j.running ? "started " : "ran ") + ago(j.started) : "";
   $("stop").disabled = !j.running;
-  document.querySelectorAll("[data-action]").forEach((b) => (b.disabled = j.running));
+  document.querySelectorAll("[data-action], [data-find]").forEach((b) => (b.disabled = j.running));
+  // A finished search: switch the List to the sheet it just made.
+  if (wasRunning && !j.running && j.label === "Find new prospects" && j.exit_code === 0 && s.latest_sheet && s.sheets.includes(s.latest_sheet)) {
+    sel.value = s.latest_sheet;
+    try { localStorage.setItem("sheet", sel.value); } catch (e) {}
+  }
   if (j.lines.length && j.seq !== lastLines) {
     const log = $("log");
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
@@ -661,6 +783,39 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   lastLines = -1;
   setTimeout(poll, 150);
 }));
+const FINDER_FIELDS = ["f-areas", "f-age", "f-max", "f-include", "f-exclude"];
+const FINDER_CHECKS = ["f-website-only", "f-no-directors", "f-no-websites"];
+function finderForm() {
+  return {
+    trades: [...document.querySelectorAll("#f-trades input:checked")].map((i) => i.value),
+    areas: $("f-areas").value, age: $("f-age").value, max: $("f-max").value,
+    include: $("f-include").value, exclude: $("f-exclude").value,
+    website_only: $("f-website-only").checked, no_directors: $("f-no-directors").checked, no_websites: $("f-no-websites").checked,
+  };
+}
+function saveFinder() {
+  try { localStorage.setItem("finder", JSON.stringify(finderForm())); } catch (e) {}
+}
+(function restoreFinder() {
+  let f = null;
+  try { f = JSON.parse(localStorage.getItem("finder") || "null"); } catch (e) {}
+  if (!f) return;
+  document.querySelectorAll("#f-trades input").forEach((i) => (i.checked = (f.trades || []).includes(i.value)));
+  $("f-areas").value = f.areas || ""; $("f-age").value = f.age || "any"; $("f-max").value = f.max || 100;
+  $("f-include").value = f.include || ""; if (f.exclude != null) $("f-exclude").value = f.exclude;
+  $("f-website-only").checked = !!f.website_only; $("f-no-directors").checked = !!f.no_directors; $("f-no-websites").checked = !!f.no_websites;
+})();
+document.querySelectorAll("[data-find]").forEach((b) => b.addEventListener("click", async () => {
+  saveFinder();
+  $("find-msg").textContent = "";
+  const r = await post("/api/run", { action: b.dataset.find, ...finderForm() });
+  if (r.error) $("find-msg").textContent = r.error;
+  lastLines = -1;
+  setTimeout(poll, 150);
+}));
+try { if (localStorage.getItem("finderOpen") === "0") $("finder-box").open = false; } catch (e) {}
+$("finder-box").addEventListener("toggle", () => { try { localStorage.setItem("finderOpen", $("finder-box").open ? "1" : "0"); } catch (e) {} });
+$("f-areas").addEventListener("keydown", (e) => { if (e.key === "Enter") document.querySelector('[data-find="count"]').click(); });
 $("stop").addEventListener("click", () => post("/api/stop"));
 $("open-folder").addEventListener("click", () => post("/api/open-folder"));
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); });
