@@ -39,11 +39,16 @@ from urllib.parse import urlparse
 HERE = Path(__file__).resolve().parent
 PUSH = HERE / "push_prospects.py"
 FIND = HERE / "find_prospects.py"
-SETTING_KEYS = ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "DASHBOARD_API_URL", "SITE_URL"]
-SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"}
+SETTING_KEYS = [
+    "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+    "DASHBOARD_API_URL", "SITE_URL",
+]
+SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN"}
+# A run this long gets a phone alert when it ends (if Telegram is set up).
+ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "10"
+PANEL_VERSION = "11"
 MAX_LOG_LINES = 5000
 
 
@@ -121,9 +126,14 @@ def progress(name: str) -> dict:
     try:
         sys.path.insert(0, str(HERE))
         import openpyxl  # noqa: F401 - push_prospects needs it too
+        from contact_rules import Claims, load_blocklist
         from push_prospects import SKIP_STATUSES, domain_of
     except (ImportError, SystemExit):
         return {"error": "Needs openpyxl: python -m pip install openpyxl"}
+    # The same rules push_prospects applies, so "still to do" can reach 0.
+    listed: dict[str, set[str]] = {}
+    blocklist = load_blocklist(OUTREACH, domain_of, listed)
+    claims = Claims(OUTREACH, listed)
     try:
         wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
         rows = list(wb["Outreach"].iter_rows(values_only=True))
@@ -141,6 +151,10 @@ def progress(name: str) -> dict:
         row = dict(zip(header, values))
         domain = domain_of(str(row.get("Website") or ""))
         if not (str(row.get("Business") or "").strip() and domain) or str(row.get("Status") or "") in SKIP_STATUSES:
+            continue
+        if blocklist.why(domain, str(row.get("Email") or ""), str(row.get("Business") or "")):
+            continue
+        if claims.other_owner(domain, name):
             continue
         # Dissolved firms are left out of every run (only when the sheet leaves the type blank).
         if domain in closed and not str(row.get("Company type") or "").strip():
@@ -349,6 +363,7 @@ class Job:
 
     def _run(self, steps, env: dict[str, str]) -> None:
         code = 0
+        keep_awake(True)
         try:
             for step in steps(self):
                 if self.stopping:
@@ -376,8 +391,13 @@ class Job:
         except Exception as e:  # never leave the panel stuck on "running"
             self.note(f"Panel error: {e}")
             code = 1
+        keep_awake(False)
         with self.lock:
             self.exit_code = code if not self.stopping else -1
+            lines = list(self.lines)
+        if time.time() - self.started >= ALERT_AFTER_S:
+            phone_alert(self.label, code, self.stopping, time.time() - self.started, lines, env)
+        with self.lock:
             self.seq += 1
             self.lines.append("Stopped." if self.stopping else "Done." if code == 0 else f"Stopped (exit code {code}).")
 
@@ -397,6 +417,40 @@ class Job:
                 "lines": list(self.lines),
                 "seq": self.seq,
             }
+
+
+def keep_awake(on: bool) -> None:
+    """Stops Windows sleeping mid-run (the screen may still turn off). Called on the run's own thread."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | (ES_SYSTEM_REQUIRED if on else 0))
+
+
+# Only these lines go in a phone alert: counts and outcomes, never names or emails.
+ALERT_LINE = re.compile(r"^(List done|Logged|Pushed|Wrote|\d+ prospects|\d+ companies|Only \d+|Stopped|  (Outreach|Check website|No website) )")
+
+
+def phone_alert(label: str, code: int, stopped: bool, seconds: float, lines: list[str], env: dict[str, str]) -> None:
+    token, chat = env.get("TELEGRAM_BOT_TOKEN", ""), env.get("TELEGRAM_CHAT_ID", "")
+    if not token or not chat:
+        return
+    mins = int(seconds // 60)
+    took = f"{mins // 60}h {mins % 60}m" if mins >= 60 else f"{mins}m"
+    head = ("Stopped: " if stopped else "Done: " if code == 0 else "Failed: ") + f"{label} ({took})"
+    summary = [l.strip() for l in lines if ALERT_LINE.match(l)][-6:]
+    text = "\n".join([head, *summary])
+    try:
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=json.dumps({"chat_id": chat, "text": text, "disable_web_page_preview": True}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=15).close()
+    except (urllib.error.URLError, TimeoutError, OSError):
+        pass  # an alert that can't be sent never breaks a run
 
 
 JOB = Job()
@@ -635,7 +689,7 @@ PAGE = r"""<!doctype html>
       <h2>Run</h2>
       <div class="action">
         <button class="primary" data-action="all">Run the whole list</button>
-        <p>Checks emails, looks up company types, guesses trades, then speed checks every site left, 10 at a time - each batch pushed as it goes. Start it and walk away; Stop loses nothing.</p>
+        <p>Checks emails, looks up company types, guesses trades, then speed checks every site left (4 at once, pushed every 10). Keeps the PC awake; start it and walk away - Stop loses nothing.</p>
       </div>
       <label class="check" style="margin:14px 0 4px; border-top:1px solid var(--line); padding-top:10px"><input type="checkbox" id="dry"> Dry run - write the CSVs, send nothing to the dashboard</label>
 
@@ -685,6 +739,11 @@ PAGE = r"""<!doctype html>
         <input type="password" id="PAGESPEED_API_KEY" placeholder="leave blank to keep the saved one" autocomplete="off">
         <label>COMPANIES_HOUSE_API_KEY <span id="set-ch"></span></label>
         <input type="password" id="COMPANIES_HOUSE_API_KEY" placeholder="leave blank to keep the saved one" autocomplete="off">
+        <label>TELEGRAM_BOT_TOKEN <span id="set-tg"></span></label>
+        <input type="password" id="TELEGRAM_BOT_TOKEN" placeholder="leave blank to keep the saved one" autocomplete="off">
+        <label>TELEGRAM_CHAT_ID</label>
+        <input type="text" id="TELEGRAM_CHAT_ID" placeholder="same as in Vercel">
+        <p class="hint">Optional: a phone alert when a run longer than 3 minutes finishes. Use the same bot and chat as the website's preview alerts.</p>
         <label>DASHBOARD_API_URL (optional)</label>
         <input type="text" id="DASHBOARD_API_URL" placeholder="https://admin.scalardigital.co.uk">
         <label>SITE_URL (optional)</label>
@@ -745,10 +804,12 @@ function render() {
     settingsLoaded = true;
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
+    $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
     if (!s.settings.PROSPECTS_API_SECRET) $("settings-box").open = true;
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
   $("set-psi").textContent = s.settings.PAGESPEED_API_KEY ? "(saved)" : "(not set - needed for speed checks)";
+  $("set-tg").textContent = s.settings.TELEGRAM_BOT_TOKEN ? "(saved)" : "(optional)";
   $("set-ch").textContent = s.settings.COMPANIES_HOUSE_API_KEY ? "(saved)" : "(not set - free at developer.company-information.service.gov.uk)";
 
   const j = s.job;
@@ -827,9 +888,9 @@ $("open-folder").addEventListener("click", () => post("/api/open-folder"));
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY"]) $(k).value = "";
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
   $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
 });
