@@ -39,6 +39,10 @@ Outputs, beside the sheet:
                      description and headings and guess one (trade_guess.py). Guesses are
                      kept in outreach/trade-guesses.csv and reused on every later run, so a
                      normal re-run never blanks them. Your sheet is never changed.
+    --find-contacts  for firms with a blank Email, Phone or Contact name: read their own site's
+                     published email and phone, and take the contact name from their directors
+                     on Companies House (when the company lookup confirmed their number). Kept in
+                     outreach/contacts-found.csv and reused; the sheet always wins. --recheck redoes.
     --check-emails   check every email address can receive mail (email_check.py): typo'd,
                      dead or mail-less domains. Bad ones go by letter instead. Results are
                      kept in outreach/email-checks.csv and reused; rechecked after 30 days.
@@ -165,6 +169,7 @@ def main() -> None:
     ap.add_argument("--guess-trades", action="store_true")
     ap.add_argument("--recheck", action="store_true")
     ap.add_argument("--retry-failed", action="store_true", help="with --teardown: only the sites that couldn't be checked before")
+    ap.add_argument("--find-contacts", action="store_true")
     ap.add_argument("--check-emails", action="store_true")
     ap.add_argument("--lookup-companies", action="store_true")
     args = ap.parse_args()
@@ -216,6 +221,8 @@ def main() -> None:
     guesses_path = args.sheet.parent / "trade-guesses.csv"
     lookups_path = args.sheet.parent / "company-lookups.csv"
     emails_path = args.sheet.parent / "email-checks.csv"
+    contacts_path = args.sheet.parent / "contacts-found.csv"
+    CONTACT_FIELDS = ["website", "email", "phone", "contact", "checked_at"]
     LOOKUP_FIELDS = ["website", "business", "result", "company_type", "number", "registered_name", "status", "how", "checked_at", "logic"]
     EMAIL_FIELDS = ["email", "result", "checked_at"]
 
@@ -234,6 +241,7 @@ def main() -> None:
     guesses: dict[str, str] = {w: r["trade"] for w, r in read_csv(guesses_path, "website").items() if r.get("trade")}
     lookups = read_csv(lookups_path, "website")
     email_checks = read_csv(emails_path, "email")
+    contacts_found = read_csv(contacts_path, "website")
 
     def email_result(email: str) -> str:
         return (email_checks.get(email.strip().lower()) or {}).get("result") or ""
@@ -280,9 +288,13 @@ def main() -> None:
                 looked_up_type = {"company": lookup.get("company_type"), "none": "no record", "unsure": "unsure"}.get(
                     lookup.get("result") or ""
                 )
-            email = str(row.get("Email") or "").strip()
+            # The sheet wins; what --find-contacts found only fills blanks.
+            found = contacts_found.get(domain) or {}
+            email = str(row.get("Email") or "").strip() or (found.get("email") or "").strip()
+            if email and not row.get("Email"):
+                row = {**row, "Email": email}
             channel = channel_for(row, looked_up_type, is_bad(email_result(email)) if email else False)
-            contact = str(row.get("Contact name") or "").strip()
+            contact = str(row.get("Contact name") or "").strip() or (found.get("contact") or "").strip()
             out.append(
                 {
                     "slug": slug,
@@ -299,6 +311,8 @@ def main() -> None:
                     "_email": email,
                     "_status": row.get("Status") or "",
                     "_greeting": contact.split()[0] if contact else "there",
+                    "_contact": contact,
+                    "_phone": str(row.get("Phone") or "").strip() or (found.get("phone") or "").strip(),
                 }
             )
         return out, skipped, closed
@@ -517,39 +531,6 @@ def main() -> None:
                 pages.append(extra)
         return "\n".join(pages)
 
-    if args.check_emails:
-        from email_check import check, is_bad
-
-        now = datetime.now(timezone.utc)
-        domain_cache: dict[str, str] = {}
-        todo = []
-        for p in selected:
-            email = p["_email"].strip().lower()
-            if not email or "@" not in email:
-                continue
-            saved = email_checks.get(email)
-            if saved and not args.recheck:
-                try:
-                    age = now - datetime.fromisoformat(saved.get("checked_at") or "")
-                    if age.days < EMAIL_RECHECK_DAYS:
-                        continue
-                except ValueError:
-                    pass
-            todo.append((p, email))
-        print(f"Checking {len(todo)} email addresses ...")
-        bad = 0
-        for p, email in todo:
-            result = check(email, domain_cache)
-            if result == "unknown":
-                print(f"    {email}: couldn't check just now - left as it was")
-                continue
-            email_checks[email] = {"email": email, "result": result, "checked_at": now.isoformat()}
-            if is_bad(result):
-                bad += 1
-                print(f"    {p['business_name']}: {email} - {result}")
-        write_csv(emails_path, EMAIL_FIELDS, email_checks)
-        print(f"{bad} won't take mail - they'll go by letter. Saved to {emails_path.name}")
-
     if args.lookup_companies:
         ch_key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
         if not ch_key:
@@ -607,6 +588,92 @@ def main() -> None:
             f"{counts.get('closed', 0)} dissolved. Saved to {lookups_path.name}"
         )
 
+    if args.find_contacts:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from find_prospects import find_email, find_phone, pick_director
+
+        ch_key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
+        todo = [
+            p for p in selected
+            if not (p["_email"] and p["_contact"] and p["_phone"]) and (args.recheck or p["website"] not in contacts_found)
+        ]
+        print(f"Looking for missing emails, phones and contact names for {len(todo)} firms ...")
+
+        def contacts_for(p: dict) -> dict:
+            pages = company_pages(p["website"]) or ""
+            email = find_email(pages, p["website"]) if pages else ""
+            phone = find_phone(pages) if pages else ""
+            contact = ""
+            number = (lookups.get(p["website"]) or {}).get("number") or ""
+            confirmed = (lookups.get(p["website"]) or {}).get("result") == "company"
+            if ch_key and number and confirmed:
+                from company_lookup import LookupFailed, _get
+
+                try:
+                    contact, _ = pick_director(_get(f"/company/{number}/officers?items_per_page=50", ch_key))
+                except (LookupFailed, PermissionError):
+                    pass
+            return {"website": p["website"], "email": email, "phone": phone, "contact": contact,
+                    "checked_at": datetime.now(timezone.utc).isoformat()}
+
+        added = {"email": 0, "phone": 0, "contact": 0}
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for i, (p, found) in enumerate(zip(todo, pool.map(contacts_for, todo)), 1):
+                contacts_found[p["website"]] = found
+                new = []
+                if found["email"] and not p["_email"]:
+                    p["_email"] = found["email"]
+                    added["email"] += 1
+                    new.append(found["email"])
+                if found["phone"] and not p["_phone"]:
+                    added["phone"] += 1
+                    new.append(found["phone"])
+                if found["contact"] and not p["_contact"]:
+                    added["contact"] += 1
+                    new.append(found["contact"])
+                print(f"    [{i}/{len(todo)}] {p['business_name']}: {' · '.join(new) or 'nothing new found'}", flush=True)
+                if i % 25 == 0:
+                    write_csv(contacts_path, CONTACT_FIELDS, contacts_found)
+        write_csv(contacts_path, CONTACT_FIELDS, contacts_found)
+        print(
+            f"Found {added['email']} emails, {added['phone']} phone numbers and {added['contact']} contact names. "
+            f"Saved to {contacts_path.name} - your sheet is unchanged."
+        )
+
+    if args.check_emails:
+        from email_check import check, is_bad
+
+        now = datetime.now(timezone.utc)
+        domain_cache: dict[str, str] = {}
+        todo = []
+        for p in selected:
+            email = p["_email"].strip().lower()
+            if not email or "@" not in email:
+                continue
+            saved = email_checks.get(email)
+            if saved and not args.recheck:
+                try:
+                    age = now - datetime.fromisoformat(saved.get("checked_at") or "")
+                    if age.days < EMAIL_RECHECK_DAYS:
+                        continue
+                except ValueError:
+                    pass
+            todo.append((p, email))
+        print(f"Checking {len(todo)} email addresses ...")
+        bad = 0
+        for p, email in todo:
+            result = check(email, domain_cache)
+            if result == "unknown":
+                print(f"    {email}: couldn't check just now - left as it was")
+                continue
+            email_checks[email] = {"email": email, "result": result, "checked_at": now.isoformat()}
+            if is_bad(result):
+                bad += 1
+                print(f"    {p['business_name']}: {email} - {result}")
+        write_csv(emails_path, EMAIL_FIELDS, email_checks)
+        print(f"{bad} won't take mail - they'll go by letter. Saved to {emails_path.name}")
+
     if args.guess_trades:
         from trade_guess import guess_trade, page_text_for_guess
 
@@ -629,7 +696,7 @@ def main() -> None:
         write_csv(guesses_path, ["website", "trade"], {w: {"website": w, "trade": t} for w, t in guesses.items()})
         print(f"{new_guesses} guessed; saved to {guesses_path}")
 
-    if args.check_emails or args.lookup_companies or args.guess_trades:
+    if args.find_contacts or args.check_emails or args.lookup_companies or args.guess_trades:
         # Rebuild from the updated notes, so channels, trades and the CSVs
         # reflect what was just found. Dissolved firms drop out here.
         chosen = [p["slug"] for p in selected]
