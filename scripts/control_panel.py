@@ -39,6 +39,8 @@ from urllib.parse import urlparse
 HERE = Path(__file__).resolve().parent
 PUSH = HERE / "push_prospects.py"
 FIND = HERE / "find_prospects.py"
+EXPORT = HERE / "export_results.py"
+RESULTS_NAME = "outreach-results.xlsx"
 SETTING_KEYS = [
     "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
     "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "DASHBOARD_API_URL", "SITE_URL",
@@ -48,7 +50,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "18"
+PANEL_VERSION = "19"
 MAX_LOG_LINES = 5000
 
 
@@ -99,7 +101,7 @@ def save_settings(new: dict[str, str]) -> None:
 def sheets() -> list[str]:
     if not OUTREACH.is_dir():
         return []
-    names = sorted(p.name for p in OUTREACH.glob("*.xlsx") if not p.name.startswith("~$"))
+    names = sorted(p.name for p in OUTREACH.glob("*.xlsx") if not p.name.startswith("~$") and p.name != RESULTS_NAME and not p.name.endswith(".tmp.xlsx"))
     # The master list first, as it's the default.
     return sorted(names, key=lambda n: n != "outreach-master.xlsx")
 
@@ -183,6 +185,7 @@ ACTIONS = {
     "retry": "Retry failed speed checks",
     "links": "Refresh preview links + Mailmeteor CSV",
     "prepare": "Prepare Mailmeteor send",
+    "export": "Export to Excel",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
     "contacts": "Find missing emails & phones",
@@ -208,6 +211,7 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
     if not settings.get("PAGESPEED_API_KEY"):
         job.note("No PAGESPEED_API_KEY in Settings - skipping the speed checks.")
         yield ["--sheet", sheet, "--verify-links"]
+        yield (EXPORT, [])
         return
     last = None
     while True:
@@ -216,6 +220,7 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
         if not remaining:
             # Last step: make sure every link in the Mailmeteor file actually loads.
             yield ["--sheet", sheet, "--verify-links"]
+            yield (EXPORT, [])
             now = progress(name)
             failed = now.get("failed") or 0
             job.note(
@@ -284,6 +289,8 @@ def build_steps(body: dict, settings: dict[str, str]):
     action = body.get("action")
     if action not in ACTIONS:
         return None, "Unknown action."
+    if action == "export":
+        return (lambda job: [(EXPORT, [])]), ""
     if action == "install_segno":
         return (lambda job: [("pip", ["install", "segno"])]), ""
     if action in ("find", "count"):
@@ -307,6 +314,7 @@ def build_steps(body: dict, settings: dict[str, str]):
         if dry:
             return None, "Prepare Mailmeteor send pushes for real, so every link exists - untick Dry run."
         args.append("--verify-links")
+        return (lambda job: [args, (EXPORT, [])]), ""
     elif action == "speed":
         try:
             n = int(body.get("limit") or 10)
@@ -758,6 +766,12 @@ class Handler(BaseHTTPRequestHandler):
 
             ch = load_settings()["COMPANIES_HOUSE_API_KEY"]
             return self._json({"ok": True, "warning": key_problem(ch) if ch else None})
+        if route == "/api/open-results":
+            path = OUTREACH / RESULTS_NAME
+            if not path.exists():
+                return self._json({"error": "Export first - there's no results workbook yet."}, 400)
+            open_folder(path)
+            return self._json({"ok": True})
         if route == "/api/open-folder":
             OUTREACH.mkdir(exist_ok=True)
             open_folder(OUTREACH)
@@ -994,6 +1008,8 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
 
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center"><h2 style="margin:0">Files in outreach/</h2><button id="open-folder">Open folder</button></div>
+      <div class="row" style="margin-top:10px"><button class="primary" data-action="export">Export to Excel</button><button id="open-results">Open results in Excel</button></div>
+      <p class="hint">One workbook for every list: outreach-results.xlsx, grouped by the date each firm was added, with a Notes column that's kept every time. Also updated automatically at the end of Run the whole list and Prepare Mailmeteor send. Close it in Excel before exporting.</p>
       <ul class="files" id="files" style="margin-top:10px"></ul>
     </div>
 
@@ -1340,6 +1356,7 @@ async function reviewDecide(b) {
 }
 $("stop").addEventListener("click", () => post("/api/stop"));
 $("open-folder").addEventListener("click", () => post("/api/open-folder"));
+$("open-results").addEventListener("click", async () => { const r = await post("/api/open-results"); if (r.error) { $("run-msg").style.color = "var(--bad)"; $("run-msg").textContent = r.error; } });
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (!$("pane-calls").hidden) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
