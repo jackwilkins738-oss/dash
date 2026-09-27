@@ -188,6 +188,60 @@ class PushRun(unittest.TestCase):
         with (self.dir / "mailmeteor-push.csv").open(encoding="utf-8") as f:
             self.assertEqual([r["business"] for r in csv.DictReader(f)], ["New Roofing"])  # after it
 
+    def test_verify_links_keeps_only_links_that_load(self):
+        import urllib.error
+
+        from push_prospects import make_slug
+
+        make_sheet(self.dir / "v.xlsx", [
+            {"Business": "Good Roofing", "Website": "good.co.uk", "Status": "New", "Email": "a@good.co.uk", "Company type": "Ltd"},
+            {"Business": "Broken Roofing", "Website": "broken.co.uk", "Status": "New", "Email": "a@broken.co.uk", "Company type": "Ltd"},
+        ])
+        slugs = {make_slug(b, w, "x" * 40): {} for b, w in (("Good Roofing", "good.co.uk"), ("Broken Roofing", "broken.co.uk"))}
+        seen = []
+
+        class Res(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(req, timeout=0):
+            seen.append(req.full_url)
+            if "broken" in req.full_url:
+                raise urllib.error.HTTPError(req.full_url, 404, "nf", {}, io.BytesIO(b""))
+            return Res(b"<title>Prepared for Good Roofing</title>")
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, secret, tenant: slugs), \
+                mock.patch("push_prospects.urllib.request.urlopen", fake_urlopen), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "v.xlsx"), "--dry-run", "--verify-links"]):
+            import push_prospects
+
+            push_prospects.main()
+        out = buf.getvalue()
+        self.assertIn("Broken Roofing: HTTP 404", out)
+        self.assertIn("READY: 1 links checked and loading", out)
+        with (self.dir / "mailmeteor-v.csv").open(encoding="utf-8") as f:
+            self.assertEqual([r["business"] for r in csv.DictReader(f)], ["Good Roofing"])
+        # Checked as the owner's own visit, never counted as theirs.
+        self.assertTrue(seen and all("src=dashboard" in u and "src=email" not in u for u in seen))
+
+    def test_link_loads_needs_their_preview(self):
+        from push_prospects import link_loads
+
+        class Res(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch("push_prospects.urllib.request.urlopen", lambda req, timeout=0: Res(b"<title>Scalar Digital</title>")):
+            self.assertEqual(link_loads("https://x/for/a?src=email"), "page loaded but isn't their preview")
+
     def test_parallel_speed_checks_record_findings(self):
         import threading
 
