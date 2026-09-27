@@ -43,6 +43,10 @@ Outputs, beside the sheet:
                      published email and phone, and take the contact name from their directors
                      on Companies House (when the company lookup confirmed their number). Kept in
                      outreach/contacts-found.csv and reused; the sheet always wins. --recheck redoes.
+    --letters        write letters-<sheet>.html: a print-ready A4 letter for every letter-channel
+                     firm (and a finder sheet's No website tab), each with a QR code to their
+                     preview page. Skips firms already posted one (--letters-all includes them).
+                     Needs: python -m pip install segno
     --check-emails   check every email address can receive mail (email_check.py): typo'd,
                      dead or mail-less domains. Bad ones go by letter instead. Results are
                      kept in outreach/email-checks.csv and reused; rechecked after 30 days.
@@ -140,6 +144,17 @@ def channel_for(row: dict, company_type: str | None = None, email_bad: bool = Fa
     return "email" if email_ok else "letter"
 
 
+ADDRESS_PARTS = ["Address 1", "Address line 1", "Address 2", "Address line 2", "Street", "Town", "City", "County", "Postcode"]
+
+
+def address_of(row: dict) -> str:
+    """A postal address from whatever address columns the sheet has."""
+    for col in ("Address", "Postal address", "Registered address"):
+        if str(row.get(col) or "").strip():
+            return str(row[col]).strip()
+    return ", ".join(str(row[c]).strip() for c in ADDRESS_PARTS if str(row.get(c) or "").strip())
+
+
 def number(value):
     try:
         return float(value)
@@ -170,6 +185,8 @@ def main() -> None:
     ap.add_argument("--recheck", action="store_true")
     ap.add_argument("--retry-failed", action="store_true", help="with --teardown: only the sites that couldn't be checked before")
     ap.add_argument("--find-contacts", action="store_true")
+    ap.add_argument("--letters", action="store_true")
+    ap.add_argument("--letters-all", action="store_true", help="with --letters: include firms already posted a letter")
     ap.add_argument("--check-emails", action="store_true")
     ap.add_argument("--lookup-companies", action="store_true")
     args = ap.parse_args()
@@ -213,6 +230,7 @@ def main() -> None:
             fixed = overrides.apply(row, d)
             if fixed is not None:
                 sheet_rows.append(fixed)
+    no_website_rows = tab_rows("No website")  # letters only
     wb.close()
 
     # ---- this machine's notes: saved results reused on every run ---------
@@ -222,7 +240,7 @@ def main() -> None:
     lookups_path = args.sheet.parent / "company-lookups.csv"
     emails_path = args.sheet.parent / "email-checks.csv"
     contacts_path = args.sheet.parent / "contacts-found.csv"
-    CONTACT_FIELDS = ["website", "email", "phone", "contact", "checked_at"]
+    CONTACT_FIELDS = ["website", "email", "phone", "contact", "address", "checked_at"]
     LOOKUP_FIELDS = ["website", "business", "result", "company_type", "number", "registered_name", "status", "how", "checked_at", "logic"]
     EMAIL_FIELDS = ["email", "result", "checked_at"]
 
@@ -312,6 +330,8 @@ def main() -> None:
                     "_status": row.get("Status") or "",
                     "_greeting": contact.split()[0] if contact else "there",
                     "_contact": contact,
+                    "_key": overrides.row_key(row),
+                    "_address": address_of(row) or (found.get("address") or "").strip(),
                     "_phone": str(row.get("Phone") or "").strip() or (found.get("phone") or "").strip(),
                 }
             )
@@ -451,6 +471,114 @@ def main() -> None:
                     }
                 )
         print(f"Wrote {out.name} and {mm.name}")
+
+    def make_letters() -> None:
+        try:
+            import letters
+        except ImportError:
+            sys.exit("Letters need one extra piece: python -m pip install segno  (the panel has an Install button).")
+        try:
+            import segno  # noqa: F401
+        except ImportError:
+            sys.exit("Letters need one extra piece: python -m pip install segno  (the panel has an Install button).")
+        from company_lookup import LookupFailed, _get
+
+        outreach = args.sheet.parent
+        sent = read_csv(outreach / "letters-sent.csv", "key")
+        with_site_t, no_site_t = letters.load_templates(outreach)
+        sender = {
+            "name": os.environ.get("LETTER_SIGNOFF", "") or "Scalar Digital",
+            "email": os.environ.get("LETTER_EMAIL", "") or "hello@scalardigital.co.uk",
+            "phone": os.environ.get("LETTER_PHONE", "") or "07401 696272",
+            "site": site.removeprefix("https://").removeprefix("http://"),
+        }
+        ch_key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
+
+        def registered_office(p_website: str) -> str:
+            found = lookups.get(p_website) or {}
+            if not (ch_key and found.get("number") and found.get("result") == "company"):
+                return ""
+            try:
+                office = _get(f"/company/{found['number']}", ch_key).get("registered_office_address") or {}
+            except (LookupFailed, PermissionError):
+                return ""
+            return ", ".join(str(office[k]).strip() for k in ("address_line_1", "address_line_2", "locality", "region", "postal_code") if office.get(k))
+
+        def values(business: str, contact: str, website: str, trade: str, area: str, score, issue: str) -> dict:
+            return {
+                "greeting": contact.split()[0] if contact else "Sir or Madam",
+                "business": business, "website": website, "area": area,
+                "score_sentence": letters.score_sentence(score),
+                "issue_sentence": f"I also noticed {issue}." if issue else "",
+                "trade_plural": letters.TRADE_PLURALS.get((trade or "").lower(), "trade businesses"),
+                "sender_email": sender["email"], "sender_phone": sender["phone"], "signoff": sender["name"],
+            }
+
+        batch, no_address, already = [], [], 0
+        for p in prospects:
+            if p["channel"] != "letter":
+                continue
+            if p["_key"] in sent and not args.letters_all:
+                already += 1
+                continue
+            address = p["_address"]
+            if not address:
+                address = registered_office(p["website"])
+                if address:
+                    contacts_found.setdefault(p["website"], {"website": p["website"]})["address"] = address
+            if not address:
+                no_address.append(p["business_name"])
+                continue
+            url = f"{site}/for/{p['slug']}?src=letter"
+            body = letters.fill(with_site_t, values(p["business_name"], p["_contact"], p["website"], p.get("trade") or "",
+                                                    p.get("area") or "", p.get("mobile_score"), p.get("_top_issue") or ""))
+            batch.append({"key": p["_key"], "business": p["business_name"], "contact": p["_contact"], "address": address,
+                          "url": url, "short_url": url.split("://", 1)[-1].split("?")[0], "body": body})
+        # A finder sheet's No website tab: no preview page, so the code goes to the website itself.
+        for row in no_website_rows:
+            d = decisions.get(overrides.row_key(row), {})
+            fixed = overrides.apply(row, d)
+            business = str(row.get("Business") or "").strip()
+            if fixed is None or not business or str(row.get("Status") or "") in SKIP_STATUSES:
+                continue
+            if blocklist.why(None, str(row.get("Email") or ""), business):
+                continue
+            key = overrides.row_key(row)
+            if key in sent and not args.letters_all:
+                already += 1
+                continue
+            address = address_of(row)
+            if not address:
+                no_address.append(business)
+                continue
+            url = f"{site}/?src=letter"
+            contact = str(row.get("Contact name") or "").strip()
+            body = letters.fill(no_site_t, values(business, contact, "", str(row.get("Trade") or ""), str(row.get("Area") or ""), None, ""))
+            batch.append({"key": key, "business": business, "contact": contact, "address": address,
+                          "url": url, "short_url": url.split("://", 1)[-1].split("?")[0], "body": body})
+
+        if contacts_found:
+            write_csv(contacts_path, CONTACT_FIELDS, contacts_found)
+        batch.sort(key=lambda l: l["business"].lower())
+        page = outreach / f"letters-{args.sheet.stem}.html"
+        batch_file = outreach / f"letters-batch-{args.sheet.stem}.csv"
+        if not batch:
+            print(f"No letters to make ({already} already posted, {len(no_address)} with no address).")
+            return
+        for l in batch:
+            l["qr"] = letters.qr_svg(l["url"])
+        page.write_text(letters.render(batch, sender), encoding="utf-8")
+        with batch_file.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["key", "business", "sheet"])
+            writer.writeheader()
+            writer.writerows({"key": l["key"], "business": l["business"], "sheet": args.sheet.name} for l in batch)
+        print(f"Wrote {page.name}: {len(batch)} letter{'s' if len(batch) != 1 else ''} ready to print.")
+        if already:
+            print(f"  {already} left out - already posted a letter (tick 'Include firms already sent one' to redo)")
+        if no_address:
+            print(f"  {len(no_address)} have no postal address, so no letter: " + ", ".join(no_address[:8]) + (" ..." if len(no_address) > 8 else ""))
+        if args.dry_run:
+            print("  Dry run: nothing pushed, so new firms' preview pages may not exist yet - run it without Dry run before posting.")
 
     def preview_url(p: dict) -> str:
         src = "email" if p["channel"] == "email" else "letter"
@@ -758,6 +886,9 @@ def main() -> None:
     # Rewritten after the teardown, so new scores reach the Mailmeteor file.
     if args.teardown:
         write_outputs()
+
+    if args.letters:
+        make_letters()
 
     if args.dry_run:
         print("Dry run: nothing sent.")

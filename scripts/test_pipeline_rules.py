@@ -201,6 +201,73 @@ class PushRun(unittest.TestCase):
         self.assertEqual((rows["Has Email Roofing"]["email"], rows["Has Email Roofing"]["greeting_name"]), ("mine@hasemail.co.uk", "Sue"))
 
 
+class Letters(unittest.TestCase):
+    def test_fill_leaves_out_unknown_facts(self):
+        import letters
+
+        body = letters.fill("Dear {greeting},\n\nA. {score_sentence} {issue_sentence} B. {unknown}", {"greeting": "Tom"})
+        self.assertEqual(body, "Dear Tom,\n\nA. B. {unknown}")
+        self.assertEqual(letters.score_sentence(38), "It scored 38 out of 100 on mobile, which Google itself counts as poor.")
+        self.assertEqual(letters.score_sentence(None), "")
+
+    def test_letters_run(self):
+        import openpyxl
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Outreach"
+            head = ["Business", "Website", "Status", "Email", "Company type", "Contact name", "Address", "Trade", "Company number"]
+            ws.append(head)
+            ws.append(["Sole Roofer", "soleroofer.co.uk", "New", "", "Sole trader", "Bill Kerr", "4 Mill Lane, Woking, GU21 1AA", "Roofing", ""])
+            ws.append(["No Address Ltd", "noaddress.co.uk", "New", "", "Ltd", "", "", "Roofing", "07654321"])
+            ws.append(["Posted Already", "posted.co.uk", "New", "", "Sole trader", "", "1 Road, Town, GU1 1AA", "", ""])
+            ws.append(["Email Firm", "emailfirm.co.uk", "New", "info@emailfirm.co.uk", "Ltd", "", "2 Road, Town", "", ""])
+            nw = wb.create_sheet("No website")
+            nw.append(["Business", "Status", "Company type", "Contact name", "Registered address", "Trade", "Company number"])
+            nw.append(["Siteless Builders", "New", "Ltd", "Ann Hale", "9 High St, Guildford, GU1 2BB", "Building & extensions", "01111111"])
+            wb.save(d / "letters.xlsx")
+            with (d / "company-lookups.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["website", "result", "number", "company_type"])
+                w.writerow(["noaddress.co.uk", "company", "07654321", "Ltd"])
+            with (d / "teardown-log.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["website", "checked_at", "result", "mobile_score", "lcp_s", "top_issue", "issue_count"])
+                w.writerow(["soleroofer.co.uk", "2026-09-01", "ok", "34", "7.1", "your phone number isn't tap-to-call on a mobile", "2"])
+            import overrides
+
+            with (d / "letters-sent.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["key", "business", "sheet", "posted"])
+                w.writerow([overrides.row_key({"Business": "Posted Already"}), "Posted Already", "letters.xlsx", "2026-09-01"])
+            office = {"registered_office_address": {"address_line_1": "Unit 3", "locality": "Leeds", "postal_code": "LS1 1AA"}}
+            buf = io.StringIO()
+            env = {"PROSPECTS_API_SECRET": "x" * 40, "COMPANIES_HOUSE_API_KEY": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"}
+            with mock.patch.dict(os.environ, env), redirect_stdout(buf), mock.patch("company_lookup._get", lambda path, key: office), \
+                    mock.patch.object(sys, "argv", ["p", "--sheet", str(d / "letters.xlsx"), "--letters", "--dry-run"]):
+                import push_prospects
+
+                push_prospects.main()
+            out = buf.getvalue()
+            self.assertIn("Wrote letters-letters.html: 3 letters ready", out)
+            self.assertIn("1 left out - already posted", out)
+            page = (d / "letters-letters.html").read_text(encoding="utf-8")
+            self.assertIn("Dear Bill,", page)
+            self.assertIn("It scored 34 out of 100 on mobile, which Google itself counts as poor.", page)
+            self.assertIn("I also noticed your phone number isn&#x27;t tap-to-call on a mobile.", page)
+            self.assertIn("Unit 3<br>Leeds<br>LS1 1AA", page)  # registered office from Companies House
+            self.assertIn("Dear Ann,", page)
+            self.assertIn("I couldn&#x27;t find a website for Siteless Builders", page)
+            self.assertIn("builders", page)
+            self.assertNotIn("Email Firm", page)  # goes by email, not letter
+            self.assertNotIn("Posted Already", page)
+            self.assertEqual(page.count("data:image/svg+xml"), 3)
+            with (d / "letters-batch-letters.csv").open(encoding="utf-8") as f:
+                self.assertEqual(len(list(csv.DictReader(f))), 3)
+
+
 class Review(unittest.TestCase):
     def setUp(self):
         import openpyxl
