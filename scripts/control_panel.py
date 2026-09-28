@@ -52,6 +52,7 @@ RESULTS_NAME = "outreach-results.xlsx"
 SETTING_KEYS = [
     "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
     "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST",
+    "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT",
     "DASHBOARD_API_URL", "SITE_URL",
 ]
 SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD"}
@@ -59,7 +60,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "23"
+PANEL_VERSION = "24"
 MAX_LOG_LINES = 5000
 
 
@@ -551,6 +552,38 @@ def calls_for(sheet: str) -> dict:
     return out
 
 
+def quote_action(body: dict) -> tuple[dict, int]:
+    """Calls tab "Quote" button: a numbered quote in the dashboard, and its link for you to send."""
+    import calls
+    import quotes
+    from push_prospects import make_slug
+
+    settings = load_settings()
+    sheet, key = str(body.get("sheet") or ""), str(body.get("key") or "")
+    business = str(body.get("business") or "").strip()[:120]
+    package = str(body.get("package") or "")
+    website = str(body.get("website") or "").lower()
+    email = str(body.get("email") or "").strip()
+    phone = str(body.get("phone") or "").strip()[:40]
+    if not sheet_path(sheet) or not REVIEW_KEY.match(key) or not business or package not in quotes.PACKAGES:
+        return {"error": "That doesn't look right."}, 400
+    if email and not EMAIL.match(email):
+        email = ""
+    if len(settings["PROSPECTS_API_SECRET"]) < 32:
+        return {"error": "Add PROSPECTS_API_SECRET in Settings first."}, 400
+    slug = make_slug(business, website, settings["PROSPECTS_API_SECRET"]) if DOMAIN.match(website) else None
+    try:
+        result = quotes.create_quote(settings, business, email, phone, package, slug)
+    except quotes.QuoteFailed as e:
+        return {"error": f"No quote made: {e}."}, 502
+    quotes.record(OUTREACH, sheet, key, business, package, result)
+    calls.log_call(OUTREACH, sheet, key, business, "Quoted", result.get("quote_number", ""))
+    calls.mark_reply_handled(OUTREACH, business)
+    signoff = settings.get("LETTER_SIGNOFF") or "Scalar Digital"
+    return {"ok": True, "quote_number": result.get("quote_number"), "total": (result.get("total_pence") or 0) / 100,
+            "url": result["quote_url"], "mailto": quotes.email_link(email, str(body.get("contact") or ""), business, result, signoff)}, 200
+
+
 def call_action(body: dict) -> tuple[dict, int]:
     import calls
     from contact_rules import add_to_blocklist
@@ -898,6 +931,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"error": "Both letters need some text (5,000 characters at most)."}, 400)
                 letters.save_templates(OUTREACH, with_site, no_site)
             return self._json({"ok": True})
+        if route == "/api/quote":
+            return self._json(*quote_action(body))
         if route == "/api/calls":
             return self._json(*call_action(body))
         if route == "/api/review":
@@ -1224,6 +1259,9 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
         <div class="grid2"><input type="text" id="MAIL_ADDRESS" placeholder="the Gmail you send from"><input type="password" id="MAIL_APP_PASSWORD" placeholder="app password (blank keeps the saved one)" autocomplete="off"></div>
         <input type="text" id="MAIL_IMAP_HOST" placeholder="imap.gmail.com (leave blank for Gmail)" style="margin-top:6px">
         <p class="hint">For "Check replies". Not your normal password: Google Account &gt; Security &gt; 2-Step Verification &gt; App passwords. It only ever reads - nothing is marked read, moved or deleted.</p>
+        <label>Quotes: build £ / landing page £ / VAT % / deposit %</label>
+        <div class="grid2" style="grid-template-columns:1fr 1fr 1fr 1fr"><input type="text" id="QUOTE_PRICE_BUILD" placeholder="2500"><input type="text" id="QUOTE_PRICE_LANDING" placeholder="750"><input type="text" id="QUOTE_VAT_RATE" placeholder="0"><input type="text" id="QUOTE_DEPOSIT_PERCENT" placeholder="0"></div>
+        <p class="hint">For the Calls tab's Quote buttons. VAT: 0 if you're not VAT-registered, 20 if you are.</p>
         <label>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</label>
         <div class="grid2" style="grid-template-columns:1fr 1fr 1fr"><input type="text" id="LETTER_SIGNOFF" placeholder="Scalar Digital"><input type="text" id="LETTER_EMAIL" placeholder="hello@scalardigital.co.uk"><input type="text" id="LETTER_PHONE" placeholder="07401 696272"></div>
         <p class="hint">Who the letters are from: the name they're signed with, and the email and phone they give.</p>
@@ -1309,7 +1347,8 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT"]) $(k).value = s.settings[k] || "";
+    quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     if (!s.settings.PROSPECTS_API_SECRET) $("settings-box").open = true;
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
@@ -1426,6 +1465,8 @@ function callRow(i, section) {
     <div class="why">${seen}${last}</div>
     <div class="btns">${(callData.outcomes || []).map((o) => `<button data-outcome="${esc(o)}" ${o === "Not interested" ? 'class="danger"' : o === "Interested" || o === "Won" ? 'class="primary"' : ""}>${esc(o)}</button>`).join("")}
       <input type="text" placeholder="note (optional)" data-note></div>
+    <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button></div>
+    <div class="why" data-quote-result></div>
   </div>`;
 }
 function renderCalls() {
@@ -1440,6 +1481,26 @@ function renderCalls() {
   $("calls").innerHTML = msg + tps + (rp ? `<h2 style="font-size:12px;color:var(--ok);text-transform:uppercase;letter-spacing:.06em">Replied to your email - answer these first</h2>` + rp : "") + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em">Looking at their preview - hottest first</h2>` + v
     + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:18px">Letter follow-ups (${LETTER_WAIT} days+, not opened)</h2>` + l;
   document.querySelectorAll("#calls [data-outcome]").forEach((b) => b.addEventListener("click", () => callOutcome(b)));
+  document.querySelectorAll("#calls [data-quote]").forEach((b) => b.addEventListener("click", () => makeQuote(b)));
+}
+let quotePrices = { build: "2500", landing: "750" };
+async function makeQuote(b) {
+  const card = b.closest(".ritem");
+  const item = (callData[card.dataset.sec] || []).find((x) => x.key === card.dataset.key);
+  const label = b.dataset.quote === "build" ? "Scalar build" : "landing page";
+  if (!confirm(`Make a ${label} quote for ${item.business}? It's added to your dashboard as a sent quote - you send the link.`)) return;
+  b.disabled = true;
+  const r = await post("/api/quote", { sheet: $("sheet").value, key: item.key, business: item.business, email: item.email,
+    phone: item.phone, website: item.website, contact: item.contact, package: b.dataset.quote });
+  b.disabled = false;
+  const box = card.querySelector("[data-quote-result]");
+  if (r.error) { box.style.color = "var(--bad)"; box.textContent = r.error; return; }
+  box.style.color = "var(--ok)";
+  box.innerHTML = `Quote ${esc(r.quote_number)} (£${Number(r.total).toLocaleString()}) is ready: <a href="${esc(r.url)}" target="_blank" rel="noopener">open it ↗</a>
+    <button data-copy="${esc(r.url)}">Copy link</button> <a href="${esc(r.mailto)}"><button class="primary">Email it to them</button></a>`;
+  box.querySelector("[data-copy]").addEventListener("click", async (e) => {
+    try { await navigator.clipboard.writeText(e.target.dataset.copy); e.target.textContent = "Copied"; } catch (err) {}
+  });
 }
 async function callOutcome(b) {
   const card = b.closest(".ritem");
@@ -1607,7 +1668,7 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (!$("pane-calls").hidden) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);

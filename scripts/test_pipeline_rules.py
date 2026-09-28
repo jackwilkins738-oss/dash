@@ -746,6 +746,80 @@ class Autopilot(unittest.TestCase):
                 self.assertEqual(autopilot.load_config()["find"]["areas"], "Woking")
 
 
+class Quotes(unittest.TestCase):
+    def test_what_is_sent_and_the_email_it_opens(self):
+        import json as _json
+        import urllib.parse
+
+        import quotes
+
+        sent = {}
+
+        class Res(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(req, timeout=0):
+            sent["url"], sent["body"], sent["auth"] = req.full_url, _json.loads(req.data), req.headers.get("Authorization")
+            return Res(_json.dumps({"ok": True, "quote_number": "Q-0007", "total_pence": 250000,
+                                    "quote_url": "https://admin.scalardigital.co.uk/quote/q1/t1"}).encode())
+
+        settings = {"PROSPECTS_API_SECRET": "x" * 40, "QUOTE_PRICE_BUILD": "2500", "QUOTE_VAT_RATE": "0", "QUOTE_DEPOSIT_PERCENT": "50"}
+        with mock.patch.object(quotes.urllib.request, "urlopen", fake_urlopen):
+            out = quotes.create_quote(settings, "Kerr Roofing", "info@kerr.co.uk", "01483 111222", "build", "kerr-roofing-4a7bc2")
+        self.assertEqual(sent["url"], "https://admin.scalardigital.co.uk/api/prospects/quote")
+        self.assertEqual(sent["auth"], "Bearer " + "x" * 40)
+        b = sent["body"]
+        self.assertEqual((b["client_name"], b["slug"], b["vat_rate"], b["deposit_percent"]), ("Kerr Roofing", "kerr-roofing-4a7bc2", 0, 50))
+        self.assertEqual(b["line_items"][0]["unit_price_pence"], 250000)
+        link = quotes.email_link("info@kerr.co.uk", "Bill Kerr", "Kerr Roofing", out, "Jack")
+        self.assertTrue(link.startswith("mailto:info%40kerr.co.uk?subject="))
+        body = urllib.parse.unquote(link.split("body=", 1)[1])
+        self.assertIn("Hi Bill,", body)
+        self.assertIn("(£2,500)", body)
+        self.assertIn("https://admin.scalardigital.co.uk/quote/q1/t1", body)
+
+    def test_a_dashboard_without_the_update_says_so(self):
+        import urllib.error
+
+        import quotes
+
+        err = urllib.error.HTTPError("u", 404, "nf", {}, io.BytesIO(b""))
+        with mock.patch.object(quotes.urllib.request, "urlopen", side_effect=err):
+            with self.assertRaisesRegex(quotes.QuoteFailed, "doesn't have the quote update"):
+                quotes.create_quote({"PROSPECTS_API_SECRET": "x" * 40}, "A", "", "", "landing")
+
+    def test_panel_quote_logs_the_call_and_clears_the_reply(self):
+        import control_panel as panel
+        import quotes
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            make_sheet(d / "s.xlsx", [{"Business": "Kerr Roofing", "Website": "kerr.co.uk", "Status": "New"}])
+            (d / "panel.env").write_text("PROSPECTS_API_SECRET=" + "x" * 40 + "\n", encoding="utf-8")
+            with (d / "replies.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["message_id", "date", "from", "business", "website", "kind", "subject", "snippet", "handled"])
+                w.writerow(["1", "2026-09-28", "bill@kerr.co.uk", "Kerr Roofing", "kerr.co.uk", "interested", "", "", ""])
+            fake = {"quote_number": "Q-0001", "total_pence": 75000, "quote_url": "https://admin.x/quote/1/t"}
+            with mock.patch.object(panel, "OUTREACH", d), mock.patch.object(panel, "SETTINGS_FILE", d / "panel.env"), \
+                    mock.patch.object(quotes, "create_quote", lambda *a, **k: fake):
+                out, code = panel.quote_action({"sheet": "s.xlsx", "key": "name:kerr roofing", "business": "Kerr Roofing",
+                                                "email": "bill@kerr.co.uk", "website": "kerr.co.uk", "package": "landing"})
+                bad, bad_code = panel.quote_action({"sheet": "s.xlsx", "key": "name:kerr roofing", "business": "Kerr Roofing", "package": "gold"})
+            self.assertEqual((code, out["quote_number"], out["url"]), (200, "Q-0001", "https://admin.x/quote/1/t"))
+            self.assertEqual(bad_code, 400)
+            with (d / "calls.csv").open(encoding="utf-8") as f:
+                self.assertEqual([r["outcome"] for r in csv.DictReader(f)], ["Quoted"])
+            with (d / "replies.csv").open(encoding="utf-8") as f:
+                self.assertTrue(next(csv.DictReader(f))["handled"].startswith("answered"))
+            with (d / "quotes-sent.csv").open(encoding="utf-8") as f:
+                self.assertEqual(next(csv.DictReader(f))["total"], "750.00")
+
+
 class Review(unittest.TestCase):
     def setUp(self):
         import openpyxl
