@@ -208,6 +208,31 @@ the same tests used before. Scores move a little from run to run; you can re-run
 """
 
 
+def case_study_snippet(business: str, trade: str, area: str, launched: str, site: str, c: dict) -> str | None:
+    """The launch as an entry for lib/case-studies.ts, ready to paste - or None if a number is missing.
+
+    permission starts false: the site only shows it once the client has said yes."""
+    (sb, sa), (lb, la) = c["score"], c["lcp"]
+    if None in (sb, sa, lb, la):
+        return None
+    fixed = [i[0].upper() + i[1:] for i in c["fixed"]][:4]
+    return "\n".join([
+        "  {",
+        f"    business: {json.dumps(business)},",
+        f"    trade: {json.dumps(trade or 'TRADE')},",
+        f"    area: {json.dumps(area or 'AREA')},",
+        f"    launched: {json.dumps(launched)},",
+        f"    site: {json.dumps(site)},",
+        f"    scoreBefore: {round(sb)},",
+        f"    scoreAfter: {round(sa)},",
+        f"    loadBefore: {round(lb, 1)},",
+        f"    loadAfter: {round(la, 1)},",
+        f"    fixed: {json.dumps(fixed)},",
+        "    permission: false, // true once they've agreed to be named",
+        "  },",
+    ])
+
+
 def record_case_study(outreach: Path, row: dict) -> None:
     path = outreach / "case-studies.csv"
     rows = []
@@ -282,6 +307,12 @@ def main() -> None:
     print(f"Speed score {_fmt(b, 'score')} -> {_fmt(a, 'score')}; loads in {_fmt(c['lcp'][1], 'lcp')} (was {_fmt(c['lcp'][0], 'lcp')}); "
           f"{len(c['fixed'])} problem(s) fixed, {len(c['still'])} still flagged.")
     print(f"READY: {report.relative_to(outreach)} - send it to them (open it and print to PDF). Added to case-studies.csv.")
+    snippet = case_study_snippet(business, before.get("trade") or firm.get("Trade") or "", before.get("area") or firm.get("Area") or "",
+                                 today.isoformat(), new, c)
+    if snippet:
+        print("\nFor your website's results section - once they're happy to be named, paste this into")
+        print("CASE_STUDIES in lib/case-studies.ts and set permission to true:\n")
+        print(snippet)
     if a is not None and a < 90:
         print("  NOTE: under 90 - worth fixing before you send it (images, fonts, third-party scripts are the usual causes).")
 
