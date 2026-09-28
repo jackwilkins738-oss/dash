@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Services } from '@/components/services'
 import { DashPitch } from '@/components/dash-pitch'
 import { Pricing } from '@/components/pricing'
+import { CaseStudies } from '@/components/case-studies'
 import { CostCalculator } from '@/components/cost-calculator'
 import { CtaBand } from '@/components/cta-band'
 import { PageHeader, HeaderActions } from '@/components/page-header'
@@ -52,6 +53,7 @@ export default function WorkPage() {
       />
       <Services />
       <DashPitch />
+      <CaseStudies />
       <Pricing />
 
       <section className="border-t border-border py-12">

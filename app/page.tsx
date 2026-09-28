@@ -10,6 +10,7 @@ import { TradesGrid } from '@/components/trades-grid'
 import { Comparison } from '@/components/comparison'
 import { SpeedRace } from '@/components/speed-race'
 import { SpeedCheck } from '@/components/speed-check'
+import { CaseStudies } from '@/components/case-studies'
 
 const PRINCIPLES = [
   {
@@ -47,6 +48,7 @@ export default function HomePage() {
           not read cold. */}
       <Hero />
       <ExampleBuild />
+      <CaseStudies />
       <TradesGrid />
       <DashShowcase />
       <section data-wire-section className="relative border-y border-border py-24 sm:py-32">

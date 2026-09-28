@@ -22,6 +22,16 @@ const GUIDES = [
     title: 'Website or Facebook page? What actually wins work.',
     body: 'A fair comparison of running your trade business on a Facebook or Instagram page versus your own website, and where relying on one alone costs you jobs.',
   },
+  {
+    href: '/guides/google-business-profile-for-tradesmen',
+    title: 'How to get your trade business on Google Maps.',
+    body: 'Setting up a free Google Business Profile properly: service areas, categories, verification, photos, and the mistakes that get profiles suspended.',
+  },
+  {
+    href: '/guides/how-to-get-more-google-reviews',
+    title: 'How to get more Google reviews, within the rules.',
+    body: 'When to ask, what to send, how to reply, and what Google’s rules and UK law say you mustn’t do.',
+  },
 ]
 
 export default function GuidesPage() {

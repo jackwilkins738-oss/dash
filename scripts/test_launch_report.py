@@ -68,6 +68,17 @@ class LaunchReport(unittest.TestCase):
             self.assertEqual((rows[0]["score_before"], rows[0]["score_after"], rows[0]["lcp_after"]), ("38", "96", "1.1s"))
             self.assertIn("READY: sites/kerr-roofing/launch-report.html", printed.getvalue().replace(os.sep, "/"))
 
+    def test_case_study_snippet_is_pasteable_and_starts_unpermitted(self):
+        c = {"score": (31.0, 97.6), "lcp": (9.44, 1.06), "fixed": ["no tap-to-call button"]}
+        out = lr.case_study_snippet('Kerr "Roofing"', "Roofer", "", "2026-10-01", "kerrroofing.co.uk", c)
+        self.assertIn('business: "Kerr \\"Roofing\\"",', out)
+        self.assertIn("scoreAfter: 98,", out)
+        self.assertIn("loadBefore: 9.4,", out)
+        self.assertIn('fixed: ["No tap-to-call button"],', out)
+        self.assertIn('area: "AREA",', out)
+        self.assertIn("permission: false", out)
+        self.assertIsNone(lr.case_study_snippet("K", "", "", "2026-10-01", "k.co.uk", {**c, "lcp": (None, 1.0)}))
+
     def test_no_earlier_measurement_is_refused_not_invented(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d)
