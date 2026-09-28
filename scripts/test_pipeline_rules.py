@@ -474,10 +474,65 @@ class ExportResults(unittest.TestCase):
             self.assertEqual(kerr[header.index("Contact")], "Bill Kerr")
             self.assertEqual(kerr[header.index("Channel")], "Email")
             self.assertEqual(kerr[header.index("Added")].date(), date(2026, 9, 20))
-            self.assertTrue(ws.column_dimensions["W"].hidden)  # the Key column
+            key_col = openpyxl.utils.get_column_letter(header.index("Key") + 1)
+            self.assertTrue(ws.column_dimensions[key_col].hidden)
             summary = [[c.value for c in r] for r in wb["Summary"].iter_rows()]
             self.assertEqual(sum(1 for r in summary if r[0] == "Export"), 2)
             self.assertIn(["All lists", 3, 2, 1], [r[:4] for r in summary])
+
+
+class EmailBatches(unittest.TestCase):
+    def test_batches_take_the_next_firms_and_never_repeat(self):
+        import email_batches as eb
+        from datetime import date
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            head = ["business", "greeting_name", "email", "preview_url"]
+            with (d / "mailmeteor-old.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(head)
+                for i in range(15):
+                    w.writerow([f"Old {i}", "there", f"a{i}@old.co.uk", f"https://s/for/old-{i}?src=email"])
+            with (d / "mailmeteor-new.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(head)
+                for i in range(15):
+                    w.writerow([f"New {i}", "there", f"b{i}@new.co.uk", f"https://s/for/new-{i}?src=email"])
+            import os as _os
+            _os.utime(d / "mailmeteor-old.csv", (1, 1))  # the older list goes first
+            broken = lambda url: "HTTP 404" if url.endswith("old-3?src=email") else None  # noqa: E731
+
+            path, notes = eb.make_batch(d, 20, check=broken, today=date(2026, 9, 28))
+            names = [r["business"] for r in csv.DictReader(path.open(encoding="utf-8"))]
+            self.assertEqual(path.name, "mailmeteor-batch-2026-09-28.csv")
+            self.assertEqual(len(names), 20)
+            self.assertEqual(names[:3], ["Old 0", "Old 1", "Old 2"])
+            self.assertNotIn("Old 3", names)
+            self.assertIn("skipped Old 3: link HTTP 404", notes)
+            self.assertEqual(eb.mark_sent(d, date(2026, 9, 28)), 20)
+
+            path2, _ = eb.make_batch(d, 20, check=lambda u: None, today=date(2026, 9, 29))
+            names2 = [r["business"] for r in csv.DictReader(path2.open(encoding="utf-8"))]
+            self.assertEqual(set(names) & set(names2), set())  # nobody emailed twice
+            self.assertIn("Old 3", names2)  # its link loads now, so it gets its turn
+            self.assertEqual(len(names2), 10)
+            eb.mark_sent(d, date(2026, 9, 29))
+            self.assertEqual(eb.remaining(d), 0)
+            self.assertEqual(eb.make_batch(d, 20, check=lambda u: None)[0], None)
+
+    def test_one_list_only(self):
+        import email_batches as eb
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            for name, who in (("mailmeteor-a.csv", "A"), ("mailmeteor-b.csv", "B")):
+                with (d / name).open("w", newline="", encoding="utf-8") as f:
+                    w = csv.writer(f)
+                    w.writerow(["business", "email", "preview_url"])
+                    w.writerow([who, f"x@{who.lower()}.co.uk", "https://s/for/x"])
+            path, _ = eb.make_batch(d, 20, sheet="b.xlsx", check=lambda u: None)
+            self.assertEqual([r["business"] for r in csv.DictReader(path.open(encoding="utf-8"))], ["B"])
 
 
 class Review(unittest.TestCase):

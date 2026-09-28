@@ -36,7 +36,7 @@ COLUMNS = [
     ("Added", 12), ("List", 26), ("Business", 30), ("Contact", 18), ("Email", 30), ("Phone", 15),
     ("Channel", 11), ("Company type", 13), ("Trade", 18), ("Area", 14), ("Website", 24), ("Mobile score", 8),
     ("Worst issue", 44), ("Preview link", 30), ("Preview live", 8), ("Visits", 7), ("Last visit", 12),
-    ("Letter posted", 12), ("Last call", 14), ("Called on", 12), ("Status", 16), ("Notes", 40), ("Key", 10),
+    ("Emailed", 12), ("Letter posted", 12), ("Last call", 14), ("Called on", 12), ("Status", 16), ("Notes", 40), ("Key", 10),
 ]
 
 
@@ -120,6 +120,7 @@ def build(outreach: Path, today: date | None = None) -> tuple[list[dict], dict]:
     index_path = outreach / "results-index.csv"
     first_seen = {r["key"]: r["added"] for r in _csv(index_path) if r.get("key")}
     posted = {r["key"]: r.get("posted") or "" for r in _csv(outreach / "letters-sent.csv") if r.get("key")}
+    emailed = {r["email"].lower(): r.get("sent") or "" for r in _csv(outreach / "emails-sent.csv") if r.get("email")}
     calls: dict[str, dict] = {}
     for r in _csv(outreach / "calls.csv"):
         calls[r.get("key") or ""] = r  # the last one wins
@@ -133,7 +134,7 @@ def build(outreach: Path, today: date | None = None) -> tuple[list[dict], dict]:
             first_seen.setdefault(key, today.isoformat())
             call = calls.get(f["key"]) or {}
             rows.append({**f, "_key": key, "_sheet": sheet.name, "_added": first_seen[key],
-                         "_posted": posted.get(f["key"], ""), "_call": call.get("outcome", ""), "_call_at": call.get("at", "")})
+                         "_posted": posted.get(f["key"], ""), "_emailed": emailed.get((f.get("email") or "").lower(), ""), "_call": call.get("outcome", ""), "_call_at": call.get("at", "")})
             c["firms"] += 1
             c["email" if f["channel"] == "email" else "letter"] += 1
             c["live"] += 1 if f.get("live") else 0
@@ -201,11 +202,11 @@ def write(path: Path, rows: list[dict], counts: dict, notes: dict[str, str], now
                 r.get("phone") or "", r["channel"].capitalize(), r.get("company_type") or "", r.get("trade") or "",
                 r.get("area") or "", r.get("website") or "", int(score) if score is not None else None,
                 r.get("top_issue") or "", r.get("preview_url") or "", live, r.get("views") if r.get("views") is not None else None,
-                _date(r.get("last_viewed")), _date(r.get("_posted")), r.get("_call") or "", _date(r.get("_call_at")),
+                _date(r.get("last_viewed")), _date(r.get("_emailed")), _date(r.get("_posted")), r.get("_call") or "", _date(r.get("_call_at")),
                 r.get("status") or "", notes.get(r["_key"], ""), r["_key"],
             ])
             n = ws.max_row
-            for col in ("Added", "Last visit", "Letter posted", "Called on"):
+            for col in ("Added", "Last visit", "Emailed", "Letter posted", "Called on"):
                 ws.cell(n, names.index(col) + 1).number_format = "d mmm yyyy"
             if score is not None:
                 band_name = "good" if score >= 90 else "mid" if score >= 50 else "poor"
