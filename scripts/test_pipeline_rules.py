@@ -674,6 +674,35 @@ class FollowUps(unittest.TestCase):
 
 
 class Autopilot(unittest.TestCase):
+    def test_a_lock_left_by_a_stopped_or_crashed_run_is_not_running(self):
+        import subprocess
+
+        import autopilot
+        import control_panel as panel
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            lock = d / autopilot.LOCK
+            with mock.patch.object(panel, "OUTREACH", d):
+                self.assertFalse(autopilot.is_running())
+                # A live Python process holds it: running.
+                lock.write_text(str(os.getpid()))
+                self.assertTrue(autopilot.is_running())
+                # The run was killed (Stop, a shutdown): its process is gone, so the lock is cleared.
+                dead = subprocess.Popen([sys.executable, "-c", "pass"])
+                dead.wait()
+                lock.write_text(str(dead.pid))
+                self.assertFalse(autopilot.is_running())
+                self.assertFalse(lock.exists())
+                # A lock with no process number (an old version's crash) - cleared too.
+                lock.write_text("")
+                self.assertFalse(autopilot.is_running())
+                # Older than 6 hours: cleared even if the number now belongs to something else.
+                lock.write_text(str(os.getpid()))
+                old = time.time() - 7 * 3600
+                os.utime(lock, (old, old))
+                self.assertFalse(autopilot.is_running())
+
     def test_runs_every_step_in_order_and_carries_on(self):
         import autopilot
         import control_panel as panel

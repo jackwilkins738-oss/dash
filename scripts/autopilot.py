@@ -60,10 +60,57 @@ def save_config(cfg: dict) -> None:
     (panel.OUTREACH / CONFIG).write_text(json.dumps({**DEFAULTS, **cfg}, indent=2), encoding="utf-8")
 
 
+def _alive(pid: int) -> bool:
+    """Whether that process is still a running Python (so a reused process number doesn't count)."""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+        k32.OpenProcess.restype = wintypes.HANDLE  # a pointer-sized handle, not the default 32-bit int
+        k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        k32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        k32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = wintypes.DWORD()
+            if not k32.GetExitCodeProcess(handle, ctypes.byref(code)) or code.value != 259:  # 259 = STILL_ACTIVE
+                return False
+            buf = ctypes.create_unicode_buffer(1024)
+            size = wintypes.DWORD(1024)
+            if k32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                return "python" in buf.value.lower()
+            return True
+        finally:
+            k32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)  # signal 0 only asks - never use this on Windows, where it would kill the process
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def is_running() -> bool:
-    """True while a run is going (a lock younger than 6 hours - an older one is from a crash)."""
+    """True while a run is actually going. A lock left behind by a run that was stopped, crashed or
+    lost to a shutdown is cleared here, so the panel never shows a run that isn't happening."""
     lock = panel.OUTREACH / LOCK
-    return lock.exists() and time.time() - lock.stat().st_mtime < 6 * 3600
+    if not lock.exists():
+        return False
+    try:
+        pid = int(lock.read_text().strip() or 0)
+    except (OSError, ValueError):
+        pid = 0
+    if time.time() - lock.stat().st_mtime < 6 * 3600 and _alive(pid):
+        return True
+    lock.unlink(missing_ok=True)
+    return False
 
 
 class Run:
