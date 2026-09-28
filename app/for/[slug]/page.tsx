@@ -139,7 +139,15 @@ export default async function ProspectPreviewPage({ params }: Props) {
             </Reveal>
 
             <div>
-              <SiteShowcase initialTrade={sceneId} firm={{ name: p.business_name, domain: p.website }} />
+              <SiteShowcase
+                initialTrade={sceneId}
+                firm={{
+                  name: p.business_name,
+                  domain: p.website,
+                  services: p.teardown?.services,
+                  accent: p.teardown?.brandColour,
+                }}
+              />
               <p className="mt-4 text-center text-xs text-muted-foreground">
                 A concept of a Scalar build for {p.business_name} — an illustration, not your live site.
               </p>

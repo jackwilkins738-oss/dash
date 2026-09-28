@@ -191,6 +191,42 @@ def _grey(hexcode: str) -> bool:
     return max(r, g, b) - min(r, g, b) < 40 or max(r, g, b) < 35 or min(r, g, b) > 225
 
 
+def _six(hexcode: str) -> str:
+    h = hexcode.lstrip("#").lower()
+    return "#" + ("".join(c * 2 for c in h) if len(h) == 3 else h)
+
+
+def _contrast_with_white(hexcode: str) -> float:
+    def lin(c: int) -> float:
+        v = c / 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+    h = _six(hexcode)[1:]
+    r, g, b = (lin(int(h[i:i + 2], 16)) for i in (0, 2, 4))
+    return 1.05 / (0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05)
+
+
+def readable(hexcode: str) -> str:
+    """Their colour, darkened just enough for white text on it to be readable (4.5:1) - same hue."""
+    colour = _six(hexcode)
+    while _contrast_with_white(colour) < 4.5:
+        colour = _darker(colour, 0.9)
+    return colour
+
+
+def for_preview(site: dict) -> dict:
+    """The part of read_site() that may appear on their preview page: 2-3 of their own service
+    names and a colour we're fairly sure of. Stricter than the draft, since they'll see it
+    without you there to explain a wrong guess - so when unsure, nothing (the page stays generic)."""
+    out: dict = {}
+    names = [s for s in site.get("services", []) if len(s) <= 24 and re.fullmatch(r"[A-Za-z0-9 &'/,+-]+", s)]
+    if len(names) >= 2:
+        out["services"] = names[:3]
+    if site.get("colour") and site.get("colour_sure"):
+        out["brandColour"] = site["colour"]
+    return out
+
+
 def read_site(page: str, base_url: str) -> dict:
     """What their homepage says about them: services, headings, logo, colour, photos, years trading."""
     body = re.sub(r"<(script|noscript|svg)\b.*?</\1>", " ", page, flags=re.I | re.S)
@@ -227,9 +263,13 @@ def read_site(page: str, base_url: str) -> dict:
         m = re.search(r"#[0-9a-f]{6}\b|#[0-9a-f]{3}\b", theme.group(0), re.I)
         colour = m.group(0) if m and not _grey(m.group(0)) else ""
     css = " ".join(re.findall(r"<style[^>]*>(.*?)</style>", page, re.I | re.S)) + " ".join(re.findall(r"style\s*=\s*\"([^\"]*)\"", page, re.I))
-    counts = Counter(c.lower() for c in re.findall(r"#[0-9a-f]{6}\b|#[0-9a-f]{3}\b", css, re.I) if not _grey(c))
+    counts = Counter(_six(c) for c in re.findall(r"#[0-9a-f]{6}\b|#[0-9a-f]{3}\b", css, re.I) if not _grey(c))
     if not colour and counts:
-        colour = counts.most_common(1)[0][0]
+        colour, times = counts.most_common(1)[0]
+        colour_sure = times >= 3
+    else:
+        colour_sure = bool(colour)
+    colour = readable(colour) if colour else ""
 
     # Logo and photos (their own - listed in the brief, to ask for the originals).
     logo, photos = "", []
@@ -257,7 +297,7 @@ def read_site(page: str, base_url: str) -> dict:
                                                     r"Trading Standards|Buy With Confidence|Guild of Master Craftsmen)\b", text, re.I)})
     return {
         "title": _text(title_m.group(1)) if title_m else "", "description": desc, "headings": headings[:12],
-        "services": services, "colour": colour, "logo": logo, "photos": photos[:15], "years": years,
+        "services": services, "colour": colour, "colour_sure": colour_sure, "logo": logo, "photos": photos[:15], "years": years,
         "accreditations": accreditations,
     }
 

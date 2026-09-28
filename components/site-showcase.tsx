@@ -1,7 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex, showcaseIndexForTrade, type ShowcaseArt } from '@/lib/showcase'
+import {
+  SHOWCASE_CYCLE_MS,
+  SHOWCASE_TRADES,
+  nextShowcaseIndex,
+  showcaseIndexForTrade,
+  type ShowcaseArt,
+  type ShowcaseTrade,
+} from '@/lib/showcase'
 
 // The hero's centrepiece: a small, honest illustration of what the product
 // is. A real-looking website for a trade, set in a 3D scene that turns to
@@ -19,13 +26,37 @@ import { SHOWCASE_CYCLE_MS, SHOWCASE_TRADES, nextShowcaseIndex, showcaseIndexFor
 
 type Vars = CSSProperties & Record<`--${string}`, string | number>
 
+const HEX = /^#[0-9a-f]{6}$/i
+
+/**
+ * Their trade's scene with their own service names on the tiles (topped up
+ * from the scene's own to make three) and their colour. The colour arrives
+ * already darkened to take white text; the lighter version for this page's
+ * dark background is mixed from it, the same way the scenes' own pairs are.
+ */
+function personalise(scene: ShowcaseTrade, firm?: { services?: string[]; accent?: string | null }): ShowcaseTrade {
+  const own = (firm?.services ?? []).slice(0, 3)
+  const seen = new Set(own.map((s) => s.toLowerCase()))
+  const tiles = [...own, ...scene.tiles.filter((t) => !seen.has(t.toLowerCase()))].slice(0, 3) as ShowcaseTrade['tiles']
+  const accent = firm?.accent && HEX.test(firm.accent) ? firm.accent : null
+  return {
+    ...scene,
+    tiles: own.length >= 2 ? tiles : scene.tiles,
+    ...(accent ? { accent, accentUi: `color-mix(in oklch, ${accent} 55%, white)` } : {}),
+  }
+}
+
 export function SiteShowcase({
   initialTrade,
   firm,
 }: {
   initialTrade?: string
-  /** A real prospect's name and domain, on their private preview page (app/for/[slug]). */
-  firm?: { name: string; domain?: string | null }
+  /**
+   * A real prospect's name and domain, on their private preview page (app/for/[slug]) -
+   * and, when their homepage made them clear, their own service names and brand colour,
+   * shown on their own trade's scene only.
+   */
+  firm?: { name: string; domain?: string | null; services?: string[]; accent?: string | null }
 } = {}) {
   const firmName = firm?.name.toUpperCase() ?? 'YOUR FIRM'
   const firmDomain = firm?.domain || 'yourfirm.co.uk'
@@ -34,7 +65,8 @@ export function SiteShowcase({
   const stageRef = useRef<HTMLDivElement>(null)
   const tiltRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const trade = SHOWCASE_TRADES[active]
+  const ownIndex = firm && initialTrade ? showcaseIndexForTrade(initialTrade) : null
+  const trade = active === ownIndex ? personalise(SHOWCASE_TRADES[active], firm) : SHOWCASE_TRADES[active]
 
   // Auto-rotation is driven by the switcher's own CSS progress bar: when its
   // animation ends, move on. That keeps the visible bar and the actual
