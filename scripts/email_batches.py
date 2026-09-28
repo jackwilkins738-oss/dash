@@ -28,7 +28,8 @@ sys.path.insert(0, str(HERE))
 PENDING = "mailmeteor-batch-pending.csv"
 FOLLOWUP_PENDING = "mailmeteor-followup-pending.csv"
 SENT = "emails-sent.csv"
-SENT_FIELDS = ["email", "business", "preview_url", "batch", "sent", "followup_sent", "message_id", "subject", "variant"]
+SENT_FIELDS = ["email", "business", "preview_url", "batch", "sent", "followup_sent", "message_id", "subject", "variant",
+               "sent_from"]
 FOLLOWUP_AFTER_DAYS = 5
 
 
@@ -159,7 +160,7 @@ def _write_sent(outreach: Path, rows: list[dict]) -> None:
 
 
 def record_sent(outreach: Path, row: dict, batch: str, today: date, message_id: str = "", subject: str = "",
-                variant: str = "") -> None:
+                variant: str = "", sent_from: str = "") -> None:
     """One email just sent from the panel (send_email.py) - recorded straight away."""
     rows = _rows(outreach / SENT)[1]
     email = row["email"].strip().lower()
@@ -167,7 +168,7 @@ def record_sent(outreach: Path, row: dict, batch: str, today: date, message_id: 
         return
     rows.append({"email": email, "business": row.get("business", ""), "preview_url": row.get("preview_url", ""),
                  "batch": batch, "sent": today.isoformat(), "message_id": message_id, "subject": subject,
-                 "variant": variant})
+                 "variant": variant, "sent_from": sent_from})
     _write_sent(outreach, rows)
 
 

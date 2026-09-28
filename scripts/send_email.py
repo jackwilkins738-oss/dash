@@ -41,9 +41,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import email_batches as eb  # noqa: E402
+import mail_accounts  # noqa: E402
 
 TEMPLATES = "email-templates.json"
-DAILY_CAP = 100  # first emails + follow-ups in one day, whatever the batch sizes say
+DAILY_CAP = 100  # first emails + follow-ups per inbox in one day, whatever the batch sizes say
 GAP_SECONDS = (40, 90)
 
 DEFAULT_TEMPLATES = {
@@ -203,10 +204,16 @@ def build_message(to: str, subject: str, body: str, reply_to_id: str = "", env=N
     return msg
 
 
-def sent_today(outreach: Path, today: date) -> int:
+def sent_today(outreach: Path, today: date, by_inbox: bool = False, main: str = ""):
+    """Emails sent today - in total, or per inbox (older rows with no sent_from count to the main inbox)."""
     rows = eb._rows(outreach / eb.SENT)[1]
-    return sum(1 for r in rows if r.get("sent") == today.isoformat()) + sum(
-        1 for r in rows if r.get("followup_sent") == today.isoformat())
+    counts: dict[str, int] = {}
+    for r in rows:
+        n = (r.get("sent") == today.isoformat()) + (r.get("followup_sent") == today.isoformat())
+        if n:
+            inbox = (r.get("sent_from") or main).lower()
+            counts[inbox] = counts.get(inbox, 0) + n
+    return counts if by_inbox else sum(counts.values())
 
 
 def _still_ok(outreach: Path, email: str, business: str) -> str:
@@ -255,18 +262,46 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
         (outreach / pending_name).unlink(missing_ok=True)
         out("Everyone in this batch has already been emailed.")
         return 0
+    inboxes = mail_accounts.accounts()
+    if not inboxes:
+        raise SendStopped("Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first.")
+    main_inbox = inboxes[0]
+    used = sent_today(outreach, today, by_inbox=True, main=main_inbox.address)
+    used = {a.address: used.get(a.address, 0) for a in inboxes}
     if test:
         todo = todo[:1]
     else:
-        room = DAILY_CAP - sent_today(outreach, today)
+        room = sum(max(0, DAILY_CAP - n) for n in used.values())
         if room <= 0:
-            raise SendStopped(f"{DAILY_CAP} emails have already gone today - the rest wait for tomorrow (keeps the account safe).")
+            raise SendStopped(f"{DAILY_CAP} emails a day per inbox have already gone - the rest wait for tomorrow (keeps the accounts safe).")
         if len(todo) > room:
-            out(f"Only {room} more today (the daily cap is {DAILY_CAP}) - the rest go next time you press Send.")
+            out(f"Only {room} more today (the cap is {DAILY_CAP} a day per inbox) - the rest go next time you press Send.")
             todo = todo[:room]
+    if len(inboxes) > 1 and not test:
+        out(f"Sending from {len(inboxes)} inboxes, spread evenly.")
 
-    smtp = smtp or connect()
-    me = os.environ.get("MAIL_ADDRESS", "")
+    # One login per inbox, opened when first needed. A test smtp passed in stands in for all of them.
+    conns: dict[str, object] = {}
+
+    def conn(inbox: mail_accounts.Account, fresh: bool = False):
+        if smtp is not None:
+            return smtp
+        if fresh or inbox.address not in conns:
+            conns[inbox.address] = connect(inbox.env())
+        return conns[inbox.address]
+
+    def pick(email: str) -> mail_accounts.Account | None:
+        """Follow-ups go from the inbox that sent the first email (same thread); first emails from the least-used inbox."""
+        if followups:
+            first_from = (sent_rows.get(email, {}).get("sent_from") or main_inbox.address).lower()
+            inbox = next((a for a in inboxes if a.address == first_from), main_inbox)
+            return inbox if test or used[inbox.address] < DAILY_CAP else None
+        if test:
+            return main_inbox
+        free = [a for a in inboxes if used[a.address] < DAILY_CAP]
+        return min(free, key=lambda a: used[a.address]) if free else None
+
+    me = main_inbox.address
     sent = 0
     try:
         for i, row in enumerate(todo):
@@ -285,36 +320,41 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
                 if first.get("message_id") and first.get("subject"):
                     reply_to, subject = first["message_id"], "Re: " + first["subject"]
             body = render(templates[f"{kind}_body{suffix}"], row, your_name)
+            inbox = pick(email)
+            if inbox is None:
+                out(f"[{i + 1}/{len(todo)}] {business}: waits for tomorrow - its inbox has reached today's {DAILY_CAP}.")
+                continue
             to = me if test else email
             if test:
                 subject = f"[TEST to yourself - would go to {email}{', version ' + variant if has_variant_b(templates) and variant else ''}] {subject}"
-            msg = build_message(to, subject, body, reply_to)
+            msg = build_message(to, subject, body, reply_to, env=inbox.env())
             try:
-                smtp.send_message(msg)
+                conn(inbox).send_message(msg)
             except smtplib.SMTPRecipientsRefused:
                 out(f"[{i + 1}/{len(todo)}] {business}: {email} was refused by your mail server - marked as bounced.")
                 if not test:
                     eb.record_bounce(outreach, email)
                 continue
             except smtplib.SMTPServerDisconnected:
-                smtp = connect()
-                smtp.send_message(msg)
+                conn(inbox, fresh=True).send_message(msg)
+            used[inbox.address] += 1
             if test:
                 out(f"Test sent to {me} - check it reads right, then press Send.")
                 return 1
             if followups:
                 eb.record_followup_sent(outreach, email, today)
             else:
-                eb.record_sent(outreach, row, batch_file.name, today, msg["Message-ID"], subject, variant)
+                eb.record_sent(outreach, row, batch_file.name, today, msg["Message-ID"], subject, variant, inbox.address)
             sent += 1
-            out(f"[{i + 1}/{len(todo)}] sent to {business} ({email})")
+            out(f"[{i + 1}/{len(todo)}] sent to {business} ({email})" + (f" from {inbox.address}" if len(inboxes) > 1 else ""))
             if i < len(todo) - 1:
                 sleep(random.uniform(*GAP_SECONDS))
     finally:
-        try:
-            smtp.quit()
-        except Exception:  # already closed
-            pass
+        for c in [smtp] if smtp is not None else conns.values():
+            try:
+                c.quit()
+            except Exception:  # already closed
+                pass
     left = [p for p in pending if not _done(outreach, p, followups)]
     if not left:
         (outreach / pending_name).unlink(missing_ok=True)
