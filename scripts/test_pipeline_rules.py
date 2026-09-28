@@ -242,6 +242,98 @@ class PushRun(unittest.TestCase):
         with mock.patch("push_prospects.urllib.request.urlopen", lambda req, timeout=0: Res(b"<title>Scalar Digital</title>")):
             self.assertEqual(link_loads("https://x/for/a?src=email"), "page loaded but isn't their preview")
 
+    def test_companies_house_down_never_stops_the_push(self):
+        import json as _json
+
+        from company_lookup import LookupFailed
+
+        make_sheet(self.dir / "ch.xlsx", [
+            {"Business": f"Blank Type {i}", "Website": f"blanktype{i}.co.uk", "Status": "New", "Email": f"a@blanktype{i}.co.uk"} for i in range(4)
+        ])
+
+        class Res(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def down(*a, **k):
+            raise LookupFailed("HTTP 503")
+
+        buf = io.StringIO()
+        env = {"PROSPECTS_API_SECRET": "x" * 40, "COMPANIES_HOUSE_API_KEY": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"}
+        with mock.patch.dict(os.environ, env), redirect_stdout(buf), mock.patch("company_lookup.lookup", down), \
+                mock.patch("site_teardown.fetch_html", lambda url, timeout=20: (None, None)), \
+                mock.patch("calls.fetch_activity", lambda api, secret, tenant: {}), \
+                mock.patch("urllib.request.urlopen", lambda req, timeout=0: Res(_json.dumps({"upserted": 1, "rejected": []}).encode())), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "ch.xlsx"), "--lookup-companies"]):
+            import push_prospects
+
+            push_prospects.main()  # no SystemExit
+        out = buf.getvalue()
+        self.assertIn("WARNING: company lookup stopped", out)
+        self.assertIn("Pushed 1", out)  # the fake dashboard always answers "1"
+
+    def test_previews_with_only_a_name_are_flagged(self):
+        from push_prospects import make_slug
+
+        make_sheet(self.dir / "nm.xlsx", [
+            {"Business": "Scored", "Website": "scored.co.uk", "Status": "New", "Email": "a@scored.co.uk", "Company type": "Ltd"},
+            {"Business": "Name Only", "Website": "nameonly.co.uk", "Status": "New", "Email": "a@nameonly.co.uk", "Company type": "Ltd"},
+        ])
+        slugs = {make_slug(b, w, "x" * 40): {} for b, w in (("Scored", "scored.co.uk"), ("Name Only", "nameonly.co.uk"))}
+
+        class Res(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def page(req, timeout=0):
+            if "scored" in req.full_url:
+                return Res(b"<title>Prepared for Scored</title> 41 / 100 on mobile ... What we found")
+            return Res(b"<title>Prepared for Name Only</title>")
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40, "PAGESPEED_API_KEY": ""}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, secret, tenant: slugs), \
+                mock.patch("push_prospects.urllib.request.urlopen", page), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "nm.xlsx"), "--dry-run", "--verify-links"]):
+            import push_prospects
+
+            push_prospects.main()
+        out = buf.getvalue()
+        self.assertIn("NOTE: 1 of 2 previews load but show no speed score", out)
+        self.assertIn("no PAGESPEED_API_KEY", out)
+        self.assertIn("    Name Only", out)
+        self.assertIn("READY: all 2 links checked", out)  # they still load, so they stay in
+
+    def test_diagnosis_names_the_website_settings(self):
+        import urllib.error
+
+        from push_prospects import make_slug
+
+        make_sheet(self.dir / "dg.xlsx", [{"Business": "On Dash", "Website": "ondash.co.uk", "Status": "New", "Email": "a@ondash.co.uk", "Company type": "Ltd"}])
+        slug = make_slug("On Dash", "ondash.co.uk", "x" * 40)
+
+        def not_found(req, timeout=0):
+            raise urllib.error.HTTPError(req.full_url, 404, "nf", {}, io.BytesIO(b""))
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, secret, tenant: {slug: {}}), \
+                mock.patch("push_prospects.urllib.request.urlopen", not_found), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "dg.xlsx"), "--dry-run", "--verify-links"]):
+            import push_prospects
+
+            push_prospects.main()
+        out = buf.getvalue()
+        self.assertIn("DIAGNOSIS: 1 of 1 links don't load.", out)
+        self.assertIn("on your dashboard but the website says 'not found'", out)
+        self.assertIn("PROSPECTS_API_SECRET", out)
+
     def test_parallel_speed_checks_record_findings(self):
         import threading
 
@@ -659,6 +751,27 @@ class Panel(unittest.TestCase):
             ])
             with mock.patch.object(control_panel, "OUTREACH", d):
                 self.assertEqual(control_panel.progress("new.xlsx")["total"], 1)
+
+    def test_whole_list_carries_on_past_a_failed_step(self):
+        import control_panel
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "fail.py").write_text("import sys; print('boom'); sys.exit(1)")
+            (d / "ok.py").write_text("print('pushed fine')")
+            job = control_panel.Job()
+            err = job.start("Run the whole list", lambda j: [(d / "fail.py", []), (d / "ok.py", [])], {"PROSPECTS_API_SECRET": "x" * 40}, keep_going=True)
+            self.assertEqual(err, "")
+            job.thread.join(20)
+            lines = "\n".join(job.state()["lines"])
+            self.assertIn("pushed fine", lines)
+            self.assertIn("carrying on with the rest", lines)
+            self.assertIn("1 step(s) had problems", lines)
+            # Without keep_going, a failure still stops a single action.
+            job2 = control_panel.Job()
+            job2.start("x", lambda j: [(d / "fail.py", []), (d / "ok.py", [])], {"PROSPECTS_API_SECRET": "x" * 40})
+            job2.thread.join(20)
+            self.assertNotIn("pushed fine", "\n".join(job2.state()["lines"]))
 
     def test_no_alert_without_telegram(self):
         import control_panel

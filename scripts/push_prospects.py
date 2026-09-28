@@ -168,7 +168,12 @@ def score_line(score) -> str:
 
 
 def link_loads(url: str, timeout: int = 20) -> str | None:
-    """None if the preview page loads with the firm on it, else what went wrong.
+    """None if the preview page loads with the firm on it, else what went wrong."""
+    return check_preview(url, timeout)[0]
+
+
+def check_preview(url: str, timeout: int = 20) -> tuple[str | None, dict]:
+    """(what went wrong or None, what the page shows: {"score": bool, "findings": bool}).
 
     Fetched server-side, with ?src=dashboard: the visit counter only runs in a
     browser, and ignores the owner's own "dashboard" visits anyway."""
@@ -178,10 +183,13 @@ def link_loads(url: str, timeout: int = 20) -> str | None:
         with urllib.request.urlopen(req, timeout=timeout) as res:
             page = res.read(400_000).decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
-        return f"HTTP {e.code}"
+        return f"HTTP {e.code}", {}
     except (urllib.error.URLError, TimeoutError, OSError) as e:
-        return f"couldn't connect ({getattr(e, 'reason', e)})"
-    return None if "Prepared for" in page else "page loaded but isn't their preview"
+        return f"couldn't connect ({getattr(e, 'reason', e)})", {}
+    if "Prepared for" not in page:
+        return "page loaded but isn't their preview", {}
+    # The preview page's own wording: "/ 100 on mobile" by the score, "What we found" over the findings.
+    return None, {"score": "100 on mobile" in page, "findings": "What we found" in page}
 
 
 def number(value):
@@ -748,61 +756,61 @@ def main() -> None:
         return "\n".join(pages)
 
     if args.lookup_companies:
-        ch_key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
-        if not ch_key:
-            sys.exit("--lookup-companies needs COMPANIES_HOUSE_API_KEY (free: developer.company-information.service.gov.uk).")
+        # Optional: a problem here is reported, and never stops the push.
         from company_lookup import LOGIC_VERSION, LookupFailed, key_problem, lookup
 
-        problem = key_problem(ch_key)
+        ch_key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
+        problem = key_problem(ch_key) if ch_key else "no COMPANIES_HOUSE_API_KEY in Settings"
         if problem:
-            sys.exit(f"Can't look up companies: {problem}.")
+            print(f"WARNING: company lookup skipped - {problem}. Everything else carries on.")
+        else:
+            def needs_lookup(p: dict) -> bool:
+                saved = lookups.get(p["website"])
+                if args.recheck or not saved:
+                    return True
+                if (saved.get("logic") or "1") == LOGIC_VERSION:
+                    return False
+                # Matching has improved since this answer: try the unsure / not-found ones again, and
+                # re-confirm company numbers (an older version could take a Gas Safe number for one).
+                return saved.get("result") in ("unsure", "none") or saved.get("how") == "number on their site"
 
-        def needs_lookup(p: dict) -> bool:
-            saved = lookups.get(p["website"])
-            if args.recheck or not saved:
-                return True
-            if (saved.get("logic") or "1") == LOGIC_VERSION:
-                return False
-            # Matching has improved since this answer: try the unsure / not-found ones again, and
-            # re-confirm company numbers (an older version could take a Gas Safe number for one).
-            return saved.get("result") in ("unsure", "none") or saved.get("how") == "number on their site"
-
-        todo = [p for p in selected if not p["_sheet_type"] and needs_lookup(p)]
-        print(f"Looking up {len(todo)} firms with no Company type in the sheet on Companies House ...")
-        counts: dict[str, int] = {}
-        failures_in_a_row = 0
-        for i, p in enumerate(todo, 1):
-            try:
-                found = lookup(p["business_name"], p.get("area") or "", company_pages(p["website"]), ch_key)
-            except PermissionError as e:
-                write_csv(lookups_path, LOOKUP_FIELDS, lookups)
-                sys.exit(f"{e}.")
-            except LookupFailed as e:
-                print(f"    {p['business_name']}: Companies House didn't answer - {e}")
-                failures_in_a_row += 1
-                if failures_in_a_row >= 3:
-                    write_csv(lookups_path, LOOKUP_FIELDS, lookups)
-                    sys.exit(f"Stopped: Companies House failed 3 times in a row ({e}). Nothing is lost - run it again later.")
-                continue
+            todo = [p for p in selected if not p["_sheet_type"] and needs_lookup(p)]
+            print(f"Looking up {len(todo)} firms with no Company type in the sheet on Companies House ...")
+            counts: dict[str, int] = {}
             failures_in_a_row = 0
-            lookups[p["website"]] = {
-                "website": p["website"],
-                "business": p["business_name"],
-                **found,
-                "checked_at": datetime.now(timezone.utc).isoformat(),
-                "logic": LOGIC_VERSION,
-            }
-            counts[found["result"]] = counts.get(found["result"], 0) + 1
-            label = found["company_type"] or {"none": "no record -> letter", "unsure": "unsure -> letter", "closed": f"{found['status']} -> left out"}[found["result"]]
-            print(f"    [{i}/{len(todo)}] {p['business_name']}: {label}  ({found['how']})")
-            if i % 25 == 0:
-                write_csv(lookups_path, LOOKUP_FIELDS, lookups)
-        write_csv(lookups_path, LOOKUP_FIELDS, lookups)
-        print(
-            f"{counts.get('company', 0)} companies, {counts.get('none', 0)} not on the register, "
-            f"{counts.get('unsure', 0)} unsure (letter - put the real type in the sheet if you know it), "
-            f"{counts.get('closed', 0)} dissolved. Saved to {lookups_path.name}"
-        )
+            for i, p in enumerate(todo, 1):
+                try:
+                    found = lookup(p["business_name"], p.get("area") or "", company_pages(p["website"]), ch_key)
+                except PermissionError as e:
+                    print(f"WARNING: company lookup stopped - {e}. Everything else carries on.")
+                    break
+                except LookupFailed as e:
+                    print(f"    {p['business_name']}: Companies House didn't answer - {e}")
+                    failures_in_a_row += 1
+                    if failures_in_a_row >= 3:
+                        print(f"WARNING: company lookup stopped - Companies House failed 3 times in a row ({e}). "
+                              "The rest is done next run; everything else carries on.")
+                        break
+                    continue
+                failures_in_a_row = 0
+                lookups[p["website"]] = {
+                    "website": p["website"],
+                    "business": p["business_name"],
+                    **found,
+                    "checked_at": datetime.now(timezone.utc).isoformat(),
+                    "logic": LOGIC_VERSION,
+                }
+                counts[found["result"]] = counts.get(found["result"], 0) + 1
+                label = found["company_type"] or {"none": "no record -> letter", "unsure": "unsure -> letter", "closed": f"{found['status']} -> left out"}[found["result"]]
+                print(f"    [{i}/{len(todo)}] {p['business_name']}: {label}  ({found['how']})")
+                if i % 25 == 0:
+                    write_csv(lookups_path, LOOKUP_FIELDS, lookups)
+            write_csv(lookups_path, LOOKUP_FIELDS, lookups)
+            print(
+                f"{counts.get('company', 0)} companies, {counts.get('none', 0)} not on the register, "
+                f"{counts.get('unsure', 0)} unsure (letter - put the real type in the sheet if you know it), "
+                f"{counts.get('closed', 0)} dissolved. Saved to {lookups_path.name}"
+            )
 
     if args.find_contacts:
         from concurrent.futures import ThreadPoolExecutor
@@ -923,7 +931,8 @@ def main() -> None:
         write_outputs()
         report()
         if not selected:
-            sys.exit("Nothing left to push.")
+            print("Nothing left to push.")
+            return
 
     if args.teardown:
         if len(selected) > 10 and not args.yes_all:
@@ -978,6 +987,31 @@ def main() -> None:
     if args.letters:
         make_letters()
 
+    def diagnose(bad: list[tuple[dict, str]], total: int) -> None:
+        """Says in plain words why links don't load, and what to change."""
+        def slug_of(url: str) -> str:
+            m = re.search(r"/for/([a-z0-9-]+)", url or "")
+            return m.group(1) if m else ""
+
+        missing = [r for r, why in bad if why.startswith("HTTP 404")]
+        on_dashboard = [r for r in missing if live_known and slug_of(r.get("preview_url", "")) in live]
+        offline = [r for r, why in bad if why.startswith("couldn't connect")]
+        print("")
+        print(f"DIAGNOSIS: {len(bad)} of {total} links don't load.")
+        if on_dashboard:
+            print(
+                f"  {len(on_dashboard)} are on your dashboard but the website says 'not found'. So the website can't read\n"
+                "  your dashboard. In Vercel, open the WEBSITE project > Settings > Environment Variables and check:\n"
+                "    PROSPECTS_API_SECRET  exactly the same value as in the dashboard project (and in panel Settings)\n"
+                "    DASHBOARD_API_URL     https://admin.scalardigital.co.uk\n"
+                "  Then redeploy the website (Deployments > ... > Redeploy) and run this again."
+            )
+        if len(missing) > len(on_dashboard):
+            print(f"  {len(missing) - len(on_dashboard)} never reached your dashboard - see the 'Pushed ... (rejected: ...)' line above.")
+        if offline:
+            print(f"  {len(offline)} couldn't be reached at all from this PC - check the internet connection and try again.")
+        print("")
+
     def verify_links() -> None:
         """Opens every link in the Mailmeteor file; keeps only the ones that load."""
         from concurrent.futures import ThreadPoolExecutor
@@ -993,9 +1027,25 @@ def main() -> None:
             return
         print(f"Checking all {len(rows)} preview links in {mm.name} ...", flush=True)
         with ThreadPoolExecutor(max_workers=8) as pool:
-            problems = list(pool.map(lambda r: link_loads(r["preview_url"]), rows))
+            results = list(pool.map(lambda r: check_preview(r["preview_url"]), rows))
+        problems = [why for why, _ in results]
         bad = [(r, why) for r, why in zip(rows, problems) if why]
+        empty = [r for r, (why, facts) in zip(rows, results) if not why and not facts.get("score")]
+        if empty:
+            no_key = not os.environ.get("PAGESPEED_API_KEY")
+            print("")
+            print(f"NOTE: {len(empty)} of {len(rows)} previews load but show no speed score or findings - only the name.")
+            if no_key:
+                print("  Cause: no PAGESPEED_API_KEY in the panel's Settings, so the speed checks never ran.\n"
+                      "  Add it in Settings (the Google key the site's speed test uses), then Run the whole list again.")
+            else:
+                print("  Their speed check hasn't run yet, or couldn't reach their site. Run the whole list again; if it\n"
+                      "  still shows here, press Speed check next with 'Include sites already checked' ticked.")
+            for r in empty[:10]:
+                print(f"    {r.get('business')}")
+            print("")
         if bad:
+            diagnose(bad, len(rows))
             good = [r for r, why in zip(rows, problems) if not why]
             with mm.open("w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=fields)
