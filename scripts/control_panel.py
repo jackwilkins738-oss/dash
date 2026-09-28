@@ -62,7 +62,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "27"
+PANEL_VERSION = "28"
 MAX_LOG_LINES = 5000
 
 
@@ -541,7 +541,12 @@ class Job:
         with self.lock:
             self.stopping = True
             if self.proc is not None and self.proc.poll() is None:
-                self.proc.terminate()
+                if sys.platform == "win32":
+                    # The whole tree: the autopilot runs its steps as child processes, which a plain
+                    # terminate() would leave running on their own.
+                    subprocess.run(["taskkill", "/PID", str(self.proc.pid), "/T", "/F"], capture_output=True, timeout=30)
+                else:
+                    self.proc.terminate()
 
     def state(self) -> dict:
         with self.lock:
