@@ -136,31 +136,35 @@ def render(text: str, row: dict, your_name: str) -> str:
 # ---------------------------------------------------------------- sending
 
 
-def smtp_host() -> str:
-    host = os.environ.get("MAIL_SMTP_HOST", "").strip()
+def smtp_host(env=None) -> str:
+    env = os.environ if env is None else env
+    host = (env.get("MAIL_SMTP_HOST") or "").strip()
     if host:
         return host
-    imap = os.environ.get("MAIL_IMAP_HOST", "").strip()
+    imap = (env.get("MAIL_IMAP_HOST") or "").strip()
     return "smtp." + imap[5:] if imap.startswith("imap.") else "smtp.gmail.com"
 
 
-def connect():
-    address, password = os.environ.get("MAIL_ADDRESS", ""), os.environ.get("MAIL_APP_PASSWORD", "")
+def connect(env=None):
+    """An SMTP login with the panel's mail settings (os.environ, or the settings dict passed in)."""
+    env = os.environ if env is None else env
+    address, password = env.get("MAIL_ADDRESS", ""), env.get("MAIL_APP_PASSWORD", "")
     if not (address and password):
         raise SendStopped("Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first.")
     try:
-        smtp = smtplib.SMTP_SSL(smtp_host(), 465, timeout=60)
+        smtp = smtplib.SMTP_SSL(smtp_host(env), 465, timeout=60)
         smtp.login(address, password.replace(" ", ""))
     except smtplib.SMTPAuthenticationError as e:
         raise SendStopped("Your email login was refused - check MAIL_APP_PASSWORD (a Gmail app password, not your normal one).") from e
     except (OSError, smtplib.SMTPException) as e:
-        raise SendStopped(f"Couldn't connect to {smtp_host()} ({e}).") from e
+        raise SendStopped(f"Couldn't connect to {smtp_host(env)} ({e}).") from e
     return smtp
 
 
-def build_message(to: str, subject: str, body: str, reply_to_id: str = "") -> EmailMessage:
-    address = os.environ.get("MAIL_ADDRESS", "")
-    name = os.environ.get("MAIL_FROM_NAME", "").strip()
+def build_message(to: str, subject: str, body: str, reply_to_id: str = "", env=None) -> EmailMessage:
+    env = os.environ if env is None else env
+    address = env.get("MAIL_ADDRESS", "")
+    name = (env.get("MAIL_FROM_NAME") or "").strip()
     msg = EmailMessage()
     msg["From"] = formataddr((name, address)) if name else address
     msg["To"] = to

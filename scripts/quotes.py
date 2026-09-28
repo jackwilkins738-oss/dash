@@ -96,8 +96,8 @@ def record(outreach: Path, sheet: str, key: str, business: str, package: str, re
                     "quote_url": result.get("quote_url", ""), "at": datetime.now(timezone.utc).isoformat(timespec="minutes")})
 
 
-def email_link(to: str, contact: str, business: str, result: dict, signoff: str) -> str:
-    """A mailto: that opens a ready-written email in your own mail app - you check it and press send."""
+def email_text(contact: str, business: str, result: dict, signoff: str) -> tuple[str, str]:
+    """(subject, body) of the email that sends a client their quote link."""
     first = contact.split()[0] if contact else ""
     total = f"£{(result.get('total_pence') or 0) / 100:,.0f}"
     body = (
@@ -108,4 +108,19 @@ def email_link(to: str, contact: str, business: str, result: dict, signoff: str)
         f"Kind regards,\n{signoff}"
     )
     subject = f"Your website quote - {business}" + (f" ({result['quote_number']})" if result.get("quote_number") else "")
+    return subject, body
+
+
+def email_link(to: str, contact: str, business: str, result: dict, signoff: str) -> str:
+    """A mailto: that opens the same email in your own mail app - the fallback to sending it from the panel."""
+    subject, body = email_text(contact, business, result, signoff)
     return f"mailto:{urllib.parse.quote(to or '')}?subject={urllib.parse.quote(subject)}&body={urllib.parse.quote(body)}"
+
+
+def find_sent(outreach: Path, key: str, quote_number: str) -> dict | None:
+    """The quote as recorded when it was made - the link is taken from here, never from the page."""
+    path = outreach / "quotes-sent.csv"
+    if not path.exists() or not quote_number:
+        return None
+    with path.open(encoding="utf-8") as f:
+        return next((r for r in csv.DictReader(f) if r.get("key") == key and r.get("quote_number") == quote_number), None)
