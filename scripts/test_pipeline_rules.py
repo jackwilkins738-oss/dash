@@ -31,6 +31,8 @@ def make_sheet(path: Path, rows: list[dict], tab: str = "Outreach") -> None:
     ws = wb.active
     ws.title = tab
     header = ["Business", "Website", "Status", "Email", "Company type", "Trade", "Area", "Contact name"]
+    for r in rows:
+        header += [k for k in r if k not in header]
     ws.append(header)
     for r in rows:
         ws.append([r.get(h, "") for h in header])
@@ -818,6 +820,75 @@ class Quotes(unittest.TestCase):
                 self.assertTrue(next(csv.DictReader(f))["handled"].startswith("answered"))
             with (d / "quotes-sent.csv").open(encoding="utf-8") as f:
                 self.assertEqual(next(csv.DictReader(f))["total"], "750.00")
+
+
+class SiteDraft(unittest.TestCase):
+    PAGE = """<html><head><title>Kerr Roofing | Roofers in Guildford</title>
+<meta name="description" content="Family roofers since 1998.">
+<meta name="theme-color" content="#b3261e"><style>.x{color:#ffffff}</style></head><body>
+<nav><a href="/">Home</a><a href="/flat-roofs">Flat Roofs</a><a href="/repairs">Roof Repairs</a><a href="/contact">Contact us</a>
+<a href="/chimneys">Chimney &amp; Leadwork</a></nav>
+<img src="/img/kerr-logo.png" alt="Kerr logo"><img src="/img/job1.jpg"><img src="/icons/phone.png">
+<h1>Roofing in Guildford <script>x</script></h1><h2>Why choose us</h2>
+<p>Established in 1998. NFRC members.</p><img src="/img/job2.webp"></body></html>"""
+
+    def test_reads_their_site(self):
+        import site_draft
+
+        s = site_draft.read_site(self.PAGE, "https://kerr.co.uk/")
+        self.assertEqual(s["services"], ["Flat Roofs", "Roof Repairs", "Chimney & Leadwork"])
+        self.assertEqual(s["colour"], "#b3261e")
+        self.assertEqual(s["logo"], "https://kerr.co.uk/img/kerr-logo.png")
+        self.assertEqual(s["photos"], ["https://kerr.co.uk/img/job1.jpg", "https://kerr.co.uk/img/job2.webp"])
+        self.assertEqual((s["years"], s["accreditations"]), ("since 1998", ["NFRC"]))
+
+    def test_trade_keys(self):
+        import site_draft
+
+        self.assertEqual([site_draft.trade_key(t) for t in ["Roofing", "Loft conversions", "Driveways & patios", "Landscaping",
+                                                            "Building & extensions", "Plumbing", ""]],
+                         ["roofing", "lofts", "driveways", "landscaping", "building", "general", "general"])
+
+    def test_writes_a_brief_and_an_escaped_draft(self):
+        import site_draft
+
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            make_sheet(out / "list.xlsx", [{"Business": "Kerr <b>Roofing</b>", "Website": "kerr.co.uk", "Trade": "Roofing",
+                                            "Area": "Guildford", "Phone": "01483 111222", "Email": "info@kerr.co.uk",
+                                            "Company number": "1234567", "Registered name": "KERR ROOFING LTD",
+                                            "Registered address": "1 High St, Guildford", "Incorporated": "2010-04-01"}])
+            with mock.patch("site_teardown.fetch_html", return_value=(self.PAGE, "https://kerr.co.uk/")):
+                folder = site_draft.make(out, "list.xlsx", "no:01234567")
+            page = (folder / "index.html").read_text(encoding="utf-8")
+            brief = (folder / "brief.md").read_text(encoding="utf-8")
+        self.assertEqual(folder.name, "kerr-b-roofing-b")
+        self.assertNotIn("<b>Roofing</b>", page)
+        self.assertIn("Kerr &lt;b&gt;Roofing&lt;/b&gt;", page)
+        self.assertIn('href="tel:01483111222"', page)
+        self.assertIn("--brand: #b3261e", page)
+        self.assertIn("<h3>Flat Roofs</h3>", page)
+        self.assertIn("company no. 1234567", page)
+        self.assertIn('name="robots" content="noindex"', page)
+        self.assertIn("**Services they list:** Flat Roofs, Roof Repairs", brief)
+        self.assertIn("https://kerr.co.uk/img/job1.jpg", brief)
+
+    def test_no_site_and_no_row_falls_back(self):
+        import site_draft
+
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            make_sheet(out / "list.xlsx", [{"Business": "Other", "Website": "other.co.uk"}])
+            with mock.patch("site_teardown.fetch_html", return_value=(None, None)):
+                folder = site_draft.make(out, "list.xlsx", "name:acme drives",
+                                         {"business": "Acme Drives", "website": "acme.co.uk", "phone": ""})
+            page = (folder / "index.html").read_text(encoding="utf-8")
+            brief = (folder / "brief.md").read_text(encoding="utf-8")
+            with self.assertRaises(ValueError):
+                site_draft.make(out, "list.xlsx", "name:nobody", {})
+        self.assertIn("Phone number</mark>", page)
+        self.assertIn("[Their main service]".strip("[]"), page)
+        self.assertIn("Couldn't read their homepage", brief)
 
 
 class Review(unittest.TestCase):
