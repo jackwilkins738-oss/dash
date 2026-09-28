@@ -31,7 +31,7 @@ TYPOS = {
 }
 
 # Results that mean "don't email this address".
-BAD = ("bad-format", "no-domain", "no-mail-server", "typo")
+BAD = ("bad-format", "no-domain", "no-mail-server", "typo", "bounced")
 
 
 def is_bad(result: str) -> bool:

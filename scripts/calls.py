@@ -26,7 +26,7 @@ from pathlib import Path
 
 import overrides
 
-OUTCOMES = ["No answer", "Call back", "Interested", "Not interested", "Won"]
+OUTCOMES = ["No answer", "Call back", "Replied to them", "Interested", "Not interested", "Won"]
 FINAL = {"Not interested", "Won"}
 LETTER_WAIT_DAYS = 7
 PHONE_COLUMNS = ["Phone", "Phone number", "Telephone", "Tel", "Mobile", "Landline"]
@@ -175,4 +175,43 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
                 letters.append(item)
     viewing.sort(key=lambda i: -i["heat"])
     letters.sort(key=lambda i: -i["waited"])
-    return {"viewing": viewing, "letters": letters}
+
+    # Replies waiting for you (from reply_scanner.py), from any list - newest first.
+    by_site = {domain_of(str(r.get("Website") or "")): r for r in rows}
+    replied = []
+    replies_path = outreach / "replies.csv"
+    if replies_path.exists():
+        with replies_path.open(encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                if r.get("kind") not in ("interested", "read it") or r.get("handled"):
+                    continue
+                row = by_site.get(r.get("website") or "") or {}
+                extra = found.get(r.get("website") or "") or {}
+                replied.append({
+                    "key": overrides.row_key(row) if row else overrides.row_key({"Business": r.get("business", "")}),
+                    "business": r.get("business", ""), "website": r.get("website", ""), "email": r.get("from", ""),
+                    "contact": str(row.get("Contact name") or "").strip() or extra.get("contact", ""),
+                    "phone": next((str(row[c]).strip() for c in PHONE_COLUMNS if str(row.get(c) or "").strip()), "") or extra.get("phone", ""),
+                    "kind": r.get("kind", ""), "snippet": r.get("snippet", ""), "subject": r.get("subject", ""),
+                    "replied_at": r.get("date", ""), "message_id": r.get("message_id", ""),
+                    "preview": "", "views": 0, "last_viewed": "", "last_call": "", "last_call_at": "", "calls": 0, "posted": "",
+                })
+    replied.sort(key=lambda i: i["replied_at"], reverse=True)
+    return {"viewing": viewing, "letters": letters, "replied": replied}
+
+
+def mark_reply_handled(outreach: Path, business: str) -> None:
+    """Once you've called or answered them, their replies leave the top of the Calls tab."""
+    path = outreach / "replies.csv"
+    if not path.exists():
+        return
+    with path.open(encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        fields, rows = reader.fieldnames or [], list(reader)
+    for r in rows:
+        if r.get("business") == business and r.get("kind") in ("interested", "read it") and not r.get("handled"):
+            r["handled"] = f"answered {date.today().isoformat()}"
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(rows)

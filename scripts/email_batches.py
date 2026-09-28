@@ -58,8 +58,20 @@ def sources(outreach: Path, sheet: str | None) -> list[Path]:
     return sorted(files, key=lambda p: p.stat().st_mtime)
 
 
+def do_not_email(outreach: Path) -> dict[str, str]:
+    """email -> why not: said no (do-not-contact) or bounced - even if an older Mailmeteor file still lists them."""
+    out: dict[str, str] = {}
+    for r in _rows(outreach / "email-checks.csv")[1]:
+        if (r.get("result") or "") == "bounced" and r.get("email"):
+            out[r["email"].lower()] = "bounced"
+    for r in _rows(outreach / "do-not-contact.csv")[1]:
+        if r.get("kind") == "email" and r.get("value"):
+            out[r["value"].strip().lower()] = r.get("reason") or "do not contact"
+    return out
+
+
 def remaining(outreach: Path, sheet: str | None = None) -> int:
-    done = sent_emails(outreach)
+    done = {**sent_emails(outreach), **do_not_email(outreach)}
     seen: set[str] = set()
     for src in sources(outreach, sheet):
         for r in _rows(src)[1]:
@@ -75,6 +87,7 @@ def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, 
         from push_prospects import link_loads as check
     today = today or date.today()
     done = sent_emails(outreach)
+    stop = do_not_email(outreach)
     picked, fields, notes, seen = [], [], [], set()
     for src in sources(outreach, sheet):
         src_fields, rows = _rows(src)
@@ -83,6 +96,9 @@ def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, 
             if not email or email in done or email in seen:
                 continue
             seen.add(email)
+            if email in stop:
+                notes.append(f"skipped {r.get('business')}: {stop[email]}")
+                continue
             why = check(r.get("preview_url") or "")
             if why:
                 notes.append(f"skipped {r.get('business')}: link {why}")
