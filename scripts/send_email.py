@@ -78,6 +78,11 @@ Kind regards,
 {{your_name}}
 Scalar Digital · 07401 696272""",
 }
+# An optional second version of the first email, tested against the first: each firm gets one
+# version, picked from its email address (so a re-send never switches it), and the scorecard
+# (scorecard.py) compares how each does. Leave both blank to send one version only.
+VARIANT_B = {"first_subject_b": "", "first_body_b": ""}
+
 # What a template may use: the batch file's columns, plus your name.
 FIELDS = {"business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status", "trade", "area",
           "top_issue", "score_line", "issue_line", "your_name"}
@@ -96,12 +101,30 @@ def load_templates(outreach: Path) -> dict[str, str]:
         saved = json.loads((outreach / TEMPLATES).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         saved = {}
-    return {k: str(saved.get(k) or v) for k, v in DEFAULT_TEMPLATES.items()}
+    out = {k: str(saved.get(k) or v) for k, v in DEFAULT_TEMPLATES.items()}
+    out.update({k: str(saved.get(k) or "") for k in VARIANT_B})
+    return out
+
+
+def has_variant_b(templates: dict[str, str]) -> bool:
+    return bool(templates.get("first_subject_b", "").strip() and templates.get("first_body_b", "").strip())
+
+
+def variant_for(email: str, templates: dict[str, str]) -> str:
+    """"A" or "B" - fixed per address, about half each, and always "A" when there's no version B."""
+    if not has_variant_b(templates):
+        return "A"
+    import hashlib
+
+    return "B" if hashlib.sha256(email.strip().lower().encode()).digest()[0] % 2 else "A"
 
 
 def template_problem(templates: dict[str, str]) -> str:
     """Why these templates can't be saved/sent, or ''."""
-    for key in DEFAULT_TEMPLATES:
+    b = [k for k in VARIANT_B if templates.get(k, "").strip()]
+    if len(b) == 1:
+        return "Version B needs both a subject and a body (or leave both blank to send one version)."
+    for key in [*DEFAULT_TEMPLATES, *b]:
         text = templates.get(key, "")
         if not text.strip():
             return f"The {key.replace('_', ' ')} is empty."
@@ -110,14 +133,14 @@ def template_problem(templates: dict[str, str]) -> str:
             return f"The {key.replace('_', ' ')} uses {{{{{unknown[0]}}}}}, which isn't a field. Fields: " + ", ".join(sorted(FIELDS))
         if "[your name]" in text.lower():
             return "Replace [your name] with {{your_name}} (set MAIL_FROM_NAME in Settings)."
-    for key in ("first_body", "followup_body"):
+    for key in ("first_body", "followup_body", *(["first_body_b"] if b else [])):
         if "{{preview_url}}" not in templates[key].replace(" ", ""):
             return f"The {key.replace('_', ' ')} must include {{{{preview_url}}}}."
     return ""
 
 
 def save_templates(outreach: Path, templates: dict[str, str]) -> str:
-    clean = {k: str(templates.get(k) or "").replace("\r\n", "\n")[:6000] for k in DEFAULT_TEMPLATES}
+    clean = {k: str(templates.get(k) or "").replace("\r\n", "\n")[:6000] for k in [*DEFAULT_TEMPLATES, *VARIANT_B]}
     problem = template_problem(clean)
     if problem:
         return problem
@@ -253,16 +276,18 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
                 if why:
                     out(f"[{i + 1}/{len(todo)}] {business}: skipped - {why}")
                     continue
-            subject = render(templates[f"{kind}_subject"], row, your_name).strip()
+            variant = "" if followups else variant_for(email, templates)
+            suffix = "_b" if variant == "B" else ""
+            subject = render(templates[f"{kind}_subject{suffix}"], row, your_name).strip()
             reply_to = ""
             if followups:
                 first = sent_rows.get(email, {})
                 if first.get("message_id") and first.get("subject"):
                     reply_to, subject = first["message_id"], "Re: " + first["subject"]
-            body = render(templates[f"{kind}_body"], row, your_name)
+            body = render(templates[f"{kind}_body{suffix}"], row, your_name)
             to = me if test else email
             if test:
-                subject = f"[TEST to yourself - would go to {email}] {subject}"
+                subject = f"[TEST to yourself - would go to {email}{', version ' + variant if has_variant_b(templates) and variant else ''}] {subject}"
             msg = build_message(to, subject, body, reply_to)
             try:
                 smtp.send_message(msg)
@@ -280,7 +305,7 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
             if followups:
                 eb.record_followup_sent(outreach, email, today)
             else:
-                eb.record_sent(outreach, row, batch_file.name, today, msg["Message-ID"], subject)
+                eb.record_sent(outreach, row, batch_file.name, today, msg["Message-ID"], subject, variant)
             sent += 1
             out(f"[{i + 1}/{len(todo)}] sent to {business} ({email})")
             if i < len(todo) - 1:

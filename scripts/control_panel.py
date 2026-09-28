@@ -45,6 +45,7 @@ REPLIES = HERE / "reply_scanner.py"
 AUTOPILOT = HERE / "autopilot.py"
 SEND = HERE / "send_email.py"
 LAUNCH = HERE / "launch_report.py"
+SCORECARD = HERE / "scorecard.py"
 
 
 def replies_first(settings: dict[str, str]) -> list:
@@ -62,7 +63,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "29"
+PANEL_VERSION = "30"
 MAX_LOG_LINES = 5000
 
 
@@ -208,6 +209,7 @@ ACTIONS = {
     "send_followups": "Send follow-ups",
     "send_test": "Send a test to yourself",
     "launch_report": "Launch report",
+    "scorecard": "Scorecard",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
     "contacts": "Find missing emails & phones",
@@ -348,6 +350,8 @@ def build_steps(body: dict, settings: dict[str, str]):
         extra = ["--followups"] if action == "send_followups" else []
         # Replies first, so anyone who said no since the batch was made is left out.
         return (lambda job: [*replies_first(settings), (SEND, extra), (EXPORT, [])]), ""
+    if action == "scorecard":
+        return (lambda job: [(SCORECARD, [])]), ""
     if action == "launch_report":
         from push_prospects import domain_of
 
@@ -1026,7 +1030,8 @@ class Handler(BaseHTTPRequestHandler):
             if body.get("reset"):
                 (OUTREACH / send_email.TEMPLATES).unlink(missing_ok=True)
                 return self._json({"ok": True})
-            problem = send_email.save_templates(OUTREACH, {k: str(body.get(k) or "") for k in send_email.DEFAULT_TEMPLATES})
+            problem = send_email.save_templates(
+                OUTREACH, {k: str(body.get(k) or "") for k in [*send_email.DEFAULT_TEMPLATES, *send_email.VARIANT_B]})
             return self._json({"error": problem}, 400) if problem else self._json({"ok": True})
         if route == "/api/quote":
             return self._json(*quote_action(body))
@@ -1299,6 +1304,11 @@ Kind regards,
 Scalar Digital · 07401 696272 · scalardigital.co.uk
 
 If you'd rather not hear from me again, just reply and say so and I won't get in touch.</textarea>
+          <details style="margin-top:8px"><summary>Version B - test a second first email against this one (optional)</summary>
+            <p class="hint">Fill both boxes and each new firm gets one version or the other, about half each. The Scorecard shows which gets more replies - give it 100+ sends each before deciding. Leave both blank to send only the email above.</p>
+            <textarea id="mm-subject-b" rows="1" placeholder="Version B subject"></textarea>
+            <textarea id="mm-body-b" rows="12" placeholder="Version B body - same {{fields}} as above" style="margin-top:6px"></textarea>
+          </details>
           <div class="row"><button class="primary" id="em-save">Save both emails</button><button id="em-reset">Back to original</button><button id="mm-copy-subject">Copy subject</button><button id="mm-copy-body">Copy body</button><span class="saved" id="mm-copied"></span></div>
           <p class="hint">Fields: {{business}} {{greeting_name}} {{score_line}} {{issue_line}} {{preview_url}} {{trade}} {{area}} {{your_name}} (MAIL_FROM_NAME in Settings). For Mailmeteor, copy and swap {{your_name}} for your name.</p>
         </details>
@@ -1343,7 +1353,7 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
 
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center"><h2 style="margin:0">Files in outreach/</h2><button id="open-folder">Open folder</button></div>
-      <div class="row" style="margin-top:10px"><button class="primary" data-action="export">Export to Excel</button><button id="open-results">Open results in Excel</button></div>
+      <div class="row" style="margin-top:10px"><button class="primary" data-action="export">Export to Excel</button><button data-action="scorecard">Scorecard</button><button id="open-results">Open results in Excel</button></div>
       <p class="hint">One workbook for every list: outreach-results.xlsx, grouped by the date each firm was added, with a Notes column that's kept every time. Also updated automatically at the end of Run the whole list and Prepare Mailmeteor send. Close it in Excel before exporting.</p>
       <ul class="files" id="files" style="margin-top:10px"></ul>
     </div>
@@ -1717,11 +1727,13 @@ async function loadEmailTemplates() {
   const t = await (await fetch("/api/email-template")).json();
   $("mm-subject").value = t.first_subject; $("mm-body").value = t.first_body;
   $("fu-subject").value = t.followup_subject; $("fu-body").value = t.followup_body;
+  $("mm-subject-b").value = t.first_subject_b || ""; $("mm-body-b").value = t.first_body_b || "";
 }
 loadEmailTemplates();
 $("em-save").addEventListener("click", async () => {
   const r = await post("/api/email-template", { first_subject: $("mm-subject").value, first_body: $("mm-body").value,
-    followup_subject: $("fu-subject").value, followup_body: $("fu-body").value });
+    followup_subject: $("fu-subject").value, followup_body: $("fu-body").value,
+    first_subject_b: $("mm-subject-b").value, first_body_b: $("mm-body-b").value });
   $("mm-copied").textContent = r.error || "Saved"; setTimeout(() => ($("mm-copied").textContent = ""), r.error ? 8000 : 2500);
 });
 $("em-reset").addEventListener("click", async () => {

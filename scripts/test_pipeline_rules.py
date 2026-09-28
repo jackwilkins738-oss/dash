@@ -11,6 +11,7 @@ import tempfile
 import time
 import unittest
 from contextlib import redirect_stdout
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -704,6 +705,15 @@ class Autopilot(unittest.TestCase):
                 self.assertFalse(autopilot.is_running())
 
     def test_runs_every_step_in_order_and_carries_on(self):
+        self._run_autopilot(monday=False)
+
+    def test_on_mondays_the_scorecard_goes_in_the_text(self):
+        order, log = self._run_autopilot(monday=True)
+        self.assertEqual(order[-1], "scorecard.py")
+        self.assertIn("Weekly scorecard:", log)
+        self.assertIn("All time: 40 sent", log)
+
+    def _run_autopilot(self, monday):
         import autopilot
         import control_panel as panel
 
@@ -722,11 +732,13 @@ class Autopilot(unittest.TestCase):
                 if script.name == "reply_scanner.py":
                     self.failed.append("reply_scanner.py")  # a failed step: the rest still run
                     return 1
+                if script.name == "scorecard.py":
+                    self.lines.append("  All time: 40 sent · 3% replied (1)")
                 return 0
 
             with mock.patch.object(panel, "OUTREACH", d), mock.patch.object(panel, "SETTINGS_FILE", d / "panel.env"), \
                     mock.patch.object(autopilot.Run, "step", fake_step), mock.patch.object(panel, "keep_awake", lambda on: None), \
-                    redirect_stdout(io.StringIO()):
+                    mock.patch.object(autopilot, "scorecard_day", lambda: monday), redirect_stdout(io.StringIO()):
                 autopilot.save_config({"find": {"trades": ["roofing"], "areas": "Guildford", "age": "any", "max": 50, "exclude": ""},
                                        "batch_size": 20, "followups": True})
                 code = autopilot.run()
@@ -734,13 +746,15 @@ class Autopilot(unittest.TestCase):
             self.assertEqual(order[0], "reply_scanner.py")
             self.assertEqual(order[1], "find_prospects.py")
             self.assertIn("push_prospects.py", order)  # the whole list ran on the new sheet
-            self.assertEqual(order[-3:], ["email_batches.py", "email_batches.py", "export_results.py"])
+            tail = order[:-1] if monday else order
+            self.assertEqual(tail[-3:], ["email_batches.py", "email_batches.py", "export_results.py"])
             self.assertIn(["--followups", "--size", "--after-days"], [a for n, a in ran if n == "email_batches.py"])
             self.assertEqual(code, 1)  # one step had a problem, and it says so
             self.assertFalse((d / autopilot.LOCK).exists())
             log = (d / "autopilot-log.txt").read_text(encoding="utf-8")
             self.assertIn("READY: mailmeteor-batch", log)
             self.assertIn("1 step(s) had problems", log)
+            return order, log
 
     def test_the_windows_schedule_command(self):
         import autopilot
@@ -775,6 +789,63 @@ class Autopilot(unittest.TestCase):
                 import autopilot
 
                 self.assertEqual(autopilot.load_config()["find"]["areas"], "Woking")
+
+
+class Scorecard(unittest.TestCase):
+    def test_versions_trades_and_a_fair_verdict(self):
+        import csv as _csv
+
+        import scorecard
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            def write(name, fields, rows):
+                with (d / name).open("w", newline="", encoding="utf-8") as f:
+                    w = _csv.DictWriter(f, fieldnames=fields)
+                    w.writeheader()
+                    w.writerows(rows)
+            sent = [{"email": f"a{i}@x.co.uk", "business": f"Firm {i}", "preview_url": f"https://s/for/firm-{i}",
+                     "sent": "2026-09-25", "variant": "A" if i % 2 else "B"} for i in range(240)]
+            write("emails-sent.csv", ["email", "business", "preview_url", "sent", "variant"], sent)
+            write("mailmeteor.csv", ["email", "trade"], [{"email": r["email"], "trade": "Roofing" if i < 120 else "Loft conversions"}
+                                                         for i, r in enumerate(sent)])
+            # B gets 8 replies, A gets 1; one bounce and one out-of-office don't count.
+            replies = [{"from": f"a{i}@x.co.uk", "business": f"Firm {i}", "kind": "interested" if i < 4 else "read it"}
+                       for i in (0, 2, 4, 6, 8, 10, 12, 14)]
+            replies += [{"from": "a1@x.co.uk", "business": "Firm 1", "kind": "not interested"},
+                        {"from": "a3@x.co.uk", "business": "Firm 3", "kind": "bounce"},
+                        {"from": "a5@x.co.uk", "business": "Firm 5", "kind": "out of office"}]
+            write("replies.csv", ["from", "business", "kind"], replies)
+            write("quotes-sent.csv", ["business"], [{"business": "Firm 0"}])
+            write("calls.csv", ["business", "outcome", "at"], [{"business": "Firm 0", "outcome": "Won", "at": "2026-09-27T10:00:00+00:00"},
+                                                                 {"business": "Firm 7", "outcome": "No answer", "at": "2026-09-27T11:00:00+00:00"}])
+            views = {f"firm-{i}": {"view_count": 1} for i in range(0, 240, 4)}
+            lines = scorecard.scorecard(d, views, date(2026, 9, 28))
+        text = "\n".join(lines)
+        self.assertIn("All time: 240 sent · 25% opened · 4% replied (9) · 2 keen · 1 quoted · 1 won", text)
+        self.assertIn("Version B: 120 sent", text)
+        self.assertIn("replied (8)", text)
+        self.assertIn("Version B is getting clearly more replies", text)
+        self.assertIn("Roofing: 120 sent", text)
+        self.assertIn("Calls in the last 7 days: 2, real conversations: 1", text)
+
+    def test_too_early_to_call_is_said_plainly(self):
+        import scorecard
+
+        rows = [{"variant": v, "replied": i < 3} for i, v in enumerate("AB" * 30)]
+        self.assertIn("Too early", scorecard.verdict(rows))
+
+    def test_versions_are_split_about_evenly_and_stick_to_an_address(self):
+        import send_email
+
+        t = {**send_email.DEFAULT_TEMPLATES, "first_subject_b": "Your site, {{business}}", "first_body_b": "Hi {{greeting_name}} {{preview_url}}"}
+        picks = [send_email.variant_for(f"firm{i}@x.co.uk", t) for i in range(1000)]
+        self.assertTrue(400 < picks.count("B") < 600)
+        self.assertEqual(send_email.variant_for("Firm1@X.co.uk", t), send_email.variant_for("firm1@x.co.uk", t))
+        self.assertEqual(send_email.variant_for("firm1@x.co.uk", send_email.DEFAULT_TEMPLATES), "A")
+        self.assertIn("both a subject and a body", send_email.template_problem({**send_email.DEFAULT_TEMPLATES, "first_subject_b": "x"}))
+        self.assertIn("preview_url", send_email.template_problem({**t, "first_body_b": "Hi {{business}}"}))
+        self.assertEqual(send_email.template_problem(t), "")
 
 
 class Quotes(unittest.TestCase):
