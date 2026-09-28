@@ -51,7 +51,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "20"
+PANEL_VERSION = "21"
 MAX_LOG_LINES = 5000
 
 
@@ -205,6 +205,11 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
     """Everything the list needs, in order: the quick checks for everyone, then
     speed checks in batches - each batch pushed and logged, so stopping part-way
     loses nothing."""
+    if not settings.get("PAGESPEED_API_KEY"):
+        job.note("WARNING: no PAGESPEED_API_KEY in Settings - the speed checks can't run, so preview pages will")
+        job.note("         show only each firm's name: no score, no 'What we found'. Add the key in Settings")
+        job.note("         (the Google key the site's speed test uses) and run this again.")
+        job.note("")
     first = ["--sheet", sheet, "--find-contacts", "--check-emails", "--guess-trades"]
     if settings.get("COMPANIES_HOUSE_API_KEY"):
         first.append("--lookup-companies")
@@ -212,7 +217,7 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
         job.note("No COMPANIES_HOUSE_API_KEY in Settings - skipping the company type lookup.")
     yield first
     if not settings.get("PAGESPEED_API_KEY"):
-        job.note("No PAGESPEED_API_KEY in Settings - skipping the speed checks.")
+        job.note("Skipping the speed checks - no PAGESPEED_API_KEY (see the warning at the top).")
         yield ["--sheet", sheet, "--verify-links"]
         yield (EXPORT, [])
         return
@@ -232,7 +237,9 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
             )
             return
         if remaining == last:
-            job.note(f"{remaining} still to check but the last batch made no progress - stopping.")
+            job.note(f"{remaining} still to check but the last batch made no progress - finishing up.")
+            yield ["--sheet", sheet, "--verify-links"]
+            yield (EXPORT, [])
             return
         last = remaining
         job.note(f"{remaining} sites still to speed check.")
@@ -396,7 +403,7 @@ class Job:
             if len(self.lines) > MAX_LOG_LINES:
                 del self.lines[: len(self.lines) - MAX_LOG_LINES]
 
-    def start(self, label: str, steps, settings: dict[str, str], needs_secret: bool = True) -> str:
+    def start(self, label: str, steps, settings: dict[str, str], needs_secret: bool = True, keep_going: bool = False) -> str:
         with self.lock:
             if self.running():
                 return "Something is already running - wait for it or press Stop."
@@ -407,6 +414,7 @@ class Job:
             self.lines = [f"> {label}"]
             self.seq += 1
             self.label, self.started, self.exit_code, self.stopping = label, time.time(), None, False
+            self.keep_going, self.failed_steps = keep_going, []
             self.thread = threading.Thread(target=self._run, args=(steps, env), daemon=True)
             self.thread.start()
             return ""
@@ -440,12 +448,25 @@ class Job:
                     self.note(raw.decode("utf-8", errors="replace").rstrip())
                 code = proc.wait()
                 self.note("")
-                if code != 0 or self.stopping:
+                if self.stopping:
                     break
+                if code != 0:
+                    # A chain like "Run the whole list" carries on: each later step
+                    # (the pushes, the link check) still does its job.
+                    self.failed_steps.append(shown.split(" --")[0] + " " + " ".join(a for a in args if a.startswith("--") and a != "--sheet"))
+                    if not self.keep_going:
+                        break
+                    self.note("That step had a problem (above) - carrying on with the rest.")
+                    self.note("")
         except Exception as e:  # never leave the panel stuck on "running"
             self.note(f"Panel error: {e}")
             code = 1
         keep_awake(False)
+        if getattr(self, "failed_steps", None) and self.keep_going and not self.stopping:
+            self.note(f"Finished, but {len(self.failed_steps)} step(s) had problems - look for WARNING or errors above:")
+            for f in self.failed_steps:
+                self.note(f"    {f}")
+            code = 1
         with self.lock:
             self.exit_code = code if not self.stopping else -1
             lines = list(self.lines)
@@ -769,7 +790,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": error}, 400)
             finder = body["action"] in ("find", "count")
             label = ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") and not finder else "")
-            error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] != "install_segno")
+            error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] != "install_segno",
+                              keep_going=body["action"] in ("all", "prepare"))
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
         if route == "/api/letters/posted":
             name = str(body.get("sheet") or "")

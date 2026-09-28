@@ -40,14 +40,21 @@ function config() {
   return base && secret ? { base, secret } : null
 }
 
-/** One prospect's public facts, or null (unknown slug, or not configured). Cached for an hour. */
+/**
+ * One prospect's public facts, or null (unknown slug, or not configured).
+ *
+ * Fetched fresh on every view, never cached: a preview opened before its
+ * prospect was pushed must not keep showing "not found" once it has been,
+ * and a re-run speed check should show straight away. These pages are
+ * private and rarely visited, so the extra dashboard call costs nothing.
+ */
 export async function getProspect(slug: string): Promise<Prospect | null> {
   const cfg = config()
   if (!cfg || !isProspectSlug(slug)) return null
   try {
     const res = await fetch(`${cfg.base}/api/prospects/${slug}`, {
       headers: { authorization: `Bearer ${cfg.secret}` },
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     })
     if (!res.ok) return null
     const body = (await res.json()) as { prospect?: Prospect }
