@@ -208,7 +208,7 @@ export default function CostGuidePage() {
             <p className="mt-3 text-pretty leading-relaxed text-muted-foreground">
               I build hand-coded sites for UK trades at a fixed price agreed before any work starts. A single landing
               page is £{PRICES.landing}. The full build is £{PRICES.build.toLocaleString('en-GB')}: five pages plus a
-              private dashboard for enquiries, quotes, jobs and invoices, hosted free for your first 12 months. You own
+              private dashboard for enquiries, quotes, jobs and invoices, hosted free for your first 12 months, then an optional £{PRICES.dashboardMonthly} a month. You own
               the code and the domain outright either way.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">

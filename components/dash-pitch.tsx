@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, FileText, LayoutDashboard, UserCheck } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
+import { PRICES } from '@/lib/site'
 
 const POINTS = [
   {
@@ -51,7 +52,7 @@ export function DashPitch() {
 
         <Reveal className="mt-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Hosted by me, free for your first 12 months, then a small optional monthly dashboard fee agreed up front. Your website
+            Hosted by me, free for your first 12 months, then £{PRICES.dashboardMonthly} a month if you want to keep it. Your website
             is always yours, with or without the dashboard.
           </p>
           <Link

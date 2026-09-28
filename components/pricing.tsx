@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Check } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
+import { PRICES } from '@/lib/site'
 
 const LANDING_INCLUDED: ReactNode[] = [
   'One hand-coded page, engineered to convert, not just to exist',
@@ -17,7 +18,8 @@ const BUILD_INCLUDED: ReactNode[] = [
   'Five hand-coded pages, including a gallery and a service-areas page',
   <>
     <strong className="font-semibold text-blueprint">Your own private dashboard</strong> — enquiries, quotes, jobs,
-    invoices and a customer portal, running under your business name. Hosted free for your first 12 months
+    invoices and a customer portal, running under your business name. Hosted free for your first 12 months, then £{PRICES.dashboardMonthly} a month,
+    optional
   </>,
   'Custom design, built around how your business actually wins work',
   'Mobile-first, built for 90+ on Google’s mobile speed test',
@@ -108,7 +110,7 @@ export function Pricing() {
               </div>
               <ul className="space-y-4 self-center">
                 {[
-                  ['Dashboard hosting free for 24 months', 'Twice the usual 12, before the optional monthly fee.'],
+                  ['Dashboard hosting free for 24 months', `Twice the usual 12, before the optional £${PRICES.dashboardMonthly} a month.`],
                   [
                     'A speed guarantee',
                     '90+ on Google’s mobile speed test at launch, checked together on the live site, or the balance isn’t due.',
