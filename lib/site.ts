@@ -16,4 +16,4 @@ export const SITE = {
 // (a date that changes on every build tells Google to ignore it).
 export const UPDATED = '2026-09-24'
 
-export const PRICES = { landing: 750, build: 2500 } as const
+export const PRICES = { landing: 750, build: 2500, dashboardMonthly: 39 } as const

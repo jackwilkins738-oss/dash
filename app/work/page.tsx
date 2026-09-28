@@ -25,7 +25,7 @@ const FAQS: QA[] = [
   },
   {
     q: 'Do I own the website and the domain?',
-    a: 'Yes. You pay once and own the code and the domain outright. There is no monthly rental on your site. The private dashboard that comes with the full build is hosted for free for your first 12 months, then for a small optional monthly dashboard fee agreed up front. Your website is always yours, with or without the dashboard.',
+    a: 'Yes. You pay once and own the code and the domain outright. There is no monthly rental on your site. The private dashboard that comes with the full build is hosted for free for your first 12 months, then £39 a month if you want to keep it. That is optional: stop paying and only the dashboard stops. Your website is always yours, with or without it.',
   },
   {
     q: 'What is the difference between the £750 and £2,500 options?',

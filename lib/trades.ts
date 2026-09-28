@@ -281,7 +281,7 @@ export const TRADES: Trade[] = [
       },
       {
         q: 'Does a builder need a dashboard as well as a website?',
-        a: 'Not necessarily, but it helps once enquiries and quotes grow. The full Scalar Digital build includes a private dashboard for enquiries, quotes, jobs and invoices, hosted free for the first 12 months, so the site brings the lead in and the dashboard helps run the job.',
+        a: 'Not necessarily, but it helps once enquiries and quotes grow. The full Scalar Digital build includes a private dashboard for enquiries, quotes, jobs and invoices, hosted free for the first 12 months (then an optional £39 a month), so the site brings the lead in and the dashboard helps run the job.',
       },
     ],
   },

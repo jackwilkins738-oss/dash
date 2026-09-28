@@ -47,8 +47,9 @@ it's what catches their enquiries.
    `email`, `phone`, `message`. Page views are recorded automatically.
 4. **Scalar build:** invite them (`/admin` → their card → invite) so they get the
    full dashboard - quotes, invoices, jobs, portal.
-   **Landing page:** no login needed - they just get the enquiry emails. (Upgrade
-   path: "want quotes, invoices and payments too? The full dashboard is £X a month.")
+   **Landing page:** no login needed - they just get the enquiry emails. The
+   dashboard isn't offered on the landing page; it comes only with the full build
+   (free for 12 months, then £39 a month, optional).
 
 ## 4. Pointing the domain - without breaking their email
 
