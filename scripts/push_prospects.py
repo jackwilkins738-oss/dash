@@ -876,6 +876,8 @@ def main() -> None:
             if not email or "@" not in email:
                 continue
             saved = email_checks.get(email)
+            if saved and saved.get("result") == "bounced":
+                continue  # a real bounce outranks any DNS check: the domain works, the mailbox doesn't
             if saved and not args.recheck:
                 try:
                     age = now - datetime.fromisoformat(saved.get("checked_at") or "")

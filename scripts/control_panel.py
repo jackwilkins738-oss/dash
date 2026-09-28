@@ -41,17 +41,24 @@ PUSH = HERE / "push_prospects.py"
 FIND = HERE / "find_prospects.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
+REPLIES = HERE / "reply_scanner.py"
+
+
+def replies_first(settings: dict[str, str]) -> list:
+    """Check replies before anything that picks who to contact - if the inbox is set up."""
+    return [(REPLIES, [])] if settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD") else []
 RESULTS_NAME = "outreach-results.xlsx"
 SETTING_KEYS = [
     "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
-    "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "DASHBOARD_API_URL", "SITE_URL",
+    "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST",
+    "DASHBOARD_API_URL", "SITE_URL",
 ]
-SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN"}
+SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD"}
 # A run this long gets a phone alert when it ends (if Telegram is set up).
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "21"
+PANEL_VERSION = "22"
 MAX_LOG_LINES = 5000
 
 
@@ -188,6 +195,7 @@ ACTIONS = {
     "prepare": "Prepare Mailmeteor send",
     "export": "Export to Excel",
     "batch": "Make email batch",
+    "replies": "Check replies",
     "batch_sent": "Mark batch as sent",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
@@ -210,6 +218,7 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
         job.note("         show only each firm's name: no score, no 'What we found'. Add the key in Settings")
         job.note("         (the Google key the site's speed test uses) and run this again.")
         job.note("")
+    yield from replies_first(settings)
     first = ["--sheet", sheet, "--find-contacts", "--check-emails", "--guess-trades"]
     if settings.get("COMPANIES_HOUSE_API_KEY"):
         first.append("--lookup-companies")
@@ -301,6 +310,10 @@ def build_steps(body: dict, settings: dict[str, str]):
         return None, "Unknown action."
     if action == "export":
         return (lambda job: [(EXPORT, [])]), ""
+    if action == "replies":
+        if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
+            return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first."
+        return (lambda job: [(REPLIES, [])]), ""
     if action == "batch_sent":
         return (lambda job: [(BATCHES, ["--mark-sent"]), (EXPORT, [])]), ""
     if action == "batch":
@@ -316,7 +329,7 @@ def build_steps(body: dict, settings: dict[str, str]):
             if not sheet_path(name):
                 return None, "Pick a sheet first."
             args += ["--sheet", name]
-        return (lambda job: [(BATCHES, args)]), ""
+        return (lambda job: [*replies_first(settings), (BATCHES, args)]), ""
     if action == "install_segno":
         return (lambda job: [("pip", ["install", "segno"])]), ""
     if action in ("find", "count"):
@@ -340,7 +353,7 @@ def build_steps(body: dict, settings: dict[str, str]):
         if dry:
             return None, "Prepare Mailmeteor send pushes for real, so every link exists - untick Dry run."
         args.append("--verify-links")
-        return (lambda job: [args, (EXPORT, [])]), ""
+        return (lambda job: [*replies_first(settings), args, (EXPORT, [])]), ""
     elif action == "speed":
         try:
             n = int(body.get("limit") or 10)
@@ -530,6 +543,7 @@ def call_action(body: dict) -> tuple[dict, int]:
         return {"error": "That doesn't look right."}, 400
     note = str(body.get("note") or "")[:300]
     calls.log_call(OUTREACH, sheet, key, business, outcome, note)
+    calls.mark_reply_handled(OUTREACH, business)
     if outcome == "Not interested":
         website, email = str(body.get("website") or "").lower(), str(body.get("email") or "").strip()
         entries = [("name", business)]
@@ -791,7 +805,7 @@ class Handler(BaseHTTPRequestHandler):
             finder = body["action"] in ("find", "count")
             label = ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") and not finder else "")
             error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] != "install_segno",
-                              keep_going=body["action"] in ("all", "prepare"))
+                              keep_going=body["action"] in ("all", "prepare", "batch"))
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
         if route == "/api/letters/posted":
             name = str(body.get("sheet") or "")
@@ -1088,6 +1102,10 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
         <label>TELEGRAM_CHAT_ID</label>
         <input type="text" id="TELEGRAM_CHAT_ID" placeholder="same as in Vercel">
         <p class="hint">Optional: a phone alert when a run longer than 3 minutes finishes. Use the same bot and chat as the website's preview alerts.</p>
+        <label>MAIL_ADDRESS / MAIL_APP_PASSWORD <span id="set-mail"></span></label>
+        <div class="grid2"><input type="text" id="MAIL_ADDRESS" placeholder="the Gmail you send from"><input type="password" id="MAIL_APP_PASSWORD" placeholder="app password (blank keeps the saved one)" autocomplete="off"></div>
+        <input type="text" id="MAIL_IMAP_HOST" placeholder="imap.gmail.com (leave blank for Gmail)" style="margin-top:6px">
+        <p class="hint">For "Check replies". Not your normal password: Google Account &gt; Security &gt; 2-Step Verification &gt; App passwords. It only ever reads - nothing is marked read, moved or deleted.</p>
         <label>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</label>
         <div class="grid2" style="grid-template-columns:1fr 1fr 1fr"><input type="text" id="LETTER_SIGNOFF" placeholder="Scalar Digital"><input type="text" id="LETTER_EMAIL" placeholder="hello@scalardigital.co.uk"><input type="text" id="LETTER_PHONE" placeholder="07401 696272"></div>
         <p class="hint">Who the letters are from: the name they're signed with, and the email and phone they give.</p>
@@ -1113,6 +1131,7 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
       <pre id="log">Pick a button on the left. Output appears here.</pre>
     </div>
     <div id="pane-calls" hidden>
+      <div class="row" style="margin:0 0 8px"><button data-action="replies">Check replies</button><span class="hint">Reads your inbox (read-only): no's are blocked, bounces move to letters, real replies land here.</span></div>
       <div class="toast" id="calls-toast"></div>
       <div id="calls" style="height:calc(100vh - 230px); min-height:320px; overflow:auto"></div>
     </div>
@@ -1172,11 +1191,12 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST"]) $(k).value = s.settings[k] || "";
     if (!s.settings.PROSPECTS_API_SECRET) $("settings-box").open = true;
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
   $("set-psi").textContent = s.settings.PAGESPEED_API_KEY ? "(saved)" : "(not set - needed for speed checks)";
+  $("set-mail").textContent = s.settings.MAIL_APP_PASSWORD ? "(saved)" : "(optional - lets the panel read replies)";
   $("set-tg").textContent = s.settings.TELEGRAM_BOT_TOKEN ? "(saved)" : "(optional)";
   $("set-ch").textContent = s.settings.COMPANIES_HOUSE_API_KEY ? "(saved)" : "(not set - free at developer.company-information.service.gov.uk)";
 
@@ -1199,7 +1219,7 @@ function render() {
     lastLines = j.seq;
   }
   if ((wasRunning && !j.running) || (j.running && ++polls % 15 === 0)) loadProgress();
-  if (wasRunning && !j.running) { loadReview(); loadLetters(); loadBatch(); }
+  if (wasRunning && !j.running) { loadReview(); loadLetters(); loadBatch(); if (!$("pane-calls").hidden) loadCalls(); }
   wasRunning = j.running;
 }
 
@@ -1274,13 +1294,15 @@ async function loadCalls() {
 }
 function callRow(i, section) {
   const phone = i.phone ? `<a href="tel:${esc(i.phone.replace(/\s/g, ""))}" style="font-size:14px">📞 ${esc(i.phone)}</a>` : '<span class="hint">no phone - check their site</span>';
-  const seen = section === "viewing"
+  const seen = section === "replied"
+    ? `<b style="color:var(--ok)">${i.kind === "interested" ? "Sounds interested" : "Wrote back"}</b> ${esc(agoIso(i.replied_at))} · ${esc(i.email)}<br><i>"${esc(i.snippet)}"</i>`
+    : section === "viewing"
     ? `<b style="color:var(--ok)">${i.views} visit${i.views === 1 ? "" : "s"}</b> · last ${esc(agoIso(i.last_viewed))}`
     : `letter posted ${i.waited} days ago · not opened yet`;
   const last = i.last_call ? ` · last call: ${esc(i.last_call)} ${esc(agoIso(i.last_call_at))}` : "";
   return `<div class="ritem" data-key="${esc(i.key)}" data-sec="${section}">
     <div class="top"><b>${esc(i.business)}</b>${i.contact ? `<span class="hint">${esc(i.contact)}</span>` : ""}${phone}
-      <a href="${esc(i.preview)}" target="_blank" rel="noopener">their preview ↗</a>
+      ${i.preview ? `<a href="${esc(i.preview)}" target="_blank" rel="noopener">their preview ↗</a>` : ""}
       <a href="https://${esc(i.website)}" target="_blank" rel="noopener">${esc(i.website)} ↗</a></div>
     <div class="why">${seen}${last}</div>
     <div class="btns">${(callData.outcomes || []).map((o) => `<button data-outcome="${esc(o)}" ${o === "Not interested" ? 'class="danger"' : o === "Interested" || o === "Won" ? 'class="primary"' : ""}>${esc(o)}</button>`).join("")}
@@ -1288,20 +1310,21 @@ function callRow(i, section) {
   </div>`;
 }
 function renderCalls() {
-  const n = (callData.viewing || []).length;
+  const n = (callData.viewing || []).length + (callData.replied || []).length;
   $("calls-count").hidden = !n; $("calls-count").textContent = n;
   const msg = callData.message
     ? `<div class="ritem"><b>${esc(callData.message)}</b><div class="why">The call list needs one small, read-only addition to your dashboard: a list of who opened their preview. Until it's live the call list stays empty - nothing else is affected.</div></div>` : "";
   const tps = '<p class="hint">Check each number against <a href="https://www.tpsonline.org.uk/" target="_blank" rel="noopener" style="color:var(--accent)">TPS / CTPS</a> before you call.</p>';
+  const rp = (callData.replied || []).map((i) => callRow(i, "replied")).join("");
   const v = (callData.viewing || []).map((i) => callRow(i, "viewing")).join("") || '<p class="hint">Nobody new has opened their preview since your last calls.</p>';
   const l = (callData.letters || []).map((i) => callRow(i, "letters")).join("") || '<p class="hint">No letters waiting on a follow-up.</p>';
-  $("calls").innerHTML = msg + tps + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em">Looking at their preview - hottest first</h2>` + v
+  $("calls").innerHTML = msg + tps + (rp ? `<h2 style="font-size:12px;color:var(--ok);text-transform:uppercase;letter-spacing:.06em">Replied to your email - answer these first</h2>` + rp : "") + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em">Looking at their preview - hottest first</h2>` + v
     + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:18px">Letter follow-ups (${LETTER_WAIT} days+, not opened)</h2>` + l;
   document.querySelectorAll("#calls [data-outcome]").forEach((b) => b.addEventListener("click", () => callOutcome(b)));
 }
 async function callOutcome(b) {
   const card = b.closest(".ritem");
-  const list = callData[card.dataset.sec === "viewing" ? "viewing" : "letters"];
+  const list = callData[card.dataset.sec] || [];
   const item = list.find((x) => x.key === card.dataset.key);
   const outcome = b.dataset.outcome;
   if (outcome === "Not interested" && !confirm(`${item.business}: not interested? They won't be contacted again, from any list.`)) return;
@@ -1432,9 +1455,9 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (!$("pane-calls").hidden) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN"]) $(k).value = "";
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
   $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
 });
