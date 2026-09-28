@@ -778,6 +778,43 @@ class Autopilot(unittest.TestCase):
 
 
 class Quotes(unittest.TestCase):
+    def test_email_it_to_them_sends_the_recorded_link_from_your_email(self):
+        import control_panel as panel
+        import quotes
+
+        sent = []
+
+        class FakeSMTP:
+            def send_message(self, msg):
+                sent.append(msg)
+
+            def quit(self):
+                pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            make_sheet(d / "list.xlsx", [{"Business": "Kerr Roofing", "Website": "kerr.co.uk"}])
+            (d / "panel.env").write_text("MAIL_ADDRESS=jack@scalar.co.uk\nMAIL_APP_PASSWORD=abcd\nMAIL_FROM_NAME=Jack Wilkins\n", encoding="utf-8")
+            quotes.record(d, "list.xlsx", "name:kerr roofing", "Kerr Roofing", "build",
+                          {"quote_number": "SD-0007", "total_pence": 250000, "quote_url": "https://admin.scalardigital.co.uk/quote/q1/t1"})
+            with mock.patch.object(panel, "OUTREACH", d), mock.patch.object(panel, "SETTINGS_FILE", d / "panel.env"), \
+                 mock.patch("send_email.connect", return_value=FakeSMTP()):
+                ok, code = panel.quote_email_action({"sheet": "list.xlsx", "key": "name:kerr roofing", "to": "bill@kerr.co.uk",
+                                                     "contact": "Bill Kerr", "quote_number": "SD-0007"})
+                missing, code2 = panel.quote_email_action({"sheet": "list.xlsx", "key": "name:kerr roofing", "to": "bill@kerr.co.uk",
+                                                           "quote_number": "SD-9999"})
+        self.assertEqual(code, 200, ok)
+        msg = sent[0]
+        self.assertEqual((msg["To"], msg["From"]), ("bill@kerr.co.uk", "Jack Wilkins <jack@scalar.co.uk>"))
+        self.assertEqual(msg["Subject"], "Your website quote - Kerr Roofing (SD-0007)")
+        body = msg.get_content()
+        self.assertIn("Hi Bill,", body)
+        self.assertIn("https://admin.scalardigital.co.uk/quote/q1/t1", body)
+        self.assertIn("(£2,500)", body)
+        self.assertIn("Jack Wilkins", body)
+        self.assertEqual(code2, 404)
+        self.assertEqual(len(sent), 1)
+
     def test_what_is_sent_and_the_email_it_opens(self):
         import json as _json
         import urllib.parse

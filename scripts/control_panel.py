@@ -62,7 +62,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "28"
+PANEL_VERSION = "29"
 MAX_LOG_LINES = 5000
 
 
@@ -611,7 +611,7 @@ def quote_action(body: dict) -> tuple[dict, int]:
     quotes.record(OUTREACH, sheet, key, business, package, result)
     calls.log_call(OUTREACH, sheet, key, business, "Quoted", result.get("quote_number", ""))
     calls.mark_reply_handled(OUTREACH, business)
-    signoff = settings.get("LETTER_SIGNOFF") or "Scalar Digital"
+    signoff = settings.get("MAIL_FROM_NAME") or settings.get("LETTER_SIGNOFF") or "Scalar Digital"
     return {"ok": True, "quote_number": result.get("quote_number"), "total": (result.get("total_pence") or 0) / 100,
             "url": result["quote_url"], "mailto": quotes.email_link(email, str(body.get("contact") or ""), business, result, signoff)}, 200
 
@@ -635,6 +635,38 @@ def draft_site_action(body: dict) -> tuple[dict, int]:
     except OSError:
         pass
     return {"ok": True, "message": f"Draft and brief saved in outreach/sites/{folder.name} - opened in your browser."}, 200
+
+
+def quote_email_action(body: dict) -> tuple[dict, int]:
+    """Calls tab "Email it to them": sends the quote link from your own email (as the batches are sent)."""
+    import quotes
+    import send_email
+
+    settings = load_settings()
+    sheet, key = str(body.get("sheet") or ""), str(body.get("key") or "")
+    to = str(body.get("to") or "").strip()
+    if not sheet_path(sheet) or not REVIEW_KEY.match(key) or not EMAIL.match(to):
+        return {"error": "No email address for them - copy the link and send it yourself."}, 400
+    if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
+        return {"error": "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings to send from here - or use the mail-app link."}, 400
+    sent = quotes.find_sent(OUTREACH, key, str(body.get("quote_number") or ""))
+    if not sent or not sent.get("quote_url"):
+        return {"error": "Couldn't find that quote - make it again."}, 404
+    result = {"quote_url": sent["quote_url"], "quote_number": sent["quote_number"],
+              "total_pence": round(float(sent.get("total") or 0) * 100)}
+    signoff = settings.get("MAIL_FROM_NAME") or settings.get("LETTER_SIGNOFF") or "Scalar Digital"
+    subject, text = quotes.email_text(str(body.get("contact") or ""), sent.get("business", ""), result, signoff)
+    try:
+        smtp = send_email.connect(settings)
+        try:
+            smtp.send_message(send_email.build_message(to, subject, text, env=settings))
+        finally:
+            smtp.quit()
+    except send_email.SendStopped as e:
+        return {"error": str(e)}, 502
+    except (OSError, Exception) as e:  # refused recipient, dropped connection
+        return {"error": f"Not sent: {e}"}, 502
+    return {"ok": True, "message": f"Sent to {to} - it's in your Sent folder."}, 200
 
 
 def call_action(body: dict) -> tuple[dict, int]:
@@ -1000,6 +1032,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(*quote_action(body))
         if route == "/api/calls":
             return self._json(*call_action(body))
+        if route == "/api/quote-email":
+            return self._json(*quote_email_action(body))
         if route == "/api/draft-site":
             return self._json(*draft_site_action(body))
         if route == "/api/review":
@@ -1585,7 +1619,20 @@ async function makeQuote(b) {
   if (r.error) { box.style.color = "var(--bad)"; box.textContent = r.error; return; }
   box.style.color = "var(--ok)";
   box.innerHTML = `Quote ${esc(r.quote_number)} (£${Number(r.total).toLocaleString()}) is ready: <a href="${esc(r.url)}" target="_blank" rel="noopener">open it ↗</a>
-    <button data-copy="${esc(r.url)}">Copy link</button> <a href="${esc(r.mailto)}"><button class="primary">Email it to them</button></a>`;
+    <button data-copy="${esc(r.url)}">Copy link</button> <button class="primary" data-send-quote>Email it to them${item.email ? " (" + esc(item.email) + ")" : ""}</button>
+    <a href="${esc(r.mailto)}" class="hint">or open in your mail app</a> <span data-sent></span>`;
+  box.querySelector("[data-send-quote]").addEventListener("click", async (e) => {
+    const btn = e.target;
+    let to = item.email;
+    if (!to) to = (prompt(`Email address to send ${item.business}'s quote to:`) || "").trim();
+    if (!to) return;
+    btn.disabled = true; btn.textContent = "Sending...";
+    const s = await post("/api/quote-email", { sheet: $("sheet").value, key: item.key, to, contact: item.contact, quote_number: r.quote_number });
+    btn.disabled = false; btn.textContent = s.ok ? "Sent" : "Email it to them";
+    const note = box.querySelector("[data-sent]");
+    note.style.color = s.ok ? "var(--ok)" : "var(--bad)";
+    note.textContent = s.error || s.message;
+  });
   box.querySelector("[data-copy]").addEventListener("click", async (e) => {
     try { await navigator.clipboard.writeText(e.target.dataset.copy); e.target.textContent = "Copied"; } catch (err) {}
   });
