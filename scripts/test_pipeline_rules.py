@@ -627,6 +627,125 @@ class EmailBatches(unittest.TestCase):
             self.assertEqual([r["business"] for r in csv.DictReader(path.open(encoding="utf-8"))], ["B"])
 
 
+class FollowUps(unittest.TestCase):
+    def test_who_gets_one_and_never_a_third(self):
+        import email_batches as eb
+        from datetime import date
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            with (d / "emails-sent.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(eb.SENT_FIELDS)
+                for who, sent in (("quiet", "2026-09-20"), ("replied", "2026-09-20"), ("viewer", "2026-09-20"),
+                                  ("recent", "2026-09-26"), ("blocked", "2026-09-20"), ("ooo", "2026-09-20")):
+                    w.writerow([f"{who}@x.co.uk", who.title(), f"https://s/for/{who}-abc123?src=email", "b1", sent, ""])
+            with (d / "mailmeteor-l.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["business", "greeting_name", "email", "issue_line", "preview_url"])
+                w.writerow(["Quiet", "Sam", "quiet@x.co.uk", "I also noticed your footer still says © 2019.", "https://s/for/quiet-abc123?src=email"])
+            with (d / "replies.csv").open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["message_id", "date", "from", "business", "website", "kind", "subject", "snippet", "handled"])
+                w.writerow(["1", "2026-09-22", "replied@x.co.uk", "Replied", "", "read it", "", "", ""])
+                w.writerow(["2", "2026-09-22", "ooo@x.co.uk", "Ooo", "", "out of office", "", "", ""])
+            add_to_blocklist(d, [("email", "blocked@x.co.uk")], "said no")
+            views = {"viewer-abc123": {"view_count": 2}}
+            path, notes, skipped = eb.make_followups(d, 20, 5, check=lambda u: None, views=views, today=date(2026, 9, 28))
+            rows = list(csv.DictReader(path.open(encoding="utf-8")))
+            self.assertEqual(sorted(r["email"] for r in rows), ["ooo@x.co.uk", "quiet@x.co.uk"])  # an auto-reply isn't a reply
+            quiet = next(r for r in rows if r["email"] == "quiet@x.co.uk")
+            self.assertEqual((quiet["greeting_name"], quiet["issue_line"]), ("Sam", "I also noticed your footer still says © 2019."))
+            self.assertEqual(skipped, {"replied": 1, "viewed": 1, "blocked": 1, "too soon": 1})
+            self.assertEqual(eb.mark_followups_sent(d, date(2026, 9, 28)), 2)
+            later, _, _ = eb.make_followups(d, 20, 5, check=lambda u: None, views=views, today=date(2026, 10, 30))
+            with later.open(encoding="utf-8") as f:  # only the one whose first email was too recent before - never a third
+                self.assertEqual([r["email"] for r in csv.DictReader(f)], ["recent@x.co.uk"])
+            # A later first-email batch keeps the follow-up dates.
+            with (d / eb.PENDING).open("w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["email", "business", "preview_url", "batch"])
+                w.writerow(["new@x.co.uk", "New", "https://s/for/new", "b2"])
+            eb.mark_sent(d, date(2026, 9, 29))
+            sent = {r["email"]: r for r in csv.DictReader((d / "emails-sent.csv").open(encoding="utf-8"))}
+            self.assertEqual(sent["quiet@x.co.uk"]["followup_sent"], "2026-09-28")
+
+
+class Autopilot(unittest.TestCase):
+    def test_runs_every_step_in_order_and_carries_on(self):
+        import autopilot
+        import control_panel as panel
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "panel.env").write_text("PROSPECTS_API_SECRET=" + "x" * 40 + "\nCOMPANIES_HOUSE_API_KEY=1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d\n"
+                                         "MAIL_ADDRESS=me@x.co.uk\nMAIL_APP_PASSWORD=abcd\n", encoding="utf-8")
+            autopilot.save_config.__globals__["panel"].OUTREACH  # noqa: B018 - same module object
+            ran = []
+
+            def fake_step(self, script, args):
+                ran.append((script.name, [a for a in args if a.startswith("--")]))
+                self.lines.append("READY: mailmeteor-batch-2026-09-28.csv - 20 firms" if script.name == "email_batches.py" and "--followups" not in args else "")
+                if script.name == "find_prospects.py":
+                    make_sheet(d / "roofing-guildford-2026-09-28.xlsx", [{"Business": "A", "Website": "a.co.uk", "Status": "New"}])
+                if script.name == "reply_scanner.py":
+                    self.failed.append("reply_scanner.py")  # a failed step: the rest still run
+                    return 1
+                return 0
+
+            with mock.patch.object(panel, "OUTREACH", d), mock.patch.object(panel, "SETTINGS_FILE", d / "panel.env"), \
+                    mock.patch.object(autopilot.Run, "step", fake_step), mock.patch.object(panel, "keep_awake", lambda on: None), \
+                    redirect_stdout(io.StringIO()):
+                autopilot.save_config({"find": {"trades": ["roofing"], "areas": "Guildford", "age": "any", "max": 50, "exclude": ""},
+                                       "batch_size": 20, "followups": True})
+                code = autopilot.run()
+            order = [name for name, _ in ran]
+            self.assertEqual(order[0], "reply_scanner.py")
+            self.assertEqual(order[1], "find_prospects.py")
+            self.assertIn("push_prospects.py", order)  # the whole list ran on the new sheet
+            self.assertEqual(order[-3:], ["email_batches.py", "email_batches.py", "export_results.py"])
+            self.assertIn(["--followups", "--size", "--after-days"], [a for n, a in ran if n == "email_batches.py"])
+            self.assertEqual(code, 1)  # one step had a problem, and it says so
+            self.assertFalse((d / autopilot.LOCK).exists())
+            log = (d / "autopilot-log.txt").read_text(encoding="utf-8")
+            self.assertIn("READY: mailmeteor-batch", log)
+            self.assertIn("1 step(s) had problems", log)
+
+    def test_the_windows_schedule_command(self):
+        import autopilot
+
+        seen = {}
+
+        def fake_run(cmd, capture_output=True, text=True):
+            seen["cmd"] = cmd
+            return mock.MagicMock(returncode=0, stdout="SUCCESS", stderr="")
+
+        with mock.patch.object(autopilot.sys, "platform", "win32"), mock.patch.object(autopilot.subprocess, "run", fake_run):
+            self.assertEqual(autopilot.install("06:45"), "")
+            self.assertEqual(autopilot.install("6.45"), "The time must look like 07:30.")
+        cmd = seen["cmd"]
+        self.assertEqual(cmd[:4], ["schtasks", "/Create", "/F", "/SC"])
+        self.assertEqual(cmd[cmd.index("/ST") + 1], "06:45")
+        self.assertEqual(cmd[cmd.index("/TN") + 1], "Scalar Prospect Autopilot")
+        self.assertIn("autopilot.py", cmd[cmd.index("/TR") + 1])
+
+    def test_settings_are_checked_before_saving(self):
+        import control_panel as panel
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(panel, "OUTREACH", Path(tmp)):
+                bad, code = panel.autopilot_action({"action": "save", "config": {"time": "7.30"}})
+                self.assertEqual(code, 400)
+                bad, code = panel.autopilot_action({"action": "save", "config": {"time": "07:30", "find": {"trades": [], "areas": "x"}}})
+                self.assertIn("Search", bad["error"])
+                ok, code = panel.autopilot_action({"action": "save", "config": {"time": "06:45", "batch_size": 25, "followups": True,
+                                                   "find": {"trades": ["roofing"], "areas": "Woking", "max": 40}}})
+                self.assertEqual(code, 200)
+                import autopilot
+
+                self.assertEqual(autopilot.load_config()["find"]["areas"], "Woking")
+
+
 class Review(unittest.TestCase):
     def setUp(self):
         import openpyxl

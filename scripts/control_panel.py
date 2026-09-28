@@ -42,6 +42,7 @@ FIND = HERE / "find_prospects.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
+AUTOPILOT = HERE / "autopilot.py"
 
 
 def replies_first(settings: dict[str, str]) -> list:
@@ -58,7 +59,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "22"
+PANEL_VERSION = "23"
 MAX_LOG_LINES = 5000
 
 
@@ -196,6 +197,9 @@ ACTIONS = {
     "export": "Export to Excel",
     "batch": "Make email batch",
     "replies": "Check replies",
+    "followups": "Make follow-up batch",
+    "followups_sent": "Mark follow-ups as sent",
+    "autopilot_now": "Autopilot (run now)",
     "batch_sent": "Mark batch as sent",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
@@ -310,6 +314,18 @@ def build_steps(body: dict, settings: dict[str, str]):
         return None, "Unknown action."
     if action == "export":
         return (lambda job: [(EXPORT, [])]), ""
+    if action == "autopilot_now":
+        return (lambda job: [(AUTOPILOT, [])]), ""
+    if action == "followups_sent":
+        return (lambda job: [(BATCHES, ["--mark-followups-sent"]), (EXPORT, [])]), ""
+    if action == "followups":
+        try:
+            size, days = int(body.get("followup_size") or 20), int(body.get("followup_days") or 5)
+        except ValueError:
+            return None, "Size and days must be numbers."
+        if not 1 <= size <= 500 or not 1 <= days <= 60:
+            return None, "Size 1-500, days 1-60."
+        return (lambda job: [*replies_first(settings), (BATCHES, ["--followups", "--size", str(size), "--after-days", str(days)])]), ""
     if action == "replies":
         if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
             return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first."
@@ -420,6 +436,10 @@ class Job:
         with self.lock:
             if self.running():
                 return "Something is already running - wait for it or press Stop."
+            import autopilot
+
+            if autopilot.is_running():
+                return "Autopilot is running right now - wait for its text, or see outreach/autopilot-log.txt."
             if needs_secret and len(settings["PROSPECTS_API_SECRET"]) < 32:
                 return "Add PROSPECTS_API_SECRET in Settings first (32+ characters, same value as in Vercel)."
             env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
@@ -554,6 +574,48 @@ def call_action(body: dict) -> tuple[dict, int]:
         add_to_blocklist(OUTREACH, entries, "not interested (call)")
         return {"ok": True, "message": f"{business}: logged, and they won't be contacted again"}, 200
     return {"ok": True, "message": f"{business}: {outcome} logged"}, 200
+
+
+def autopilot_action(body: dict) -> tuple[dict, int]:
+    """Save the autopilot's settings, and turn the daily schedule on or off."""
+    import autopilot
+
+    action = str(body.get("action") or "")
+    cfg = autopilot.load_config()
+    if action in ("save", "on"):
+        new = body.get("config") or {}
+        at = str(new.get("time") or cfg["time"])
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", at):
+            return {"error": "The time must look like 07:30."}, 400
+        try:
+            batch, fsize, fdays = int(new.get("batch_size") or 20), int(new.get("followup_size") or 20), int(new.get("followup_after_days") or 5)
+        except ValueError:
+            return {"error": "Sizes and days must be numbers."}, 400
+        if not (1 <= batch <= 500 and 1 <= fsize <= 500 and 1 <= fdays <= 60):
+            return {"error": "Batch sizes 1-500, days 1-60."}, 400
+        find = new.get("find")
+        if find is not None:
+            settings = load_settings()
+            args, error = build_find_args({**find, "action": "find"}, {**settings, "COMPANIES_HOUSE_API_KEY": settings.get("COMPANIES_HOUSE_API_KEY") or "x"})
+            if args is None:
+                return {"error": f"Search: {error}"}, 400
+            find = {k: find.get(k) for k in ("trades", "areas", "age", "max", "include", "exclude", "email_only", "website_only", "no_directors", "no_websites")}
+        cfg.update({"time": at, "batch_size": batch, "followups": bool(new.get("followups")), "followup_size": fsize,
+                    "followup_after_days": fdays, **({"find": find} if find is not None else {})})
+        if action == "on":
+            err = autopilot.install(at)
+            if err:
+                autopilot.save_config(cfg)
+                return {"error": err}, 400
+            cfg["enabled"] = True
+        autopilot.save_config(cfg)
+        return {"ok": True, "message": f"Autopilot on: every day at {at}." if cfg.get("enabled") else "Saved."}, 200
+    if action == "off":
+        err = autopilot.remove()
+        cfg["enabled"] = False
+        autopilot.save_config(cfg)
+        return ({"error": err}, 400) if err else ({"ok": True, "message": "Autopilot off."}, 200)
+    return {"error": "Unknown action."}, 400
 
 
 def mark_posted(sheet: str) -> tuple[dict, int]:
@@ -750,6 +812,17 @@ class Handler(BaseHTTPRequestHandler):
             if not sheet_path(name):
                 return self._json({"viewing": [], "letters": []})
             return self._json(calls_for(name))
+        if route == "/api/autopilot":
+            import autopilot
+
+            cfg = autopilot.load_config()
+            log = OUTREACH / "autopilot-log.txt"
+            last = ""
+            if log.exists():
+                lines = [l.split("  ", 1)[-1] for l in log.read_text(encoding="utf-8").splitlines() if l.strip()]
+                tail = [l for l in lines if l.startswith(("Autopilot done", "Replies:", "READY", "Next:")) or "had problems" in l]
+                last = f"Last run {time.strftime('%a %d %b %H:%M', time.localtime(log.stat().st_mtime))}: " + " · ".join(tail[-6:])
+            return self._json({"config": cfg, "last": last, "running": autopilot.is_running(), "windows": sys.platform == "win32"})
         if route.startswith("/api/batch"):
             import email_batches
 
@@ -807,6 +880,8 @@ class Handler(BaseHTTPRequestHandler):
             error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] != "install_segno",
                               keep_going=body["action"] in ("all", "prepare", "batch"))
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
+        if route == "/api/autopilot":
+            return self._json(*autopilot_action(body))
         if route == "/api/letters/posted":
             name = str(body.get("sheet") or "")
             if not sheet_path(name):
@@ -983,6 +1058,27 @@ PAGE = r"""<!doctype html>
     </div>
 
     <div class="card">
+      <details id="autopilot-box">
+      <summary class="card-title">Autopilot <span id="ap-state" class="hint"></span></summary>
+      <p class="hint">Every day at your time: check replies, run the saved search for new firms, run the whole list, make today's email batch and follow-ups, update the Excel export, and text you. It never sends an email - you import the READY files and send. The PC must be on.</p>
+      <div class="grid2">
+        <div><label for="ap-time">Time</label><input type="text" id="ap-time" value="07:30"></div>
+        <div><label for="ap-batch">Emails a day</label><input type="number" id="ap-batch" value="20" min="1" max="500"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="ap-followups" checked> Also make follow-ups (after <input type="number" id="ap-fdays" value="5" min="1" max="60" style="width:52px"> days, up to <input type="number" id="ap-fsize" value="20" min="1" max="500" style="width:60px">)</label>
+      <p class="hint" id="ap-search">Search: none saved yet.</p>
+      <div class="row" style="flex-wrap:wrap">
+        <button id="ap-use-search">Use the search in Find new prospects</button>
+        <button class="primary" id="ap-on">Save &amp; turn on</button>
+        <button id="ap-off">Turn off</button>
+        <button data-action="autopilot_now">Run now</button>
+      </div>
+      <p class="hint" id="ap-last"></p>
+      <div class="msg" id="ap-msg"></div>
+      </details>
+    </div>
+
+    <div class="card">
       <h2>List</h2>
       <select id="sheet"></select>
       <div class="stats" style="margin-top:10px">
@@ -1020,6 +1116,28 @@ PAGE = r"""<!doctype html>
         <div class="row" style="margin:0"><button data-action="batch">Make email batch</button><input type="number" id="batch-size" value="20" min="1" max="500"><select id="batch-scope" style="width:auto"><option value="all">from every list</option><option value="sheet">from this list</option></select></div>
         <p>The next firms not yet emailed, every link re-checked: <b>mailmeteor-batch-&lt;date&gt;.csv</b>. Import that, send, then Mark batch as sent - tomorrow's batch is the next lot. <span id="batch-info"></span></p>
         <div class="row"><button data-action="batch_sent">Mark batch as sent</button></div>
+      </div>
+      <div class="action">
+        <div class="row" style="margin:0"><button data-action="followups">Make follow-up batch</button><input type="number" id="followup-size" value="20" min="1" max="500"><span class="hint">after</span><input type="number" id="followup-days" value="5" min="1" max="60" style="width:60px"><span class="hint">days</span></div>
+        <p>One short second email to firms who haven't replied or opened their preview (those who opened it are on your Calls list - ring them instead). Never a third. Import <b>mailmeteor-followup-&lt;date&gt;.csv</b> with the follow-up email below, send, then:</p>
+        <div class="row"><button data-action="followups_sent">Mark follow-ups as sent</button></div>
+        <details style="margin-top:6px"><summary>Follow-up email to paste</summary>
+          <textarea id="fu-subject" rows="1" readonly>Following up - {{business}}</textarea>
+          <textarea id="fu-body" rows="12" readonly style="margin-top:6px">Hi {{greeting_name}},
+
+Just following up on my note last week about {{business}}'s website. {{issue_line}}
+
+The preview I put together is still here if you'd like a look - no sign-up:
+
+{{preview_url}}
+
+If it's not for you, just reply and say so and I won't get in touch again.
+
+Kind regards,
+[your name]
+Scalar Digital · 07401 696272</textarea>
+          <div class="row"><button id="fu-copy-subject">Copy subject</button><button class="primary" id="fu-copy-body">Copy body</button><span class="saved" id="fu-copied"></span></div>
+        </details>
       </div>
       <div class="action">
         <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
@@ -1219,7 +1337,7 @@ function render() {
     lastLines = j.seq;
   }
   if ((wasRunning && !j.running) || (j.running && ++polls % 15 === 0)) loadProgress();
-  if (wasRunning && !j.running) { loadReview(); loadLetters(); loadBatch(); if (!$("pane-calls").hidden) loadCalls(); }
+  if (wasRunning && !j.running) { loadReview(); loadLetters(); loadBatch(); loadAutopilot(); if (!$("pane-calls").hidden) loadCalls(); }
   wasRunning = j.running;
 }
 
@@ -1234,9 +1352,10 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "push" && !dry && !confirm("Push this sheet to the dashboard?")) return;
   if (action === "all" && !confirm("Run the whole list? It pushes to the dashboard as it goes and can take hours on a long list.")) return;
   $("run-msg").textContent = "";
+  if (action === "followups_sent" && !confirm("Mark the follow-up batch as sent? Do this once Mailmeteor has sent it.")) return;
   if (action === "batch_sent" && !confirm("Mark the last batch as sent? Do this once Mailmeteor has sent it - they won't be picked again.")) return;
   const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
-    batch_size: $("batch-size").value, batch_scope: $("batch-scope").value });
+    batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value });
   if (r.error) $("run-msg").textContent = r.error;
   lastLines = -1;
   setTimeout(poll, 150);
@@ -1275,10 +1394,10 @@ try { if (localStorage.getItem("finderOpen") === "0") $("finder-box").open = fal
 $("finder-box").addEventListener("toggle", () => { try { localStorage.setItem("finderOpen", $("finder-box").open ? "1" : "0"); } catch (e) {} });
 $("f-areas").addEventListener("keydown", (e) => { if (e.key === "Enter") document.querySelector('[data-find="count"]').click(); });
 // ---- Mailmeteor template
-for (const [btn, box] of [["mm-copy-subject", "mm-subject"], ["mm-copy-body", "mm-body"]]) {
+for (const [btn, box, note] of [["mm-copy-subject", "mm-subject", "mm-copied"], ["mm-copy-body", "mm-body", "mm-copied"], ["fu-copy-subject", "fu-subject", "fu-copied"], ["fu-copy-body", "fu-body", "fu-copied"]]) {
   $(btn).addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($(box).value); } catch (e) { $(box).select(); document.execCommand("copy"); }
-    $("mm-copied").textContent = "Copied"; setTimeout(() => ($("mm-copied").textContent = ""), 2000);
+    $(note).textContent = "Copied"; setTimeout(() => ($(note).textContent = ""), 2000);
   });
 }
 
@@ -1335,6 +1454,39 @@ async function callOutcome(b) {
   if (!r.error) loadCalls();
 }
 setInterval(() => { if (!$("pane-calls").hidden) loadCalls(); }, 60000);
+
+// ---- Autopilot
+let apSearch = null;
+function describeSearch(f) {
+  if (!f || !f.trades || !f.trades.length) return "Search: none saved yet - fill in Find new prospects, then press Use the search.";
+  return `Search: ${f.trades.join(", ")} in ${f.areas} - up to ${f.max} new firms a day${f.email_only ? ", only with an email" : ""}.`;
+}
+async function loadAutopilot() {
+  const r = await (await fetch("/api/autopilot")).json();
+  const c = r.config || {};
+  $("ap-time").value = c.time || "07:30"; $("ap-batch").value = c.batch_size || 20;
+  $("ap-followups").checked = c.followups !== false; $("ap-fdays").value = c.followup_after_days || 5; $("ap-fsize").value = c.followup_size || 20;
+  apSearch = c.find || null;
+  $("ap-search").textContent = describeSearch(apSearch);
+  $("ap-state").textContent = r.running ? "· running now" : c.enabled ? `· on, daily at ${c.time}` : "· off";
+  $("ap-last").textContent = r.last || "";
+  if (!r.windows) $("ap-on").title = "Scheduling needs Windows";
+}
+async function saveAutopilot(action) {
+  const config = { time: $("ap-time").value.trim(), batch_size: $("ap-batch").value, followups: $("ap-followups").checked,
+    followup_after_days: $("ap-fdays").value, followup_size: $("ap-fsize").value, ...(apSearch ? { find: apSearch } : {}) };
+  const r = await post("/api/autopilot", { action, config });
+  $("ap-msg").style.color = r.error ? "var(--bad)" : "var(--ok)";
+  $("ap-msg").textContent = r.error || r.message;
+  loadAutopilot();
+}
+$("ap-use-search").addEventListener("click", () => {
+  apSearch = finderForm();
+  $("ap-search").textContent = describeSearch(apSearch) + " (press Save & turn on to keep it)";
+});
+$("ap-on").addEventListener("click", () => saveAutopilot("on"));
+$("ap-off").addEventListener("click", () => saveAutopilot("off"));
+loadAutopilot();
 
 // ---- Email batches
 async function loadBatch() {
