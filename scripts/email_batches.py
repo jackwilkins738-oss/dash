@@ -28,7 +28,7 @@ sys.path.insert(0, str(HERE))
 PENDING = "mailmeteor-batch-pending.csv"
 FOLLOWUP_PENDING = "mailmeteor-followup-pending.csv"
 SENT = "emails-sent.csv"
-SENT_FIELDS = ["email", "business", "preview_url", "batch", "sent", "followup_sent"]
+SENT_FIELDS = ["email", "business", "preview_url", "batch", "sent", "followup_sent", "message_id", "subject"]
 FOLLOWUP_AFTER_DAYS = 5
 
 
@@ -147,6 +147,50 @@ def mark_sent(outreach: Path, today: date | None = None) -> int:
         writer.writerows(existing + new)
     (outreach / PENDING).unlink()
     return len(new)
+
+
+def _write_sent(outreach: Path, rows: list[dict]) -> None:
+    tmp = outreach / (SENT + ".tmp")
+    with tmp.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=SENT_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    tmp.replace(outreach / SENT)  # never a half-written file, even if the run is stopped mid-write
+
+
+def record_sent(outreach: Path, row: dict, batch: str, today: date, message_id: str = "", subject: str = "") -> None:
+    """One email just sent from the panel (send_email.py) - recorded straight away."""
+    rows = _rows(outreach / SENT)[1]
+    email = row["email"].strip().lower()
+    if any((r.get("email") or "").lower() == email for r in rows):
+        return
+    rows.append({"email": email, "business": row.get("business", ""), "preview_url": row.get("preview_url", ""),
+                 "batch": batch, "sent": today.isoformat(), "message_id": message_id, "subject": subject})
+    _write_sent(outreach, rows)
+
+
+def record_followup_sent(outreach: Path, email: str, today: date) -> None:
+    rows = _rows(outreach / SENT)[1]
+    for r in rows:
+        if (r.get("email") or "").lower() == email.lower() and not r.get("followup_sent"):
+            r["followup_sent"] = today.isoformat()
+    _write_sent(outreach, rows)
+
+
+def record_bounce(outreach: Path, email: str) -> None:
+    """An address the mail server refused outright: bounced, so it gets a letter instead."""
+    from datetime import datetime, timezone
+
+    path = outreach / "email-checks.csv"
+    fields, rows = _rows(path)
+    fields = fields or ["email", "result", "checked_at"]
+    by_email = {(r.get("email") or "").lower(): r for r in rows}
+    by_email[email.lower()] = {**by_email.get(email.lower(), {}), "email": email.lower(), "result": "bounced",
+                               "checked_at": datetime.now(timezone.utc).isoformat()}
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(by_email.values())
 
 
 # ---------------------------------------------------------------- follow-ups
@@ -298,8 +342,8 @@ def main() -> None:
             print("No follow-ups due today.")
             return
         count = len(_rows(path)[1])
-        print(f"READY: {path.name} - {count} follow-ups, every link checked. Import it into Mailmeteor with the follow-up "
-              "email, send, then press Mark follow-ups as sent.")
+        print(f"READY: {path.name} - {count} follow-ups, every link checked. Press Send follow-ups on the panel "
+              "(or import it into Mailmeteor, send, then Mark follow-ups as sent).")
         return
     if args.mark_sent:
         n = mark_sent(outreach)
@@ -319,7 +363,8 @@ def main() -> None:
         sys.exit("Nobody left to email - every firm in the Mailmeteor files has been sent to. Prepare a new list.")
     count = len(_rows(path)[1])
     left = remaining(outreach, args.sheet) - count
-    print(f"READY: {path.name} - {count} firms, every link checked. Import it into Mailmeteor, send, then press Mark batch as sent.")
+    print(f"READY: {path.name} - {count} firms, every link checked. Press Send today's batch on the panel "
+          "(or import it into Mailmeteor, send, then Mark batch as sent).")
     print(f"  {max(left, 0)} more waiting after this batch.")
 
 
