@@ -26,7 +26,7 @@ from pathlib import Path
 
 import overrides
 
-OUTCOMES = ["No answer", "Call back", "Replied to them", "Interested", "Not interested", "Won"]
+OUTCOMES = ["No answer", "Call back", "Replied to them", "Interested", "Quoted", "Not interested", "Won"]
 FINAL = {"Not interested", "Won"}
 LETTER_WAIT_DAYS = 7
 PHONE_COLUMNS = ["Phone", "Phone number", "Telephone", "Tel", "Mobile", "Landline"]
