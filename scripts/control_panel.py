@@ -43,6 +43,7 @@ EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
 AUTOPILOT = HERE / "autopilot.py"
+SEND = HERE / "send_email.py"
 
 
 def replies_first(settings: dict[str, str]) -> list:
@@ -51,7 +52,7 @@ def replies_first(settings: dict[str, str]) -> list:
 RESULTS_NAME = "outreach-results.xlsx"
 SETTING_KEYS = [
     "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
-    "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST",
+    "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME",
     "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT",
     "DASHBOARD_API_URL", "SITE_URL",
 ]
@@ -60,7 +61,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "25"
+PANEL_VERSION = "26"
 MAX_LOG_LINES = 5000
 
 
@@ -202,6 +203,9 @@ ACTIONS = {
     "followups_sent": "Mark follow-ups as sent",
     "autopilot_now": "Autopilot (run now)",
     "batch_sent": "Mark batch as sent",
+    "send_batch": "Send today's batch",
+    "send_followups": "Send follow-ups",
+    "send_test": "Send a test to yourself",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
     "contacts": "Find missing emails & phones",
@@ -331,6 +335,17 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
             return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first."
         return (lambda job: [(REPLIES, [])]), ""
+    if action in ("send_batch", "send_followups", "send_test"):
+        if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
+            return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first (the Gmail app password)."
+        if not settings.get("MAIL_FROM_NAME"):
+            return None, "Add MAIL_FROM_NAME in Settings first - the name people see, and your sign-off."
+        if action == "send_test":
+            follow = body.get("test_kind") == "followups"
+            return (lambda job: [(SEND, ["--test", *(["--followups"] if follow else [])])]), ""
+        extra = ["--followups"] if action == "send_followups" else []
+        # Replies first, so anyone who said no since the batch was made is left out.
+        return (lambda job: [*replies_first(settings), (SEND, extra), (EXPORT, [])]), ""
     if action == "batch_sent":
         return (lambda job: [(BATCHES, ["--mark-sent"]), (EXPORT, [])]), ""
     if action == "batch":
@@ -892,6 +907,10 @@ class Handler(BaseHTTPRequestHandler):
                     rows = list(csv.DictReader(f))
                 batch = f"{rows[0]['batch']} ({len(rows)})" if rows else ""
             return self._json({"remaining": email_batches.remaining(OUTREACH, scope) if OUTREACH.is_dir() else 0, "pending": batch})
+        if route == "/api/email-template":
+            import send_email
+
+            return self._json(send_email.load_templates(OUTREACH))
         if route == "/api/letter-template":
             import letters
 
@@ -952,6 +971,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"error": "Both letters need some text (5,000 characters at most)."}, 400)
                 letters.save_templates(OUTREACH, with_site, no_site)
             return self._json({"ok": True})
+        if route == "/api/email-template":
+            import send_email
+
+            if body.get("reset"):
+                (OUTREACH / send_email.TEMPLATES).unlink(missing_ok=True)
+                return self._json({"ok": True})
+            problem = send_email.save_templates(OUTREACH, {k: str(body.get(k) or "") for k in send_email.DEFAULT_TEMPLATES})
+            return self._json({"error": problem}, 400) if problem else self._json({"ok": True})
         if route == "/api/quote":
             return self._json(*quote_action(body))
         if route == "/api/calls":
@@ -1172,16 +1199,18 @@ PAGE = r"""<!doctype html>
       </div>
       <div class="action">
         <div class="row" style="margin:0"><button data-action="batch">Make email batch</button><input type="number" id="batch-size" value="20" min="1" max="500"><select id="batch-scope" style="width:auto"><option value="all">from every list</option><option value="sheet">from this list</option></select></div>
-        <p>The next firms not yet emailed, every link re-checked: <b>mailmeteor-batch-&lt;date&gt;.csv</b>. Import that, send, then Mark batch as sent - tomorrow's batch is the next lot. <span id="batch-info"></span></p>
-        <div class="row"><button data-action="batch_sent">Mark batch as sent</button></div>
+        <p>The next firms not yet emailed, every link re-checked (the autopilot makes one each morning). <span id="batch-info"></span></p>
+        <div class="row"><button data-action="send_test" data-test-kind="batch">Send a test to yourself</button><button class="primary" data-action="send_batch">Send today's batch</button></div>
+        <p class="hint">Sends from your own email, 40-90 seconds apart (about half an hour for 20), each recorded as it goes - stop any time and press Send again to carry on. Anyone who said no or replied since is left out. Using Mailmeteor instead? Import <b>mailmeteor-batch-&lt;date&gt;.csv</b>, send, then <button data-action="batch_sent" style="padding:2px 8px">Mark batch as sent</button></p>
       </div>
       <div class="action">
         <div class="row" style="margin:0"><button data-action="followups">Make follow-up batch</button><input type="number" id="followup-size" value="20" min="1" max="500"><span class="hint">after</span><input type="number" id="followup-days" value="5" min="1" max="60" style="width:60px"><span class="hint">days</span></div>
-        <p>One short second email to firms who haven't replied or opened their preview (those who opened it are on your Calls list - ring them instead). Never a third. Import <b>mailmeteor-followup-&lt;date&gt;.csv</b> with the follow-up email below, send, then:</p>
-        <div class="row"><button data-action="followups_sent">Mark follow-ups as sent</button></div>
-        <details style="margin-top:6px"><summary>Follow-up email to paste</summary>
-          <textarea id="fu-subject" rows="1" readonly>Following up - {{business}}</textarea>
-          <textarea id="fu-body" rows="12" readonly style="margin-top:6px">Hi {{greeting_name}},
+        <p>One short second email to firms who haven't replied or opened their preview (those who opened it are on your Calls list - ring them instead). Never a third. It goes as a reply in the same thread as the first email.</p>
+        <div class="row"><button data-action="send_test" data-test-kind="followups">Send a test to yourself</button><button class="primary" data-action="send_followups">Send follow-ups</button></div>
+        <p class="hint">Using Mailmeteor instead? Import <b>mailmeteor-followup-&lt;date&gt;.csv</b> with the follow-up email below, send, then <button data-action="followups_sent" style="padding:2px 8px">Mark follow-ups as sent</button></p>
+        <details style="margin-top:6px"><summary>Follow-up email (edit here - Send uses it)</summary>
+          <textarea id="fu-subject" rows="1">Following up - {{business}}</textarea>
+          <textarea id="fu-body" rows="12" style="margin-top:6px">Hi {{greeting_name}},
 
 Just following up on my note last week about {{business}}'s website. {{issue_line}}
 
@@ -1200,11 +1229,11 @@ Scalar Digital · 07401 696272</textarea>
       <div class="action">
         <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
         <p>Rewrites preview-links and mailmeteor CSVs from the sheet. Never sends anything - and the Mailmeteor file only includes firms whose preview page is on your dashboard, so no email links to a 404. Push first to add new firms.</p>
-        <details style="margin-top:6px"><summary>Mailmeteor email to paste</summary>
+        <details style="margin-top:6px"><summary>First email (edit here - Send uses it)</summary>
           <p class="hint">Subject</p>
-          <textarea id="mm-subject" rows="1" readonly>A quick look at {{business}}'s website</textarea>
+          <textarea id="mm-subject" rows="1">A quick look at {{business}}'s website</textarea>
           <p class="hint">Body - {{score_line}} and {{issue_line}} are whole sentences, left empty when a site hasn't been checked, so it always reads right.</p>
-          <textarea id="mm-body" rows="15" readonly>Hi {{greeting_name}},
+          <textarea id="mm-body" rows="15">Hi {{greeting_name}},
 
 I had a look at {{business}}'s website on my phone and ran it through Google's own speed test. {{score_line}} {{issue_line}}
 
@@ -1219,8 +1248,8 @@ Kind regards,
 Scalar Digital · 07401 696272 · scalardigital.co.uk
 
 If you'd rather not hear from me again, just reply and say so and I won't get in touch.</textarea>
-          <div class="row"><button id="mm-copy-subject">Copy subject</button><button class="primary" id="mm-copy-body">Copy body</button><span class="saved" id="mm-copied"></span></div>
-          <p class="hint">Replace [your name] once in Mailmeteor. Anyone who replies "no": set their Status to "Lost / not interested" and they're blocked from every list.</p>
+          <div class="row"><button class="primary" id="em-save">Save both emails</button><button id="em-reset">Back to original</button><button id="mm-copy-subject">Copy subject</button><button id="mm-copy-body">Copy body</button><span class="saved" id="mm-copied"></span></div>
+          <p class="hint">Fields: {{business}} {{greeting_name}} {{score_line}} {{issue_line}} {{preview_url}} {{trade}} {{area}} {{your_name}} (MAIL_FROM_NAME in Settings). For Mailmeteor, copy and swap {{your_name}} for your name.</p>
         </details>
       </div>
       <div class="action">
@@ -1280,7 +1309,7 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
         <p class="hint">Optional: a phone alert when a run longer than 3 minutes finishes. Use the same bot and chat as the website's preview alerts.</p>
         <label>MAIL_ADDRESS / MAIL_APP_PASSWORD <span id="set-mail"></span></label>
         <div class="grid2"><input type="text" id="MAIL_ADDRESS" placeholder="the Gmail you send from"><input type="password" id="MAIL_APP_PASSWORD" placeholder="app password (blank keeps the saved one)" autocomplete="off"></div>
-        <input type="text" id="MAIL_IMAP_HOST" placeholder="imap.gmail.com (leave blank for Gmail)" style="margin-top:6px">
+        <div class="grid2" style="margin-top:6px"><input type="text" id="MAIL_FROM_NAME" placeholder="Your name (who emails are from, and the sign-off)"><input type="text" id="MAIL_IMAP_HOST" placeholder="imap.gmail.com (leave blank for Gmail)"></div>
         <p class="hint">For "Check replies". Not your normal password: Google Account &gt; Security &gt; 2-Step Verification &gt; App passwords. It only ever reads - nothing is marked read, moved or deleted.</p>
         <label>Quotes: build £ / landing page £ / VAT % / deposit %</label>
         <div class="grid2" style="grid-template-columns:1fr 1fr 1fr 1fr"><input type="text" id="QUOTE_PRICE_BUILD" placeholder="2500"><input type="text" id="QUOTE_PRICE_LANDING" placeholder="750"><input type="text" id="QUOTE_VAT_RATE" placeholder="0"><input type="text" id="QUOTE_DEPOSIT_PERCENT" placeholder="0"></div>
@@ -1370,13 +1399,13 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     if (!s.settings.PROSPECTS_API_SECRET) $("settings-box").open = true;
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
   $("set-psi").textContent = s.settings.PAGESPEED_API_KEY ? "(saved)" : "(not set - needed for speed checks)";
-  $("set-mail").textContent = s.settings.MAIL_APP_PASSWORD ? "(saved)" : "(optional - lets the panel read replies)";
+  $("set-mail").textContent = s.settings.MAIL_APP_PASSWORD ? "(saved)" : "(lets the panel send your emails and read replies)";
   $("set-tg").textContent = s.settings.TELEGRAM_BOT_TOKEN ? "(saved)" : "(optional)";
   $("set-ch").textContent = s.settings.COMPANIES_HOUSE_API_KEY ? "(saved)" : "(not set - free at developer.company-information.service.gov.uk)";
 
@@ -1416,8 +1445,10 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   $("run-msg").textContent = "";
   if (action === "followups_sent" && !confirm("Mark the follow-up batch as sent? Do this once Mailmeteor has sent it.")) return;
   if (action === "batch_sent" && !confirm("Mark the last batch as sent? Do this once Mailmeteor has sent it - they won't be picked again.")) return;
+  if (action === "send_batch" && !confirm("Send today's batch now, from your own email? It takes about half an hour for 20 - you can stop it any time.")) return;
+  if (action === "send_followups" && !confirm("Send the follow-ups now, from your own email?")) return;
   const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
-    batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value });
+    batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "" });
   if (r.error) $("run-msg").textContent = r.error;
   lastLines = -1;
   setTimeout(poll, 150);
@@ -1613,6 +1644,22 @@ async function loadLetters() {
     loadLetters();
   });
 }
+async function loadEmailTemplates() {
+  const t = await (await fetch("/api/email-template")).json();
+  $("mm-subject").value = t.first_subject; $("mm-body").value = t.first_body;
+  $("fu-subject").value = t.followup_subject; $("fu-body").value = t.followup_body;
+}
+loadEmailTemplates();
+$("em-save").addEventListener("click", async () => {
+  const r = await post("/api/email-template", { first_subject: $("mm-subject").value, first_body: $("mm-body").value,
+    followup_subject: $("fu-subject").value, followup_body: $("fu-body").value });
+  $("mm-copied").textContent = r.error || "Saved"; setTimeout(() => ($("mm-copied").textContent = ""), r.error ? 8000 : 2500);
+});
+$("em-reset").addEventListener("click", async () => {
+  if (!confirm("Put both emails back to the original text?")) return;
+  await post("/api/email-template", { reset: true });
+  loadEmailTemplates();
+});
 (async function loadTemplates() {
   const t = await (await fetch("/api/letter-template")).json();
   $("tpl-site").value = t.with_site || ""; $("tpl-nosite").value = t.no_site || "";
@@ -1703,7 +1750,7 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (!$("pane-calls").hidden) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);

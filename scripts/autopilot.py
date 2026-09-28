@@ -15,8 +15,8 @@ make follow-ups. Each run:
   5. updates the Excel export
   6. texts you a summary (Telegram), and writes outreach/autopilot-log.txt
 
-It never sends an email: the batches wait for you to import into Mailmeteor
-and send. A step that fails is noted and the rest still run. Windows runs it
+It never sends an email: the batches wait for you to press Send today's batch
+on the panel (or import them into Mailmeteor). A step that fails is noted and the rest still run. Windows runs it
 at the time you choose while you're logged in; the PC must be on (it's kept
 awake while it runs).
 """
@@ -176,7 +176,7 @@ def summarise(r: Run, settings: dict, seconds: float) -> int:
     body += [l for l in picked if l.startswith("READY")]
     if r.failed:
         body.append(f"{len(r.failed)} step(s) had problems - see autopilot-log.txt")
-    body.append("Next: import the READY files into Mailmeteor and send.")
+    body.append("Next: open the panel and press Send today's batch (and Send follow-ups).")
     r.note("")
     for line in body:
         r.note(line)
