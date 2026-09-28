@@ -60,7 +60,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "24"
+PANEL_VERSION = "25"
 MAX_LOG_LINES = 5000
 
 
@@ -584,6 +584,27 @@ def quote_action(body: dict) -> tuple[dict, int]:
             "url": result["quote_url"], "mailto": quotes.email_link(email, str(body.get("contact") or ""), business, result, signoff)}, 200
 
 
+def draft_site_action(body: dict) -> tuple[dict, int]:
+    """Calls tab "Draft their site": a client brief and a one-page draft, opened in your browser."""
+    import site_draft
+
+    sheet, key = str(body.get("sheet") or ""), str(body.get("key") or "")
+    if not sheet_path(sheet) or not REVIEW_KEY.match(key):
+        return {"error": "That doesn't look right."}, 400
+    fallback = {k: str(body.get(k) or "").strip()[:150] for k in ("business", "website", "email", "phone", "contact")}
+    if not DOMAIN.match(fallback["website"].lower()):
+        fallback["website"] = ""
+    try:
+        folder = site_draft.make(OUTREACH, sheet, key, fallback)
+    except (ValueError, OSError) as e:
+        return {"error": f"No draft made: {e}."}, 400
+    try:
+        open_folder(folder / "index.html")
+    except OSError:
+        pass
+    return {"ok": True, "message": f"Draft and brief saved in outreach/sites/{folder.name} - opened in your browser."}, 200
+
+
 def call_action(body: dict) -> tuple[dict, int]:
     import calls
     from contact_rules import add_to_blocklist
@@ -935,6 +956,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(*quote_action(body))
         if route == "/api/calls":
             return self._json(*call_action(body))
+        if route == "/api/draft-site":
+            return self._json(*draft_site_action(body))
         if route == "/api/review":
             return self._json(*review_action(body))
         if route == "/api/stop":
@@ -1465,7 +1488,7 @@ function callRow(i, section) {
     <div class="why">${seen}${last}</div>
     <div class="btns">${(callData.outcomes || []).map((o) => `<button data-outcome="${esc(o)}" ${o === "Not interested" ? 'class="danger"' : o === "Interested" || o === "Won" ? 'class="primary"' : ""}>${esc(o)}</button>`).join("")}
       <input type="text" placeholder="note (optional)" data-note></div>
-    <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button></div>
+    <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><button data-draft>Draft their site</button></div>
     <div class="why" data-quote-result></div>
   </div>`;
 }
@@ -1482,6 +1505,18 @@ function renderCalls() {
     + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:18px">Letter follow-ups (${LETTER_WAIT} days+, not opened)</h2>` + l;
   document.querySelectorAll("#calls [data-outcome]").forEach((b) => b.addEventListener("click", () => callOutcome(b)));
   document.querySelectorAll("#calls [data-quote]").forEach((b) => b.addEventListener("click", () => makeQuote(b)));
+  document.querySelectorAll("#calls [data-draft]").forEach((b) => b.addEventListener("click", () => draftSite(b)));
+}
+async function draftSite(b) {
+  const card = b.closest(".ritem");
+  const item = (callData[card.dataset.sec] || []).find((x) => x.key === card.dataset.key);
+  b.disabled = true; b.textContent = "Reading their site...";
+  const r = await post("/api/draft-site", { sheet: $("sheet").value, key: item.key, business: item.business, website: item.website,
+    email: item.email, phone: item.phone, contact: item.contact });
+  b.disabled = false; b.textContent = "Draft their site";
+  const box = card.querySelector("[data-quote-result]");
+  box.style.color = r.error ? "var(--bad)" : "var(--ok)";
+  box.textContent = r.error || r.message;
 }
 let quotePrices = { build: "2500", landing: "750" };
 async function makeQuote(b) {
