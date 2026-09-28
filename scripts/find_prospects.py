@@ -80,6 +80,9 @@ TRADES: dict[str, dict] = {
 
 AGE_BANDS = {
     "any": (None, None),
+    # Registered in the last 6 months: the firms most likely to have no website
+    # yet (they land on the No website tab, for a letter), and to want one.
+    "under6m": (0.5, None),
     "under2": (2, None),  # incorporated in the last 2 years
     "2to10": (10, 2),
     "over10": (None, 10),
@@ -90,8 +93,13 @@ DEFAULT_EXCLUDE = "holdings, investments, estates, lettings, capital, finance"
 # ---------------------------------------------------------------- register search
 
 
-def years_ago(years: int, today: date | None = None) -> str:
+def years_ago(years: float, today: date | None = None) -> str:
     today = today or date.today()
+    if years != int(years):  # part-years (6 months) - by days, near enough for a search filter
+        from datetime import timedelta
+
+        return (today - timedelta(days=round(years * 365.25))).isoformat()
+    years = int(years)
     try:
         return today.replace(year=today.year - years).isoformat()
     except ValueError:  # 29 February

@@ -55,15 +55,18 @@ RESULTS_NAME = "outreach-results.xlsx"
 SETTING_KEYS = [
     "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
     "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME",
+    "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD",
+    "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD",
     "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT",
     "DASHBOARD_API_URL", "SITE_URL",
 ]
-SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD"}
+SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
+               "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"}
 # A run this long gets a phone alert when it ends (if Telegram is set up).
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "30"
+PANEL_VERSION = "31"
 MAX_LOG_LINES = 5000
 
 
@@ -1167,6 +1170,7 @@ PAGE = r"""<!doctype html>
           <label for="f-age">Company age</label>
           <select id="f-age">
             <option value="any">Any age</option>
+            <option value="under6m">Under 6 months (newly registered)</option>
             <option value="under2">Under 2 years</option>
             <option value="2to10">2 to 10 years</option>
             <option value="over10">Over 10 years</option>
@@ -1375,6 +1379,12 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
         <label>MAIL_ADDRESS / MAIL_APP_PASSWORD <span id="set-mail"></span></label>
         <div class="grid2"><input type="text" id="MAIL_ADDRESS" placeholder="the Gmail you send from"><input type="password" id="MAIL_APP_PASSWORD" placeholder="app password (blank keeps the saved one)" autocomplete="off"></div>
         <div class="grid2" style="margin-top:6px"><input type="text" id="MAIL_FROM_NAME" placeholder="Your name (who emails are from, and the sign-off)"><input type="text" id="MAIL_IMAP_HOST" placeholder="imap.gmail.com (leave blank for Gmail)"></div>
+        <details style="margin-top:6px"><summary>Extra sending inboxes (optional)</summary>
+          <p class="hint">Only once your email is proven to work. Up to three more inboxes, usually on look-alike domains (scalardigital.uk, getscalar.co.uk) so a busy day never risks your main domain. Send is spread evenly across them, follow-ups go from the inbox that sent the first email, and replies are read from all of them. Warm each new inbox up with 3-4 weeks of normal email first.</p>
+          <div class="grid2"><input type="text" id="MAIL_EXTRA_1_ADDRESS" placeholder="Extra inbox 1"><input type="password" id="MAIL_EXTRA_1_PASSWORD" placeholder="app password (blank keeps the saved one)" autocomplete="off"></div>
+          <div class="grid2" style="margin-top:6px"><input type="text" id="MAIL_EXTRA_2_ADDRESS" placeholder="Extra inbox 2"><input type="password" id="MAIL_EXTRA_2_PASSWORD" placeholder="app password" autocomplete="off"></div>
+          <div class="grid2" style="margin-top:6px"><input type="text" id="MAIL_EXTRA_3_ADDRESS" placeholder="Extra inbox 3"><input type="password" id="MAIL_EXTRA_3_PASSWORD" placeholder="app password" autocomplete="off"></div>
+        </details>
         <p class="hint">For "Check replies". Not your normal password: Google Account &gt; Security &gt; 2-Step Verification &gt; App passwords. It only ever reads - nothing is marked read, moved or deleted.</p>
         <label>Quotes: build £ / landing page £ / VAT % / deposit %</label>
         <div class="grid2" style="grid-template-columns:1fr 1fr 1fr 1fr"><input type="text" id="QUOTE_PRICE_BUILD" placeholder="2500"><input type="text" id="QUOTE_PRICE_LANDING" placeholder="750"><input type="text" id="QUOTE_VAT_RATE" placeholder="0"><input type="text" id="QUOTE_DEPOSIT_PERCENT" placeholder="0"></div>
@@ -1464,7 +1474,7 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     if (!s.settings.PROSPECTS_API_SECRET) $("settings-box").open = true;
   }
@@ -1831,9 +1841,9 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (!$("pane-calls").hidden) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD"]) $(k).value = "";
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
   $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
 });

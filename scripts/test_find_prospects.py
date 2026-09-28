@@ -263,3 +263,14 @@ class EndToEnd(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NewlyRegistered(unittest.TestCase):
+    def test_six_month_band_searches_from_half_a_year_ago(self):
+        from datetime import date
+
+        import find_prospects as fp
+
+        self.assertEqual(fp.years_ago(0.5, date(2026, 9, 28)), "2026-03-29")
+        self.assertEqual(fp.years_ago(2, date(2026, 9, 28)), "2024-09-28")
+        self.assertEqual(fp.AGE_BANDS["under6m"], (0.5, None))

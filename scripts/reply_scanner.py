@@ -301,30 +301,41 @@ def alert(replies: list[dict]) -> None:
 
 
 def main() -> None:
-    address = os.environ.get("MAIL_ADDRESS", "").strip()
-    password = re.sub(r"\s+", "", os.environ.get("MAIL_APP_PASSWORD", ""))  # Google shows it in groups of four
+    import mail_accounts
+
+    inboxes = mail_accounts.accounts()
     host = os.environ.get("MAIL_IMAP_HOST", "").strip() or "imap.gmail.com"
-    if not address or not password:
+    if not inboxes:
         sys.exit("Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first (a Gmail app password - see the note there).")
     outreach = outreach_dir()
     last = [r["date"] for r in _rows(outreach / REPLIES)]
     since = (date.fromisoformat(max(last)[:10]) - timedelta(days=2)) if last else date.today() - timedelta(days=30)
-    print(f"Checking {address} for replies since {since.strftime('%d %b %Y')} (read-only) ...", flush=True)
-    try:
-        imap = imaplib.IMAP4_SSL(host, 993, timeout=60)
-        imap.login(address, password)
-    except imaplib.IMAP4.error as e:
-        sys.exit(f"The inbox refused the login ({e}). Use an app password, not your normal one: "
-                 "Google Account > Security > 2-Step Verification > App passwords.")
-    except OSError as e:
-        sys.exit(f"Couldn't reach {host} ({e}).")
-    try:
-        replies = scan(outreach, imap, since, address)
-    finally:
+    # Every sending inbox - replies land wherever the email came from.
+    replies: list[dict] = []
+    seen: set[str] = set()
+    for n, inbox in enumerate(inboxes):
+        print(f"Checking {inbox.address} for replies since {since.strftime('%d %b %Y')} (read-only) ...", flush=True)
         try:
-            imap.logout()
-        except Exception:
-            pass
+            imap = imaplib.IMAP4_SSL(host, 993, timeout=60)
+            imap.login(inbox.address, inbox.password)
+        except (imaplib.IMAP4.error, OSError) as e:
+            problem = (f"The inbox refused the login ({e}). Use an app password, not your normal one: "
+                       "Google Account > Security > 2-Step Verification > App passwords."
+                       if isinstance(e, imaplib.IMAP4.error) else f"Couldn't reach {host} ({e}).")
+            if n == 0:
+                sys.exit(problem)
+            print(f"  Skipped {inbox.address}: {problem}")
+            continue
+        try:
+            for r in scan(outreach, imap, since, inbox.address):
+                if r["message_id"] not in seen:
+                    seen.add(r["message_id"])
+                    replies.append(r)
+        finally:
+            try:
+                imap.logout()
+            except Exception:
+                pass
     counts = act(outreach, replies)
     alert(replies)
     if not replies:

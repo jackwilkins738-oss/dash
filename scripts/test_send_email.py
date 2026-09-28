@@ -159,3 +159,55 @@ class SendEmail(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MultipleInboxes(SendEmail):
+    """Extra sending inboxes: sends spread evenly, follow-ups from the first email's inbox, a cap per inbox."""
+
+    def setUp(self):
+        super().setUp()
+        self.extra = mock.patch.dict(os.environ, {"MAIL_EXTRA_1_ADDRESS": "jack@getscalar.co.uk", "MAIL_EXTRA_1_PASSWORD": "wxyz"})
+        self.extra.start()
+        self.by_inbox = {}
+
+        def fake_connect(env=None):
+            smtp = self.by_inbox.setdefault(env["MAIL_ADDRESS"], FakeSMTP())
+            return smtp
+
+        self.connect = mock.patch.object(se, "connect", fake_connect)
+        self.connect.start()
+
+    def tearDown(self):
+        self.connect.stop()
+        self.extra.stop()
+        super().tearDown()
+
+    def test_spread_evenly_recorded_and_followed_up_from_the_same_inbox(self):
+        self.assertEqual(se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None), 3)
+        froms = {a: [m["To"] for m in smtp.sent] for a, smtp in self.by_inbox.items()}
+        self.assertEqual(froms, {"jack@scalar.co.uk": ["bill@kerr.co.uk", "sue@oak.co.uk"], "jack@getscalar.co.uk": ["info@acme.co.uk"]})
+        self.assertIn("jack@getscalar.co.uk", self.by_inbox["jack@getscalar.co.uk"].sent[0]["From"])
+        rows = {r["email"]: r for r in read(self.out / eb.SENT)}
+        self.assertEqual(rows["info@acme.co.uk"]["sent_from"], "jack@getscalar.co.uk")
+
+        # The follow-up to Acme goes from the same extra inbox, in the same thread.
+        write(self.out / "mailmeteor-followup-2026-10-05.csv", list(FIRMS[0]), [FIRMS[1]])
+        write(self.out / eb.FOLLOWUP_PENDING, ["email", "batch"], [{"email": "info@acme.co.uk", "batch": "mailmeteor-followup-2026-10-05.csv"}])
+        before = len(self.by_inbox["jack@getscalar.co.uk"].sent)
+        se.send_batch(self.out, followups=True, sleep=self.sleeps.append, today=date(2026, 10, 5), out=lambda s: None)
+        follow = self.by_inbox["jack@getscalar.co.uk"].sent[before]
+        self.assertEqual(follow["To"], "info@acme.co.uk")
+        self.assertEqual(follow["In-Reply-To"], rows["info@acme.co.uk"]["message_id"])
+
+    def test_daily_cap(self):
+        # The cap is per inbox: the main inbox has one slot left, the extra one is empty.
+        write(self.out / eb.SENT, eb.SENT_FIELDS, [{"email": f"x{i}@y.co.uk", "sent": "2026-09-28"} for i in range(se.DAILY_CAP - 1)])
+        self.assertEqual(se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None), 3)
+        # Least-used first: the empty extra inbox takes all three, the main one keeps its last slot.
+        self.assertEqual(list(self.by_inbox), ["jack@getscalar.co.uk"])
+        self.assertEqual(len(self.by_inbox["jack@getscalar.co.uk"].sent), 3)
+
+    def test_a_full_inbox_hands_over_to_the_others(self):
+        write(self.out / eb.SENT, eb.SENT_FIELDS, [{"email": f"x{i}@y.co.uk", "sent": "2026-09-28", "sent_from": ""} for i in range(se.DAILY_CAP)])
+        self.assertEqual(se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None), 3)
+        self.assertEqual(list(self.by_inbox), ["jack@getscalar.co.uk"])  # the main inbox is full today
