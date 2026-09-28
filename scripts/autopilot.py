@@ -30,7 +30,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -142,6 +142,10 @@ class Run:
         return code
 
 
+def scorecard_day() -> bool:
+    return date.today().weekday() == 0
+
+
 def lists_to_run(new_sheet: str | None) -> list[str]:
     """Today's new sheet, plus any list with speed checks still to do (the five most recent)."""
     names = [new_sheet] if new_sheet else []
@@ -202,6 +206,10 @@ def run() -> int:
             r.step(panel.BATCHES, ["--followups", "--size", str(int(cfg.get("followup_size") or 20)),
                                    "--after-days", str(int(cfg.get("followup_after_days") or 5))])
         r.step(panel.EXPORT, [])
+        if scorecard_day():  # the weekly scorecard goes in Monday's text too
+            start = len(r.lines)
+            r.step(panel.HERE / "scorecard.py", [])
+            r.scorecard = [l.strip() for l in r.lines[start + 1:] if l.strip() and not l.startswith("> ") and "had a problem" not in l]
         return summarise(r, settings, time.time() - started)
     finally:
         panel.keep_awake(False)
@@ -224,6 +232,8 @@ def summarise(r: Run, settings: dict, seconds: float) -> int:
     if r.failed:
         body.append(f"{len(r.failed)} step(s) had problems - see autopilot-log.txt")
     body.append("Next: open the panel and press Send today's batch (and Send follow-ups).")
+    if getattr(r, "scorecard", None):
+        body += ["", "Weekly scorecard:", *r.scorecard]
     r.note("")
     for line in body:
         r.note(line)
