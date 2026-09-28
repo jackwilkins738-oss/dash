@@ -40,6 +40,7 @@ HERE = Path(__file__).resolve().parent
 PUSH = HERE / "push_prospects.py"
 FIND = HERE / "find_prospects.py"
 EXPORT = HERE / "export_results.py"
+BATCHES = HERE / "email_batches.py"
 RESULTS_NAME = "outreach-results.xlsx"
 SETTING_KEYS = [
     "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
@@ -50,7 +51,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "19"
+PANEL_VERSION = "20"
 MAX_LOG_LINES = 5000
 
 
@@ -186,6 +187,8 @@ ACTIONS = {
     "links": "Refresh preview links + Mailmeteor CSV",
     "prepare": "Prepare Mailmeteor send",
     "export": "Export to Excel",
+    "batch": "Make email batch",
+    "batch_sent": "Mark batch as sent",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
     "contacts": "Find missing emails & phones",
@@ -291,6 +294,22 @@ def build_steps(body: dict, settings: dict[str, str]):
         return None, "Unknown action."
     if action == "export":
         return (lambda job: [(EXPORT, [])]), ""
+    if action == "batch_sent":
+        return (lambda job: [(BATCHES, ["--mark-sent"]), (EXPORT, [])]), ""
+    if action == "batch":
+        try:
+            size = int(body.get("batch_size") or 20)
+        except ValueError:
+            return None, "Batch size must be a number."
+        if not 1 <= size <= 500:
+            return None, "Batch size must be 1-500."
+        args = ["--size", str(size)]
+        if body.get("batch_scope") == "sheet":
+            name = str(body.get("sheet") or "")
+            if not sheet_path(name):
+                return None, "Pick a sheet first."
+            args += ["--sheet", name]
+        return (lambda job: [(BATCHES, args)]), ""
     if action == "install_segno":
         return (lambda job: [("pip", ["install", "segno"])]), ""
     if action in ("find", "count"):
@@ -696,6 +715,21 @@ class Handler(BaseHTTPRequestHandler):
             if not sheet_path(name):
                 return self._json({"viewing": [], "letters": []})
             return self._json(calls_for(name))
+        if route.startswith("/api/batch"):
+            import email_batches
+
+            from urllib.parse import parse_qs
+
+            q = parse_qs(urlparse(self.path).query)
+            name = (q.get("sheet") or [""])[0]
+            scope = name if name and sheet_path(name) and (q.get("scope") or [""])[0] == "sheet" else None
+            pending = OUTREACH / email_batches.PENDING
+            batch = ""
+            if pending.exists():
+                with pending.open(encoding="utf-8") as f:
+                    rows = list(csv.DictReader(f))
+                batch = f"{rows[0]['batch']} ({len(rows)})" if rows else ""
+            return self._json({"remaining": email_batches.remaining(OUTREACH, scope) if OUTREACH.is_dir() else 0, "pending": batch})
         if route == "/api/letter-template":
             import letters
 
@@ -947,6 +981,11 @@ PAGE = r"""<!doctype html>
         <p>Pushes this sheet, then opens every link in the Mailmeteor file (not counted as a visit) and takes out any that don't load. When the log ends with <b>READY</b>, import the file into Mailmeteor and schedule.</p>
       </div>
       <div class="action">
+        <div class="row" style="margin:0"><button data-action="batch">Make email batch</button><input type="number" id="batch-size" value="20" min="1" max="500"><select id="batch-scope" style="width:auto"><option value="all">from every list</option><option value="sheet">from this list</option></select></div>
+        <p>The next firms not yet emailed, every link re-checked: <b>mailmeteor-batch-&lt;date&gt;.csv</b>. Import that, send, then Mark batch as sent - tomorrow's batch is the next lot. <span id="batch-info"></span></p>
+        <div class="row"><button data-action="batch_sent">Mark batch as sent</button></div>
+      </div>
+      <div class="action">
         <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
         <p>Rewrites preview-links and mailmeteor CSVs from the sheet. Never sends anything - and the Mailmeteor file only includes firms whose preview page is on your dashboard, so no email links to a 404. Push first to add new firms.</p>
         <details style="margin-top:6px"><summary>Mailmeteor email to paste</summary>
@@ -1102,6 +1141,7 @@ function render() {
     loadProgress();
     loadReview();
     loadLetters();
+    loadBatch();
     if (!$("pane-calls").hidden) loadCalls();
   }
   $("files").innerHTML = s.files.map((f) => `<li>${f.name.replace(/</g, "&lt;")}<span>${ago(f.modified)}</span></li>`).join("") || "<li><span>None yet</span></li>";
@@ -1137,7 +1177,7 @@ function render() {
     lastLines = j.seq;
   }
   if ((wasRunning && !j.running) || (j.running && ++polls % 15 === 0)) loadProgress();
-  if (wasRunning && !j.running) { loadReview(); loadLetters(); }
+  if (wasRunning && !j.running) { loadReview(); loadLetters(); loadBatch(); }
   wasRunning = j.running;
 }
 
@@ -1152,7 +1192,9 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "push" && !dry && !confirm("Push this sheet to the dashboard?")) return;
   if (action === "all" && !confirm("Run the whole list? It pushes to the dashboard as it goes and can take hours on a long list.")) return;
   $("run-msg").textContent = "";
-  const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked });
+  if (action === "batch_sent" && !confirm("Mark the last batch as sent? Do this once Mailmeteor has sent it - they won't be picked again.")) return;
+  const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
+    batch_size: $("batch-size").value, batch_scope: $("batch-scope").value });
   if (r.error) $("run-msg").textContent = r.error;
   lastLines = -1;
   setTimeout(poll, 150);
@@ -1248,6 +1290,14 @@ async function callOutcome(b) {
   if (!r.error) loadCalls();
 }
 setInterval(() => { if (!$("pane-calls").hidden) loadCalls(); }, 60000);
+
+// ---- Email batches
+async function loadBatch() {
+  const q = `?sheet=${encodeURIComponent($("sheet").value || "")}&scope=${$("batch-scope").value}`;
+  const r = await (await fetch("/api/batch" + q)).json();
+  $("batch-info").textContent = `${r.remaining} waiting to be emailed.` + (r.pending ? ` Last batch not marked as sent yet: ${r.pending}.` : "");
+}
+$("batch-scope").addEventListener("change", loadBatch);
 
 // ---- Letters
 async function loadLetters() {
