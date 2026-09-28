@@ -16,6 +16,7 @@ import { InteractionLayer } from '@/components/interaction-layer'
 import { RevealController } from '@/components/reveal-controller'
 import { JsonLd } from '@/components/json-ld'
 import { GoogleAnalytics } from '@/components/google-analytics'
+import { ContactClickTracking } from '@/components/contact-click-tracking'
 import { PRICES, SITE } from '@/lib/site'
 
 // Bricolage/Instrument/Plex Mono instead of Space Grotesk + Geist Mono -
@@ -180,6 +181,7 @@ export default function RootLayout({
         <MobileActionBar />
         {process.env.NODE_ENV === 'production' && <Analytics />}
         {process.env.NODE_ENV === 'production' && <GoogleAnalytics />}
+        <ContactClickTracking />
         {/* Scalar Digital's own dashboard product, tracking this site as a
             real test tenant - page views and leads (via the contact
             form's data-lead-form attribute) flow into /admin's dashboard,
