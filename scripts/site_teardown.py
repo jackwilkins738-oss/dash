@@ -244,6 +244,12 @@ def analyse_html(html: str, final_url: str | None, script_bodies: list[str] | No
         plugins = set(p.lower() for p in re.findall(r"/wp-content/plugins/([A-Za-z0-9_-]+)/", html))
         out["wpPluginCount"] = len(plugins)
 
+    # Their own service names and brand colour, for the preview page's concept
+    # (only when fairly sure - see site_draft.for_preview).
+    from site_draft import for_preview, read_site
+
+    out.update(for_preview(read_site(html, final_url or "")))
+
     # HTTPS is judged on where the homepage actually ended up, nothing else.
     if final_url:
         checks["https"] = final_url.lower().startswith("https://")

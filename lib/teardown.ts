@@ -29,6 +29,10 @@ export type Teardown = {
   >
   seoScore?: number
   accessibilityScore?: number
+  /** 2-3 service names from their own homepage (validated by the dashboard). */
+  services?: string[]
+  /** Their brand colour, #rrggbb, already dark enough for white text. */
+  brandColour?: string
   imageSavingsKb?: number
   pageWeightKb?: number
   copyrightYear?: number

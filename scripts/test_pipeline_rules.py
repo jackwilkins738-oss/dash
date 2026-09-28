@@ -842,6 +842,19 @@ class SiteDraft(unittest.TestCase):
         self.assertEqual(s["photos"], ["https://kerr.co.uk/img/job1.jpg", "https://kerr.co.uk/img/job2.webp"])
         self.assertEqual((s["years"], s["accreditations"]), ("since 1998", ["NFRC"]))
 
+    def test_preview_only_gets_what_we_are_sure_of(self):
+        import site_draft
+
+        sure = {"services": ["Flat Roofs", "Roof Repairs", "A very long service name that won't fit", "Chimneys"],
+                "colour": "#b3261e", "colour_sure": True}
+        self.assertEqual(site_draft.for_preview(sure), {"services": ["Flat Roofs", "Roof Repairs", "Chimneys"], "brandColour": "#b3261e"})
+        self.assertEqual(site_draft.for_preview({"services": ["Flat Roofs"], "colour": "#b3261e", "colour_sure": False}), {})
+        # A colour used once in their CSS isn't a brand colour; one too pale for white text is darkened, same hue.
+        once = site_draft.read_site('<style>.a{color:#2a7ab0}</style><a href="/r">Roof repairs</a>', "https://x.co.uk/")
+        self.assertFalse(once["colour_sure"])
+        self.assertEqual(site_draft.readable("#ffcc00"), "#866a00")
+        self.assertGreaterEqual(site_draft._contrast_with_white(site_draft.readable("#87ceeb")), 4.5)
+
     def test_trade_keys(self):
         import site_draft
 
