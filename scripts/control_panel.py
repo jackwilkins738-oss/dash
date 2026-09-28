@@ -44,6 +44,7 @@ BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
 AUTOPILOT = HERE / "autopilot.py"
 SEND = HERE / "send_email.py"
+LAUNCH = HERE / "launch_report.py"
 
 
 def replies_first(settings: dict[str, str]) -> list:
@@ -61,7 +62,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "26"
+PANEL_VERSION = "27"
 MAX_LOG_LINES = 5000
 
 
@@ -206,6 +207,7 @@ ACTIONS = {
     "send_batch": "Send today's batch",
     "send_followups": "Send follow-ups",
     "send_test": "Send a test to yourself",
+    "launch_report": "Launch report",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
     "contacts": "Find missing emails & phones",
@@ -346,6 +348,16 @@ def build_steps(body: dict, settings: dict[str, str]):
         extra = ["--followups"] if action == "send_followups" else []
         # Replies first, so anyone who said no since the batch was made is left out.
         return (lambda job: [*replies_first(settings), (SEND, extra), (EXPORT, [])]), ""
+    if action == "launch_report":
+        from push_prospects import domain_of
+
+        old, new = str(body.get("launch_old") or "").strip().lower(), str(body.get("launch_new") or "").strip().lower()
+        old, new = domain_of(old), domain_of(new or old)
+        if not (old and DOMAIN.match(old) and new and DOMAIN.match(new)):
+            return None, "Type their old website (and the new one if it's a different domain), e.g. kerrroofing.co.uk"
+        if not settings.get("PAGESPEED_API_KEY"):
+            return None, "Add PAGESPEED_API_KEY in Settings first."
+        return (lambda job: [(LAUNCH, ["--old", old, "--new", new])]), ""
     if action == "batch_sent":
         return (lambda job: [(BATCHES, ["--mark-sent"]), (EXPORT, [])]), ""
     if action == "batch":
@@ -610,7 +622,7 @@ def draft_site_action(body: dict) -> tuple[dict, int]:
     if not DOMAIN.match(fallback["website"].lower()):
         fallback["website"] = ""
     try:
-        folder = site_draft.make(OUTREACH, sheet, key, fallback)
+        folder = site_draft.make(OUTREACH, sheet, key, fallback, settings=load_settings())
     except (ValueError, OSError) as e:
         return {"error": f"No draft made: {e}."}, 400
     try:
@@ -1253,6 +1265,10 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
         </details>
       </div>
       <div class="action">
+        <div class="row" style="margin:0"><input type="text" id="launch-old" placeholder="Their old website"><input type="text" id="launch-new" placeholder="New site (if a different domain)"><button data-action="launch_report">Launch report</button></div>
+        <p>When a client's new site goes live: their old speed score and problems (from when you first checked them) next to the new site measured now. Writes a report for them in <b>outreach/sites/&lt;firm&gt;/</b> and adds a line to <b>case-studies.csv</b> - your proof for the next pitch.</p>
+      </div>
+      <div class="action">
         <button data-action="contacts">Find missing emails &amp; phones</button>
         <p>For firms with a blank email, phone or contact name: reads their own site, and takes the contact from their directors once Look up company types has confirmed them. Your sheet is never changed.</p>
       </div>
@@ -1448,7 +1464,8 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "send_batch" && !confirm("Send today's batch now, from your own email? It takes about half an hour for 20 - you can stop it any time.")) return;
   if (action === "send_followups" && !confirm("Send the follow-ups now, from your own email?")) return;
   const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
-    batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "" });
+    batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "",
+    launch_old: $("launch-old").value, launch_new: $("launch-new").value });
   if (r.error) $("run-msg").textContent = r.error;
   lastLines = -1;
   setTimeout(poll, 150);

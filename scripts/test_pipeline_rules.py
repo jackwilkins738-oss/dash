@@ -886,6 +886,39 @@ class SiteDraft(unittest.TestCase):
         self.assertIn("**Services they list:** Flat Roofs, Roof Repairs", brief)
         self.assertIn("https://kerr.co.uk/img/job1.jpg", brief)
 
+    def test_what_they_sent_on_the_onboarding_page_replaces_the_guesses(self):
+        import site_draft
+
+        told = {"services": "Flat roofs\nRe-roofing\n- Chimneys", "areas": "Guildford\nWoking\nGodalming", "phone": "07700 900123",
+                "guarantee": "10 years on new roofs", "insurance": "Yes", "insurance_amount": "£5 million",
+                "memberships": "NFRC, TrustMark", "about": "Family run since 1998."}
+        files = [{"kind": "logo", "name": "logo.png", "path": "client-files/logo-01-logo.png"},
+                 {"kind": "photo", "name": "a.jpg", "path": "client-files/photo-02-a.jpg"},
+                 {"kind": "photo", "name": "b.heic", "path": "client-files/photo-03-b.heic"}]
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            make_sheet(out / "list.xlsx", [{"Business": "Kerr Roofing", "Website": "kerr.co.uk", "Trade": "Roofing", "Phone": "01483 111222"}])
+            with mock.patch("site_teardown.fetch_html", return_value=(None, None)), \
+                 mock.patch("site_draft.fetch_onboarding", return_value={"answers": told, "submitted_at": "2026-10-01T09:00:00Z", "files": []}) as fo, \
+                 mock.patch("site_draft.download_files", return_value=files):
+                folder = site_draft.make(out, "list.xlsx", "name:kerr roofing", settings={"PROSPECTS_API_SECRET": "s" * 40})
+            page = (folder / "index.html").read_text(encoding="utf-8")
+            brief = (folder / "brief.md").read_text(encoding="utf-8")
+        self.assertRegex(fo.call_args.args[1], r"^kerr-roofing-[0-9a-f]{6}$")
+        self.assertIn("<h3>Chimneys</h3>", page)
+        self.assertIn("Serving Guildford, Woking and Godalming", page)
+        self.assertIn('href="tel:07700900123"', page)
+        self.assertIn("<b>Guarantee: 10 years on new roofs</b>", page)
+        self.assertIn("(£5 million public liability)", page)
+        self.assertIn("<li><b>TrustMark</b></li>", page)
+        self.assertIn('src="client-files/logo-01-logo.png"', page)
+        self.assertIn('src="client-files/photo-02-a.jpg"', page)
+        self.assertNotIn("photo-03-b.heic", page)  # browsers can't show HEIC; it's kept in the folder
+        self.assertNotIn("Ask for 6-12 photos", page)
+        self.assertIn("About Kerr Roofing", page)
+        self.assertIn("<p>Yes - 10 years on new roofs.</p>", page)
+        self.assertIn("What they told us (onboarding page, sent 2026-10-01)", brief)
+
     def test_no_site_and_no_row_falls_back(self):
         import site_draft
 

@@ -302,6 +302,53 @@ def read_site(page: str, base_url: str) -> dict:
     }
 
 
+# ---------------------------------------------------------------- what they told us (onboarding)
+
+SHOWABLE = re.compile(r"\.(jpe?g|png|webp|gif)$", re.I)  # what a browser can show (HEIC and PDF are kept, not shown)
+
+
+def fetch_onboarding(settings: dict, slug: str) -> dict | None:
+    """Their answers and files from the dashboard's onboarding page (sent after they accept), or None."""
+    import json
+    import urllib.error
+    import urllib.request
+
+    secret = settings.get("PROSPECTS_API_SECRET", "")
+    if len(secret) < 32 or not slug:
+        return None
+    api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
+    req = urllib.request.Request(f"{api}/api/prospects/onboarding?slug={urllib.parse.quote(slug)}",
+                                 headers={"Authorization": f"Bearer {secret}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            out = json.loads(res.read())
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return None
+    return out if isinstance(out, dict) and isinstance(out.get("answers"), dict) else None
+
+
+def download_files(onboarding: dict, folder: Path) -> list[dict]:
+    """Saves their logo and photos into <folder>/client-files/; returns [{kind, name, path}] (path relative to folder)."""
+    import urllib.request
+
+    target = folder / "client-files"
+    saved = []
+    for i, f in enumerate(onboarding.get("files") or []):
+        url, kind = str(f.get("url") or ""), str(f.get("kind") or "other")
+        if not url.startswith("https://"):
+            continue
+        name = re.sub(r"[^A-Za-z0-9._-]+", "-", str(f.get("filename") or f"file-{i}"))[-80:].lstrip(".") or f"file-{i}"
+        name = f"{kind}-{i + 1:02d}-{name}"
+        target.mkdir(parents=True, exist_ok=True)
+        try:
+            with urllib.request.urlopen(url, timeout=60) as res:
+                (target / name).write_bytes(res.read(20 * 1024 * 1024))
+        except OSError:
+            continue
+        saved.append({"kind": kind, "name": f.get("filename") or name, "path": f"client-files/{name}"})
+    return saved
+
+
 # ---------------------------------------------------------------- the draft
 
 
@@ -314,6 +361,10 @@ def _darker(hexcode: str, factor: float = 0.7) -> str:
     if len(h) == 3:
         h = "".join(c * 2 for c in h)
     return "#" + "".join(f"{int(int(h[i:i + 2], 16) * factor):02x}" for i in (0, 2, 4))
+
+
+def _lines(text: str) -> list[str]:
+    return [line.strip(" -•\t") for line in (text or "").splitlines() if line.strip(" -•\t")]
 
 
 def _confirm(text: str) -> str:
@@ -338,17 +389,28 @@ def facts(row: dict, contacts: dict, teardown: dict, site: dict | None) -> dict:
 def draft_html(f: dict) -> str:
     copy = TRADE_COPY[trade_key(f["trade"])]
     site = f["site"]
+    told = f.get("told") or {}  # their own answers from the onboarding page - no highlight needed
+    files = f.get("files") or []
     esc = htmllib.escape
     name = esc(f["business"])
     brand = site.get("colour") or "#1f4e79"
     area = f["area"]
-    tel = re.sub(r"[^\d+]", "", f["phone"])
-    call = (f'<a class="btn" href="tel:{esc(tel)}">Call {esc(f["phone"])}</a>' if tel
+    phone = told.get("phone") or f["phone"]
+    tel = re.sub(r"[^\d+]", "", phone)
+    call = (f'<a class="btn" href="tel:{esc(tel)}">Call {esc(phone)}</a>' if tel
             else '<a class="btn" href="#quote"><mark class="confirm">Phone number</mark></a>')
-    serving = (f'Serving {esc(area)} <mark class="confirm">and surrounding areas - which towns?</mark>' if area
-               else '<mark class="confirm">Areas covered - which towns?</mark>')
+    towns = _lines(told.get("areas", ""))
+    if towns:
+        serving = "Serving " + esc(", ".join(towns[:-1]) + (" and " if len(towns) > 1 else "") + towns[-1])
+    else:
+        serving = (f'Serving {esc(area)} <mark class="confirm">and surrounding areas - which towns?</mark>' if area
+                   else '<mark class="confirm">Areas covered - which towns?</mark>')
 
-    if site.get("services"):
+    if _lines(told.get("services", "")):
+        cards = "".join(f'<div class="card"><h3>{esc(s)}</h3><p><mark class="confirm">One line about this, in their words.</mark></p></div>'
+                        for s in _lines(told["services"])[:8])
+        services_note = "From their onboarding answers."
+    elif site.get("services"):
         cards = "".join(f'<div class="card"><h3>{esc(s)}</h3><p><mark class="confirm">One line about this, in their words.</mark></p></div>'
                         for s in site["services"][:6])
         services_note = "Taken from their current site - check the list with them."
@@ -356,25 +418,48 @@ def draft_html(f: dict) -> str:
         cards = "".join(f'<div class="card"><h3>{_confirm(t)}</h3><p>{_confirm(b)}</p></div>' for t, b in copy["services"])
         services_note = "Usual services for the trade - their site didn't list any. Check with them."
     trust = []
-    if site.get("years"):
+    if told.get("years_trading"):
+        trust.append(f'<li><b>Trading: {esc(told["years_trading"])}</b></li>')
+    elif site.get("years"):
         trust.append(f'<li><b>Trading {esc(site["years"])}</b></li>')
     elif f["incorporated"]:
         trust.append(f'<li><b>Established {esc(f["incorporated"][:4])}</b> <mark class="confirm">(company date - ask how long they\'ve traded)</mark></li>')
-    trust += [f'<li><b>{esc(a)}</b> <mark class="confirm">member? check it\'s current</mark></li>' for a in site.get("accreditations", [])]
-    trust += ['<li><b>Fixed, written quotes</b> <mark class="confirm">confirm</mark></li>',
-              '<li><b>Guaranteed work</b> <mark class="confirm">how many years?</mark></li>',
-              '<li><b>Fully insured</b> <mark class="confirm">confirm public liability cover</mark></li>']
-    faqs = "".join(f"<details><summary>{esc(q)}</summary><p>{_confirm(a)}</p></details>" for q, a in copy["faqs"])
+    if told.get("memberships"):
+        trust += [f"<li><b>{esc(m.strip())}</b></li>" for m in re.split(r"[,\n;]+", told["memberships"]) if m.strip()]
+    else:
+        trust += [f'<li><b>{esc(a)}</b> <mark class="confirm">member? check it\'s current</mark></li>' for a in site.get("accreditations", [])]
+    trust.append('<li><b>Fixed, written quotes</b> <mark class="confirm">confirm</mark></li>')
+    trust.append(f'<li><b>Guarantee: {esc(told["guarantee"])}</b></li>' if told.get("guarantee")
+                 else '<li><b>Guaranteed work</b> <mark class="confirm">how many years?</mark></li>')
+    if told.get("insurance") == "Yes":
+        cover = f" ({esc(told['insurance_amount'])} public liability)" if told.get("insurance_amount") else ""
+        trust.append(f"<li><b>Fully insured</b>{cover}</li>")
+    elif told.get("insurance") != "No":
+        trust.append('<li><b>Fully insured</b> <mark class="confirm">confirm public liability cover</mark></li>')
+    qa = [(q, f"Yes - {told['guarantee']}." if told.get("guarantee") and "guarantee" in q.lower() else a) for q, a in copy["faqs"]]
+    faqs = "".join(f"<details><summary>{esc(q)}</summary><p>{_confirm(a)}</p></details>" for q, a in qa)
     # If their logo won't load (moved, hotlink-blocked), the name shows instead - as text, never as HTML.
     swap = "var b=document.createElement('b');b.textContent=this.alt;this.replaceWith(b)"
-    logo = (f'<img src="{esc(site["logo"])}" alt="{name}" class="logo" onerror="{swap}">' if site.get("logo") else f"<b>{name}</b>")
+    own_logo = next((x["path"] for x in files if x["kind"] == "logo" and SHOWABLE.search(x["path"])), "")
+    logo_src = own_logo or site.get("logo")
+    logo = (f'<img src="{esc(logo_src)}" alt="{name}" class="logo" onerror="{swap}">' if logo_src else f"<b>{name}</b>")
     reg = []
     if f["registered_name"] and f["company_number"]:
         reg.append(f'{esc(f["registered_name"])} · Registered in England &amp; Wales, company no. {esc(f["company_number"])}')
     if f["address"]:
-        reg.append(f'Registered office: {esc(f["address"])} <mark class="confirm">(show this address? it may be an accountant\'s)</mark>')
-    email = f'<a href="mailto:{esc(f["email"])}">{esc(f["email"])}</a>' if f["email"] else '<mark class="confirm">email address</mark>'
-    photos = "".join(f'<div class="ph"><mark class="confirm">Photo of their work #{i}</mark></div>' for i in range(1, 7))
+        # A limited company's site must show its registered office (Companies Act disclosure), whoever's address it is.
+        reg.append(f'Registered office: {esc(f["address"])}')
+    if told.get("show_address"):
+        reg.append(f'Address: {esc(told["show_address"])}')
+    if told.get("hours"):
+        reg.append(f'Hours: {esc(told["hours"])}')
+    mail = told.get("enquiry_email") or f["email"]
+    email = f'<a href="mailto:{esc(mail)}">{esc(mail)}</a>' if mail else '<mark class="confirm">email address</mark>'
+    shots = [x["path"] for x in files if x["kind"] == "photo" and SHOWABLE.search(x["path"])][:12]
+    photos = ("".join(f'<img class="ph" src="{esc(p)}" alt="Work by {name}" loading="lazy">' for p in shots) if shots
+              else "".join(f'<div class="ph"><mark class="confirm">Photo of their work #{i}</mark></div>' for i in range(1, 7)))
+    about = (f'<section><div class="wrap"><h2>About {name}</h2>'
+             + "".join(f"<p>{esc(p)}</p>" for p in _lines(told["about"])) + "</div></section>") if told.get("about") else ""
 
     return f"""<!doctype html>
 <html lang="en-GB">
@@ -416,6 +501,7 @@ h2 {{ font-size: clamp(24px, 3.5vw, 32px); margin: 0 0 8px; }}
 .card p {{ margin: 0; color: var(--dim); }}
 .trust {{ list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
 .trust li {{ background: #fff; border-left: 4px solid var(--brand); padding: 14px 16px; border-radius: 6px; }}
+img.ph {{ width: 100%; object-fit: cover; border: 0; }}
 .ph {{ aspect-ratio: 4/3; background: var(--soft); border: 2px dashed var(--line); border-radius: 10px; display: grid; place-items: center; text-align: center; font-size: 14px; }}
 details {{ border-bottom: 1px solid var(--line); padding: 14px 0; }}
 summary {{ font-weight: 600; cursor: pointer; }}
@@ -441,7 +527,7 @@ footer a {{ color: #fff; }}
 
 <section><div class="wrap">
   <h2>What we do</h2>
-  <p class="note"><mark class="confirm">{esc(services_note)}</mark></p>
+  <p class="note">{esc(services_note) if told.get("services") else f'<mark class="confirm">{esc(services_note)}</mark>'}</p>
   <div class="grid">{cards}</div>
 </div></section>
 
@@ -452,9 +538,10 @@ footer a {{ color: #fff; }}
 
 <section><div class="wrap">
   <h2>Recent work</h2>
-  <p class="note"><mark class="confirm">Ask for 6-12 photos of their own jobs - before and after if they have them.</mark></p>
+  {"" if shots else '<p class="note"><mark class="confirm">Ask for 6-12 photos of their own jobs - before and after if they have them.</mark></p>'}
   <div class="grid">{photos}</div>
 </div></section>
+{about}
 
 <section class="soft"><div class="wrap">
   <h2>Questions people ask</h2>
@@ -472,10 +559,10 @@ footer a {{ color: #fff; }}
 </div></section>
 
 <footer><div class="wrap">
-  <p><b style="color:#fff">{name}</b>{" · " + esc(f["phone"]) if f["phone"] else ""} · {email}</p>
+  <p><b style="color:#fff">{name}</b>{" · " + esc(phone) if phone else ""} · {email}</p>
   <p>{"<br>".join(reg)}</p>
 </div></footer>
-<div class="callbar">{f'<a href="tel:{esc(tel)}">Call {esc(f["phone"])}</a>' if tel else '<a href="#quote">Get a free quote</a>'}</div>
+<div class="callbar">{f'<a href="tel:{esc(tel)}">Call {esc(phone)}</a>' if tel else '<a href="#quote">Get a free quote</a>'}</div>
 </body>
 </html>
 """
@@ -490,6 +577,12 @@ def brief_md(f: dict, draft_path: str) -> str:
            line("Registered name", f["registered_name"]), line("Company number", f["company_number"]),
            line("Company type", f["company_type"]), line("Incorporated", f["incorporated"]),
            line("Registered office", f["address"]), ""]
+    if f.get("told"):
+        from_page = f.get("told_at") or ""
+        out += [f"## What they told us (onboarding page{', sent ' + from_page[:10] if from_page else ', not sent yet'})"]
+        out += [f"- **{k.replace('_', ' ').capitalize()}:** " + v.replace(chr(10), "; ") for k, v in f["told"].items()]
+        out += [f"- **File ({x['kind']}):** {x['path']}" for x in f.get("files") or []]
+        out.append("")
     out += ["## Their current site"]
     if f["score"] or f["top_issue"]:
         out += [line("Mobile speed score", f["score"]), line("Largest content paint (s)", f["lcp"]),
@@ -519,7 +612,8 @@ def brief_md(f: dict, draft_path: str) -> str:
     return "\n".join(out)
 
 
-def make(outreach: Path, sheet: str, key: str, fallback: dict | None = None, fetch: bool = True) -> Path:
+def make(outreach: Path, sheet: str, key: str, fallback: dict | None = None, fetch: bool = True,
+         settings: dict | None = None) -> Path:
     """Writes outreach/sites/<firm>/{brief.md,index.html}; returns the folder."""
     from push_prospects import domain_of
 
@@ -545,6 +639,13 @@ def make(outreach: Path, sheet: str, key: str, fallback: dict | None = None, fet
     f = facts(row, contacts, teardown, site)
     folder = outreach / "sites" / _slugify(f["business"])
     folder.mkdir(parents=True, exist_ok=True)
+    if fetch and settings and domain:
+        from push_prospects import make_slug
+
+        onboarding = fetch_onboarding(settings, make_slug(f["business"], domain, settings.get("PROSPECTS_API_SECRET", "")))
+        if onboarding:
+            f["told"], f["told_at"] = onboarding["answers"], onboarding.get("submitted_at") or ""
+            f["files"] = download_files(onboarding, folder)
     (folder / "index.html").write_text(draft_html(f), encoding="utf-8")
     (folder / "brief.md").write_text(brief_md(f, str(folder / "index.html")), encoding="utf-8")
     return folder
