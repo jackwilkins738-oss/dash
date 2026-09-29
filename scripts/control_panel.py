@@ -45,6 +45,7 @@ REPLIES = HERE / "reply_scanner.py"
 AUTOPILOT = HERE / "autopilot.py"
 SEND = HERE / "send_email.py"
 LAUNCH = HERE / "launch_report.py"
+PUBLISH_SITE = HERE / "publish_site.py"
 SCORECARD = HERE / "scorecard.py"
 
 
@@ -58,15 +59,15 @@ SETTING_KEYS = [
     "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD",
     "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD",
     "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT",
-    "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK",
+    "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN",
 ]
-SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
+SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
                "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"}
 # A run this long gets a phone alert when it ends (if Telegram is set up).
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "32"
+PANEL_VERSION = "33"
 MAX_LOG_LINES = 5000
 
 
@@ -214,6 +215,7 @@ ACTIONS = {
     "send_followups": "Send follow-ups",
     "send_test": "Send a test to yourself",
     "launch_report": "Launch report",
+    "publish_site": "Publish site",
     "scorecard": "Scorecard",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
@@ -367,6 +369,16 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not settings.get("PAGESPEED_API_KEY"):
             return None, "Add PAGESPEED_API_KEY in Settings first."
         return (lambda job: [(LAUNCH, ["--old", old, "--new", new])]), ""
+    if action == "publish_site":
+        folder = str(body.get("publish_folder") or "").strip().lower()
+        account = str(body.get("publish_account") or "").strip().lower()
+        project = str(body.get("publish_project") or "").strip().lower()
+        if not re.match(r"^[a-z0-9][a-z0-9-]{0,80}$", folder):
+            return None, "Type the firm's folder name under outreach/sites, e.g. kerr-roofing."
+        if not settings.get("CLOUDFLARE_API_TOKEN"):
+            return None, "Add CLOUDFLARE_API_TOKEN in Settings first."
+        args = ["--folder", folder] + (["--account", account] if account else []) + (["--project", project] if project else [])
+        return (lambda job: [(PUBLISH_SITE, args)]), ""
     if action == "batch_sent":
         return (lambda job: [(BATCHES, ["--mark-sent"]), (EXPORT, [])]), ""
     if action == "batch":
@@ -1426,6 +1438,10 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
         <p>When a client's new site goes live: their old speed score and problems (from when you first checked them) next to the new site measured now. Writes a report for them in <b>outreach/sites/&lt;firm&gt;/</b> and adds a line to <b>case-studies.csv</b> - your proof for the next pitch.</p>
       </div>
       <div class="action">
+        <div class="row" style="margin:0"><input type="text" id="publish-folder" placeholder="Folder (e.g. kerr-roofing)"><input type="text" id="publish-account" placeholder="Their Cloudflare account id (first time)"><input type="text" id="publish-project" placeholder="Project name (optional)"><button data-action="publish_site">Publish site</button></div>
+        <p>Puts <b>outreach/sites/&lt;folder&gt;/site/</b> live on the client's own Cloudflare Pages - only that <b>site</b> folder, never their brief or photos. First time: they invite you to their Cloudflare account, you give the account id, and it makes the project; after that just the folder. Needs CLOUDFLARE_API_TOKEN in Settings and Node.js installed.</p>
+      </div>
+      <div class="action">
         <button data-action="contacts">Find missing emails &amp; phones</button>
         <p>For firms with a blank email, phone or contact name: reads their own site, and takes the contact from their directors once Look up company types has confirmed them. Your sheet is never changed.</p>
       </div>
@@ -1493,6 +1509,8 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
         <label>Quotes: build £ / landing page £ / VAT % / deposit %</label>
         <div class="grid2" style="grid-template-columns:1fr 1fr 1fr 1fr"><input type="text" id="QUOTE_PRICE_BUILD" placeholder="2500"><input type="text" id="QUOTE_PRICE_LANDING" placeholder="750"><input type="text" id="QUOTE_VAT_RATE" placeholder="0"><input type="text" id="QUOTE_DEPOSIT_PERCENT" placeholder="0"></div>
         <p class="hint">For the Calls tab's Quote buttons. VAT: 0 if you're not VAT-registered, 20 if you are.</p>
+        <label>CLOUDFLARE_API_TOKEN - for Publish site (Cloudflare &gt; My Profile &gt; API Tokens, "Edit Cloudflare Workers" template, All accounts)</label>
+        <input type="password" id="CLOUDFLARE_API_TOKEN" placeholder="(leave blank to keep the saved one)">
         <label>BOOKING_LINK - your free booking page (e.g. Cal.com), used as {{booking_link}} in emails and saved replies</label>
         <input type="text" id="BOOKING_LINK" placeholder="https://cal.com/yourname/10min">
         <label>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</label>
@@ -1628,9 +1646,11 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "batch_sent" && !confirm("Mark the last batch as sent? Do this once Mailmeteor has sent it - they won't be picked again.")) return;
   if (action === "send_batch" && !confirm("Send today's batch now, from your own email? It takes about half an hour for 20 - you can stop it any time.")) return;
   if (action === "send_followups" && !confirm("Send the follow-ups now, from your own email?")) return;
+  if (action === "publish_site" && !confirm(`Publish outreach/sites/${$("publish-folder").value}/site live on their Cloudflare?`)) return;
   const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
     batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "",
-    launch_old: $("launch-old").value, launch_new: $("launch-new").value });
+    launch_old: $("launch-old").value, launch_new: $("launch-new").value,
+    publish_folder: $("publish-folder").value, publish_account: $("publish-account").value, publish_project: $("publish-project").value });
   if (r.error) $("run-msg").textContent = r.error;
   lastLines = -1;
   setTimeout(poll, 150);
@@ -1997,7 +2017,7 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (!$("pane-calls").hidden) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);

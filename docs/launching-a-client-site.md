@@ -33,6 +33,11 @@ commercial use, so client sites don't go there.)
    if you keep one per client). Upload the site folder.
 3. You get a `*.pages.dev` address - check the whole site there before any DNS change.
 
+**Or from the panel:** put the finished site in `outreach/sites/<firm>/site/` and use
+**Publish site** (needs `CLOUDFLARE_API_TOKEN` in Settings and Node.js installed). Give
+their account id the first time; later publishes need only the folder name. Only the
+`site` folder goes live - never their brief or uploaded photos.
+
 ## 3. Forms and enquiries (every client)
 
 Every client gets a business on your dashboard, even on the £750 landing page -
@@ -89,6 +94,7 @@ it's what catches their enquiries.
 
 - [ ] Send them the launch report
 - [ ] `/admin` → their card → set **launched on** (starts their aftercare reminders)
+- [ ] `/admin` → Launched customers → add their live site (hourly uptime check) and send the **£39/month card link** (nothing is charged until the free period ends)
 - [ ] Ask for the Google review and, for founding clients, the 60-second video
 - [ ] Give them their referral link (`/refer`)
 - [ ] Add a line to your own case studies once they're happy to be named
