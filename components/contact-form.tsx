@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { track } from '@vercel/analytics'
 import { Check, Loader2 } from 'lucide-react'
+import { PARTNER } from '@/lib/site'
 
 const PROJECT_TYPES = ['New website', 'Redesign my current site', 'Not sure yet']
 
@@ -37,6 +38,14 @@ export function ContactForm() {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 60)
+  // Partner link: /contact?partner=Firm (accountants, merchants - /partners). Same sanitising.
+  const partner = referredBy
+    ? ''
+    : (searchParams.get('partner') ?? '')
+        .replace(/[^\p{L}\p{N} .'&-]/gu, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 60)
   // From a prospect's preview page (/for/<slug>) and the founding-client
   // offer: a starting line in the message box, same sanitising as `ref`.
   const fromFirm = (searchParams.get('firm') ?? '')
@@ -119,7 +128,13 @@ export function ContactForm() {
           <span className="font-semibold">Referred by {referredBy}.</span> You&apos;ll get 15% off your build.
         </div>
       )}
+      {partner && (
+        <div className="mb-6 rounded-lg border border-blueprint/40 bg-blueprint/10 px-4 py-3 text-sm leading-relaxed text-foreground">
+          <span className="font-semibold">Recommended by {partner}.</span> You&apos;ll get {PARTNER.clientDiscountPercent}% off your build.
+        </div>
+      )}
       <input type="hidden" name="referredBy" value={referredBy} />
+      <input type="hidden" name="partner" value={partner} />
       {/* Honeypot */}
       <input
         type="text"
