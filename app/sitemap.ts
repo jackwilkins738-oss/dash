@@ -24,6 +24,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     at('/speed-test', UPDATED, 0.7),
     at('/contact', UPDATED, 0.7),
     at('/refer', UPDATED, 0.4),
+    at('/partners', '2026-09-29', 0.4),
     at('/privacy', '2026-09-26', 0.2),
   ]
 }

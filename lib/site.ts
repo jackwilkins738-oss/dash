@@ -17,3 +17,7 @@ export const SITE = {
 export const UPDATED = '2026-09-24'
 
 export const PRICES = { landing: 750, build: 2500, dashboardMonthly: 39 } as const
+
+// Partners: accountants, bookkeepers, merchants and others who see a lot of trades. Paid once the
+// client they sent has paid for their build. Kept here so /partners and the enquiry alert agree.
+export const PARTNER = { perBuild: 100, perLanding: 50, clientDiscountPercent: 10 } as const

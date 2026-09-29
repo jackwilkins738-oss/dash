@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { PARTNER } from '@/lib/site'
 
 // In-memory sliding-window limit - good enough for a single-instance
 // marketing site's contact form; resets on redeploy/restart.
@@ -31,6 +32,8 @@ type ContactPayload = {
   company?: string
   // Set when they arrive through a referral link
   referredBy?: string
+  // Set when they arrive through a partner's link (/partners)
+  partner?: string
 }
 
 function isEmail(value: string) {
@@ -95,9 +98,20 @@ export async function POST(request: Request) {
     .trim()
     .slice(0, 60)
 
+  const partner = referredBy
+    ? ''
+    : (body.partner ?? '')
+        .replace(/[^\p{L}\p{N} .'&-]/gu, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 60)
+
   const lines = [
     'New enquiry — Scalar Digital',
     referredBy ? `REFERRAL: referred by ${referredBy} (15% off their build - check with them, 10% off theirs later)` : null,
+    partner
+      ? `PARTNER: sent by ${partner} (${PARTNER.clientDiscountPercent}% off their build; pay ${partner} £${PARTNER.perBuild} for a Scalar build or £${PARTNER.perLanding} for a landing page once it's paid)`
+      : null,
     '',
     `Name: ${name}`,
     `Email: ${email}`,

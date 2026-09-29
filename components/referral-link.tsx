@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
+import { PARTNER } from '@/lib/site'
 
 const BASE = 'https://www.scalardigital.co.uk/contact'
 
@@ -34,15 +35,17 @@ async function copyText(text: string) {
   }
 }
 
-export function ReferralLink() {
+export function ReferralLink({ partner = false }: { partner?: boolean }) {
   const [name, setName] = useState('')
   const [copied, setCopied] = useState<'link' | 'message' | null>(null)
   const [failed, setFailed] = useState(false)
 
   const who = clean(name)
-  const link = who ? `${BASE}?ref=${encodeURIComponent(who)}` : ''
+  const link = who ? `${BASE}?${partner ? 'partner' : 'ref'}=${encodeURIComponent(who)}` : ''
   const message = who
-    ? `Scalar Digital builds fast, hand-coded websites for trades. Use my link and you'll get 15% off your build: ${link}`
+    ? partner
+      ? `If your website isn't bringing in the work it should, Scalar Digital builds fast, hand-coded sites for trades at a fixed price. Mention us and you get ${PARTNER.clientDiscountPercent}% off: ${link}`
+      : `Scalar Digital builds fast, hand-coded websites for trades. Use my link and you'll get 15% off your build: ${link}`
     : ''
 
   async function copy(kind: 'link' | 'message') {
@@ -55,21 +58,23 @@ export function ReferralLink() {
   return (
     <div className="rounded-2xl border border-blueprint/40 bg-card p-6 sm:p-8">
       <label htmlFor="referrer" className="mb-2 block font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-        Your name or business name
+        {partner ? 'Your firm’s name' : 'Your name or business name'}
       </label>
       <input
         id="referrer"
         type="text"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="e.g. Dave Thompson, or Thompson Roofing"
+        placeholder={partner ? 'e.g. Hill & Co Accountants' : 'e.g. Dave Thompson, or Thompson Roofing'}
         maxLength={60}
         autoComplete="off"
         className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-blueprint focus:ring-1 focus:ring-blueprint"
       />
 
       <div className="mt-6" aria-live="polite">
-        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Your referral link</div>
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+          {partner ? 'Your partner link' : 'Your referral link'}
+        </div>
         <div
           className={`mt-2 break-all rounded-lg border px-4 py-3 font-mono text-xs leading-relaxed ${
             link ? 'border-border bg-background text-foreground' : 'border-dashed border-border text-muted-foreground/60'
