@@ -86,7 +86,7 @@ VARIANT_B = {"first_subject_b": "", "first_body_b": ""}
 
 # What a template may use: the batch file's columns, plus your name.
 FIELDS = {"business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status", "trade", "area",
-          "top_issue", "score_line", "issue_line", "your_name"}
+          "top_issue", "score_line", "issue_line", "your_name", "booking_link"}
 PLACEHOLDER = re.compile(r"\{\{\s*([a-z_]+)\s*\}\}")
 
 
@@ -151,7 +151,11 @@ def save_templates(outreach: Path, templates: dict[str, str]) -> str:
 
 
 def render(text: str, row: dict, your_name: str) -> str:
-    values = {**{k: str(v or "") for k, v in row.items()}, "your_name": your_name}
+    values = {"booking_link": os.environ.get("BOOKING_LINK", "").strip(), **{k: str(v or "") for k, v in row.items() if v},
+              "your_name": your_name}
+    # A line offering the booking link means nothing without one - drop it rather than leave "pick a time: ".
+    if not values.get("booking_link"):
+        text = "\n".join(line for line in text.split("\n") if not re.search(r"\{\{\s*booking_link\s*\}\}", line))
     out = PLACEHOLDER.sub(lambda m: values.get(m.group(1), ""), text)
     # An empty {{score_line}} {{issue_line}} leaves double spaces; tidy them, keep line breaks.
     return "\n".join(re.sub(r"[ \t]{2,}", " ", line).rstrip() for line in out.split("\n")).strip() + "\n"
@@ -229,6 +233,37 @@ def _still_ok(outreach: Path, email: str, business: str) -> str:
     return ""
 
 
+BOUNCE_WINDOW_DAYS = 14
+BOUNCE_MIN_SENT = 20
+BOUNCE_LIMIT = 0.03
+
+
+def bounce_problem(outreach: Path, today: date) -> str:
+    """Why sending should pause, or ''. Too many bounces is the clearest sign of a bad list, and mail
+    providers judge a sender on it - past about 3%, more sending hurts the domain every email uses."""
+    from datetime import timedelta
+
+    since = today - timedelta(days=BOUNCE_WINDOW_DAYS)
+    recent = set()
+    for r in eb._rows(outreach / eb.SENT)[1]:
+        try:
+            if date.fromisoformat(r.get("sent") or "") >= since:
+                recent.add((r.get("email") or "").lower())
+        except ValueError:
+            continue
+    if len(recent) < BOUNCE_MIN_SENT:
+        return ""
+    bounced = {(r.get("email") or "").lower() for r in eb._rows(outreach / "email-checks.csv")[1] if r.get("result") == "bounced"}
+    n = len(recent & bounced)
+    rate = n / len(recent)
+    if rate <= BOUNCE_LIMIT:
+        return ""
+    return (f"Sending paused: {n} of the {len(recent)} emails sent in the last {BOUNCE_WINDOW_DAYS} days bounced ({rate:.0%}). "
+            "Over 3% tells mail providers the list is bad and starts landing you in spam. Check the addresses in your "
+            "newest list (the panel's Emails button verifies them), then send smaller batches - it clears as the "
+            "bounces age out of the last 14 days.")
+
+
 def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp=None, sleep=time.sleep,
                today: date | None = None, out=print) -> int:
     """Sends the waiting batch; returns how many were sent. Raises SendStopped on a run-ending problem."""
@@ -240,6 +275,10 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
     problem = template_problem(templates)
     if problem:
         raise SendStopped(problem)
+    if not test:
+        paused = bounce_problem(outreach, today)
+        if paused:
+            raise SendStopped(paused)
     kind = "followup" if followups else "first"
     pending_name = eb.FOLLOWUP_PENDING if followups else eb.PENDING
     pending = eb._rows(outreach / pending_name)[1]
