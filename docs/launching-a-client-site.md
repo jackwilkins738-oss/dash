@@ -50,6 +50,9 @@ it's what catches their enquiries.
 2. Copy the `<script>` snippet it gives you into every page, just before `</body>`.
 3. On the enquiry form: `<form data-lead-form>` with fields named `name`,
    `email`, `phone`, `message`. Page views are recorded automatically.
+   Add `<input type="file" name="photos" multiple accept="image/*">` so customers
+   can send up to 5 photos of the job - often enough to price it without a visit.
+   (Optional: `data-lead-redirect="/thanks"` on the form to show a thank-you page.)
 4. **Scalar build:** invite them (`/admin` → their card → invite) so they get the
    full dashboard - quotes, invoices, jobs, portal.
    **Landing page:** no login needed - they just get the enquiry emails. The
