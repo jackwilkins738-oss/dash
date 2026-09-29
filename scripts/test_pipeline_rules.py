@@ -662,8 +662,9 @@ class FollowUps(unittest.TestCase):
             self.assertEqual(skipped, {"replied": 1, "viewed": 1, "blocked": 1, "too soon": 1})
             self.assertEqual(eb.mark_followups_sent(d, date(2026, 9, 28)), 2)
             later, _, _ = eb.make_followups(d, 20, 5, check=lambda u: None, views=views, today=date(2026, 10, 30))
-            with later.open(encoding="utf-8") as f:  # only the one whose first email was too recent before - never a third
-                self.assertEqual([r["email"] for r in csv.DictReader(f)], ["recent@x.co.uk"])
+            with later.open(encoding="utf-8") as f:
+                # The one that was too recent, and the viewer nobody rang in 10 days - never a third email.
+                self.assertEqual(sorted(r["email"] for r in csv.DictReader(f)), ["recent@x.co.uk", "viewer@x.co.uk"])
             # A later first-email batch keeps the follow-up dates.
             with (d / eb.PENDING).open("w", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)

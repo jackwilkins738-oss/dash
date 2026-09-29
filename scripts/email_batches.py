@@ -31,6 +31,9 @@ SENT = "emails-sent.csv"
 SENT_FIELDS = ["email", "business", "preview_url", "batch", "sent", "followup_sent", "message_id", "subject", "variant",
                "sent_from"]
 FOLLOWUP_AFTER_DAYS = 5
+# Someone who opened their preview is a call, not an email - but if no call is logged this long after
+# the first email, they get the one follow-up after all, so a warm firm is never simply forgotten.
+VIEWER_FOLLOWUP_DAYS = 10
 
 
 def outreach_dir() -> Path:
@@ -210,8 +213,9 @@ def followup_candidates(outreach: Path, after_days: int = FOLLOWUP_AFTER_DAYS, t
                         views: dict[str, dict] | None = None) -> tuple[list[dict], dict[str, int]]:
     """Emailed once, long enough ago, and no sign of life - (rows to follow up, why others were left out).
 
-    Only ever one follow-up. Left out: anyone who replied (in any way), bounced, said no, or opened their
-    preview (they're on the Calls list - a call beats a second email)."""
+    Only ever one follow-up. Left out: anyone who replied (in any way), bounced or said no. Anyone who
+    opened their preview is on the Calls list - a call beats a second email - so they wait
+    VIEWER_FOLLOWUP_DAYS, and are left out for good once a call is logged."""
     from datetime import timedelta
 
     today = today or date.today()
@@ -226,6 +230,11 @@ def followup_candidates(outreach: Path, after_days: int = FOLLOWUP_AFTER_DAYS, t
         for r in _rows(src)[1]:
             if r.get("email"):
                 latest[r["email"].strip().lower()] = r
+    called = set()
+    calls_path = outreach / "calls.csv"
+    if calls_path.exists():
+        with calls_path.open(encoding="utf-8") as f:
+            called = {(r.get("business") or "").strip().lower() for r in csv.DictReader(f)}
     out, skipped = [], {"replied": 0, "viewed": 0, "blocked": 0, "too soon": 0}
     for r in _rows(outreach / SENT)[1]:
         email = (r.get("email") or "").lower()
@@ -241,7 +250,9 @@ def followup_candidates(outreach: Path, after_days: int = FOLLOWUP_AFTER_DAYS, t
             skipped["blocked"] += 1
         elif email in replied_emails or (r.get("business") or "").lower() in replied_names:
             skipped["replied"] += 1
-        elif views is not None and ((views.get(_slug(r.get("preview_url", ""))) or {}).get("view_count") or 0) > 0:
+        elif views is not None and ((views.get(_slug(r.get("preview_url", ""))) or {}).get("view_count") or 0) > 0 and (
+            (r.get("business") or "").strip().lower() in called or sent > today - timedelta(days=VIEWER_FOLLOWUP_DAYS)
+        ):
             skipped["viewed"] += 1
         else:
             out.append({**r, **latest.get(email, {}), "email": email})

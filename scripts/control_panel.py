@@ -58,7 +58,7 @@ SETTING_KEYS = [
     "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD",
     "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD",
     "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT",
-    "DASHBOARD_API_URL", "SITE_URL",
+    "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK",
 ]
 SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
                "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"}
@@ -66,7 +66,7 @@ SECRET_KEYS = {"PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "31"
+PANEL_VERSION = "32"
 MAX_LOG_LINES = 5000
 
 
@@ -102,6 +102,8 @@ def save_settings(new: dict[str, str]) -> None:
         # A blank secret field means "keep what's saved" - the page never sees the saved value.
         if value or key not in SECRET_KEYS:
             values[key] = value
+    if values.get("BOOKING_LINK") and not values["BOOKING_LINK"].startswith("https://"):
+        values["BOOKING_LINK"] = ""  # only a real https link goes into emails
     if values.get("COMPANIES_HOUSE_API_KEY"):
         sys.path.insert(0, str(HERE))
         from company_lookup import clean_key
@@ -676,6 +678,83 @@ def quote_email_action(body: dict) -> tuple[dict, int]:
     return {"ok": True, "message": f"Sent to {to} - it's in your Sent folder."}, 200
 
 
+def reply_values(settings: dict, body: dict) -> dict[str, str]:
+    import saved_replies
+
+    def price(key: str, default: str) -> str:
+        try:
+            return f"{float(settings.get(key) or default):,.0f}"
+        except ValueError:
+            return default
+
+    preview = str(body.get("preview") or "")
+    return {
+        "greeting_name": saved_replies.first_name(str(body.get("contact") or "")),
+        "business": str(body.get("business") or "")[:120],
+        "your_name": settings.get("MAIL_FROM_NAME") or settings.get("LETTER_SIGNOFF") or "Scalar Digital",
+        "preview_url": preview.replace("src=dashboard", "src=email") if preview.startswith("https://") else "",
+        "booking_link": settings.get("BOOKING_LINK", ""),
+        "price_build": price("QUOTE_PRICE_BUILD", "2500"),
+        "price_landing": price("QUOTE_PRICE_LANDING", "750"),
+    }
+
+
+def reply_draft_action(body: dict) -> tuple[dict, int]:
+    """Calls tab "Reply": a saved reply filled in for this firm, to read and edit before sending."""
+    import saved_replies
+
+    replies = saved_replies.parse(saved_replies.load(OUTREACH))
+    name = str(body.get("name") or "")
+    if name not in replies:
+        return {"error": "That saved reply doesn't exist any more - reload the tab."}, 400
+    return {"ok": True, "text": saved_replies.render(replies[name], reply_values(load_settings(), body))}, 200
+
+
+def reply_send_action(body: dict) -> tuple[dict, int]:
+    """Calls tab "Send reply": answers their email in the same thread, from the inbox that wrote to them."""
+    import calls
+    import mail_accounts
+    import send_email
+
+    settings = load_settings()
+    sheet, key = str(body.get("sheet") or ""), str(body.get("key") or "")
+    business = str(body.get("business") or "")[:150]
+    to = str(body.get("to") or "").strip()
+    text = str(body.get("text") or "").strip()
+    message_id = str(body.get("message_id") or "").strip()
+    subject = str(body.get("subject") or "").strip()[:200]
+    if not sheet_path(sheet) or not REVIEW_KEY.match(key) or not business or not EMAIL.match(to):
+        return {"error": "That doesn't look right."}, 400
+    if not text or len(text) > 8000:
+        return {"error": "Write the reply first (8,000 characters at most)."}, 400
+    if not re.match(r"^<[^<>\s]{3,300}>$", message_id):
+        message_id = ""
+    inboxes = mail_accounts.accounts(settings)
+    if not inboxes:
+        return {"error": "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings to reply from here."}, 400
+    sent_from = ""
+    sent_path = OUTREACH / "emails-sent.csv"
+    if sent_path.exists():
+        with sent_path.open(encoding="utf-8") as f:
+            sent_from = next((r.get("sent_from") or "" for r in csv.DictReader(f) if (r.get("email") or "").lower() == to.lower()), "")
+    inbox = next((a for a in inboxes if a.address == sent_from.lower()), inboxes[0])
+    subject = subject if subject.lower().startswith("re:") else f"Re: {subject or business}"
+    env = {**settings, **inbox.env()}
+    try:
+        smtp = send_email.connect(env)
+        try:
+            smtp.send_message(send_email.build_message(to, subject, text + "\n", message_id, env=env))
+        finally:
+            smtp.quit()
+    except send_email.SendStopped as e:
+        return {"error": str(e)}, 502
+    except Exception as e:  # refused recipient, dropped connection
+        return {"error": f"Not sent: {e}"}, 502
+    calls.log_call(OUTREACH, sheet, key, business, "Replied to them", str(body.get("name") or "")[:60])
+    calls.mark_reply_handled(OUTREACH, business)
+    return {"ok": True, "message": f"Replied to {to} from {inbox.address} - it's in that inbox's Sent folder."}, 200
+
+
 def call_action(body: dict) -> tuple[dict, int]:
     import calls
     from contact_rules import add_to_blocklist
@@ -967,6 +1046,11 @@ class Handler(BaseHTTPRequestHandler):
             import send_email
 
             return self._json(send_email.load_templates(OUTREACH))
+        if route == "/api/reply-templates":
+            import saved_replies
+
+            text = saved_replies.load(OUTREACH)
+            return self._json({"text": text, "names": list(saved_replies.parse(text))})
         if route == "/api/letter-template":
             import letters
 
@@ -1042,6 +1126,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(*call_action(body))
         if route == "/api/quote-email":
             return self._json(*quote_email_action(body))
+        if route == "/api/reply-templates":
+            import saved_replies
+
+            if body.get("reset"):
+                (OUTREACH / saved_replies.FILE).unlink(missing_ok=True)
+                return self._json({"ok": True})
+            OUTREACH.mkdir(exist_ok=True)
+            why = saved_replies.save(OUTREACH, str(body.get("text") or ""))
+            return self._json({"error": why}, 400) if why else self._json({"ok": True})
+        if route == "/api/reply-draft":
+            return self._json(*reply_draft_action(body))
+        if route == "/api/reply-send":
+            return self._json(*reply_send_action(body))
         if route == "/api/draft-site":
             return self._json(*draft_site_action(body))
         if route == "/api/review":
@@ -1287,6 +1384,13 @@ Scalar Digital · 07401 696272</textarea>
         </details>
       </div>
       <div class="action">
+        <details><summary>Saved replies (the Calls tab's Reply box uses these)</summary>
+          <p class="hint">Each starts with a line like <code>=== How much? ===</code>. Fields: {{greeting_name}} {{business}} {{your_name}} {{preview_url}} {{booking_link}} {{price_build}} {{price_landing}}. A line with {{booking_link}} is left out until you set a booking link in Settings.</p>
+          <textarea id="sr-text" rows="18" style="width:100%"></textarea>
+          <div class="row"><button class="primary" id="sr-save">Save replies</button><button id="sr-reset">Back to the originals</button><span class="saved" id="sr-saved"></span></div>
+        </details>
+      </div>
+      <div class="action">
         <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
         <p>Rewrites preview-links and mailmeteor CSVs from the sheet. Never sends anything - and the Mailmeteor file only includes firms whose preview page is on your dashboard, so no email links to a 404. Push first to add new firms.</p>
         <details style="margin-top:6px"><summary>First email (edit here - Send uses it)</summary>
@@ -1389,6 +1493,8 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
         <label>Quotes: build £ / landing page £ / VAT % / deposit %</label>
         <div class="grid2" style="grid-template-columns:1fr 1fr 1fr 1fr"><input type="text" id="QUOTE_PRICE_BUILD" placeholder="2500"><input type="text" id="QUOTE_PRICE_LANDING" placeholder="750"><input type="text" id="QUOTE_VAT_RATE" placeholder="0"><input type="text" id="QUOTE_DEPOSIT_PERCENT" placeholder="0"></div>
         <p class="hint">For the Calls tab's Quote buttons. VAT: 0 if you're not VAT-registered, 20 if you are.</p>
+        <label>BOOKING_LINK - your free booking page (e.g. Cal.com), used as {{booking_link}} in emails and saved replies</label>
+        <input type="text" id="BOOKING_LINK" placeholder="https://cal.com/yourname/10min">
         <label>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</label>
         <div class="grid2" style="grid-template-columns:1fr 1fr 1fr"><input type="text" id="LETTER_SIGNOFF" placeholder="Scalar Digital"><input type="text" id="LETTER_EMAIL" placeholder="hello@scalardigital.co.uk"><input type="text" id="LETTER_PHONE" placeholder="07401 696272"></div>
         <p class="hint">Who the letters are from: the name they're signed with, and the email and phone they give.</p>
@@ -1474,7 +1580,7 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "BOOKING_LINK"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     if (!s.settings.PROSPECTS_API_SECRET) $("settings-box").open = true;
   }
@@ -1597,6 +1703,10 @@ function callRow(i, section) {
       <input type="text" placeholder="note (optional)" data-note></div>
     <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><button data-draft>Draft their site</button></div>
     <div class="why" data-quote-result></div>
+    ${section === "replied" && i.email ? `<div class="btns" style="margin-top:6px">
+      <select data-reply-pick><option value="">Reply with a saved answer...</option>${savedReplies.map((n) => `<option>${esc(n)}</option>`).join("")}</select></div>
+      <div data-reply-box hidden style="margin-top:6px"><textarea data-reply-text rows="9" style="width:100%"></textarea>
+      <div class="btns"><button class="primary" data-reply-send>Send reply to ${esc(i.email)}</button><span class="hint" data-reply-msg></span></div></div>` : ""}
   </div>`;
 }
 function renderCalls() {
@@ -1613,7 +1723,43 @@ function renderCalls() {
   document.querySelectorAll("#calls [data-outcome]").forEach((b) => b.addEventListener("click", () => callOutcome(b)));
   document.querySelectorAll("#calls [data-quote]").forEach((b) => b.addEventListener("click", () => makeQuote(b)));
   document.querySelectorAll("#calls [data-draft]").forEach((b) => b.addEventListener("click", () => draftSite(b)));
+  document.querySelectorAll("#calls [data-reply-pick]").forEach((sel) => sel.addEventListener("change", () => pickReply(sel)));
+  document.querySelectorAll("#calls [data-reply-send]").forEach((b) => b.addEventListener("click", () => sendReply(b)));
 }
+let savedReplies = [];
+async function loadSavedReplies() {
+  const r = await (await fetch("/api/reply-templates")).json();
+  savedReplies = r.names || [];
+  if ($("sr-text")) $("sr-text").value = r.text || "";
+  if (typeof callData !== "undefined" && callData && (callData.replied || []).length) renderCalls();
+}
+function replyItem(el) {
+  const card = el.closest(".ritem");
+  return [card, (callData[card.dataset.sec] || []).find((x) => x.key === card.dataset.key)];
+}
+async function pickReply(sel) {
+  const [card, item] = replyItem(sel);
+  if (!sel.value) return;
+  const r = await post("/api/reply-draft", { name: sel.value, business: item.business, contact: item.contact, preview: item.preview });
+  const box = card.querySelector("[data-reply-box]");
+  box.hidden = false;
+  if (r.error) { card.querySelector("[data-reply-msg]").textContent = r.error; return; }
+  card.querySelector("[data-reply-text]").value = r.text;
+}
+async function sendReply(b) {
+  const [card, item] = replyItem(b);
+  const text = card.querySelector("[data-reply-text]").value;
+  if (!text.trim() || !confirm(`Send this reply to ${item.email}?`)) return;
+  b.disabled = true; b.textContent = "Sending...";
+  const r = await post("/api/reply-send", { sheet: $("sheet").value, key: item.key, business: item.business, to: item.email,
+    message_id: item.message_id, subject: item.subject, text, name: card.querySelector("[data-reply-pick]").value });
+  b.disabled = false; b.textContent = "Send reply";
+  const msg = card.querySelector("[data-reply-msg]");
+  msg.style.color = r.error ? "var(--bad)" : "var(--ok)";
+  msg.textContent = r.error || r.message;
+  if (!r.error) setTimeout(loadCalls, 2500);
+}
+loadSavedReplies();
 async function draftSite(b) {
   const card = b.closest(".ritem");
   const item = (callData[card.dataset.sec] || []).find((x) => x.key === card.dataset.key);
@@ -1746,6 +1892,16 @@ $("em-save").addEventListener("click", async () => {
     first_subject_b: $("mm-subject-b").value, first_body_b: $("mm-body-b").value });
   $("mm-copied").textContent = r.error || "Saved"; setTimeout(() => ($("mm-copied").textContent = ""), r.error ? 8000 : 2500);
 });
+$("sr-save").addEventListener("click", async () => {
+  const r = await post("/api/reply-templates", { text: $("sr-text").value });
+  $("sr-saved").textContent = r.error || "Saved"; setTimeout(() => ($("sr-saved").textContent = ""), r.error ? 8000 : 2500);
+  if (!r.error) loadSavedReplies();
+});
+$("sr-reset").addEventListener("click", async () => {
+  if (!confirm("Put the saved replies back to the originals?")) return;
+  await post("/api/reply-templates", { reset: true });
+  loadSavedReplies();
+});
 $("em-reset").addEventListener("click", async () => {
   if (!confirm("Put both emails back to the original text?")) return;
   await post("/api/email-template", { reset: true });
@@ -1841,7 +1997,7 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (!$("pane-calls").hidden) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
