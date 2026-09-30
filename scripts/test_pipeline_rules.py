@@ -915,6 +915,8 @@ class Quotes(unittest.TestCase):
         b = sent["body"]
         self.assertEqual((b["client_name"], b["slug"], b["vat_rate"], b["deposit_percent"]), ("Kerr Roofing", "kerr-roofing-4a7bc2", 0, 50))
         self.assertEqual(b["line_items"][0]["unit_price_pence"], 250000)
+        self.assertIn("A 50% deposit is due when you accept", b["terms"])
+        self.assertTrue(b["exclusions"] and b["payment_terms"].startswith("50% deposit"))
         link = quotes.email_link("info@kerr.co.uk", "Bill Kerr", "Kerr Roofing", out, "Jack")
         self.assertTrue(link.startswith("mailto:info%40kerr.co.uk?subject="))
         body = urllib.parse.unquote(link.split("body=", 1)[1])
