@@ -49,7 +49,7 @@ export function BookCallButton({ href = '#book', label = 'Book a 15-minute call'
 /** The contact page's booking section: heading, one line, the calendar. */
 export function BookCallSection() {
   return (
-    <section id="book" className="scroll-mt-24 border-t border-border py-16 sm:py-20">
+    <section id="book" data-print="hide" className="scroll-mt-24 border-t border-border py-16 sm:py-20">
       <div className="mx-auto max-w-4xl px-5 sm:px-8">
         <Reveal>
           <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Rather talk?</span>
@@ -70,7 +70,7 @@ export function BookCallSection() {
 /** The preview pages' band: message, or book a call on the calendar right here. */
 export function BookCallBand({ contactHref, firmName }: { contactHref: string; firmName: string }) {
   return (
-    <section id="book" className="scroll-mt-24 border-t border-border py-16 sm:py-20">
+    <section id="book" data-print="hide" className="scroll-mt-24 border-t border-border py-16 sm:py-20">
       <div className="mx-auto max-w-4xl px-5 sm:px-8">
         <Reveal className="rounded-2xl border border-blueprint/40 bg-card p-7 sm:p-10">
           <h2 className="font-display text-balance text-2xl font-bold tracking-tight sm:text-3xl">

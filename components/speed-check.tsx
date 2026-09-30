@@ -187,7 +187,7 @@ export function SpeedCheck({
   }
 
   return (
-    <section className="border-t border-border py-24 sm:py-28">
+    <section data-print="hide" className="border-t border-border py-24 sm:py-28">
       <div className="mx-auto max-w-4xl px-5 sm:px-8">
         <Reveal className="text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">

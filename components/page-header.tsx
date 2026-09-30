@@ -69,7 +69,7 @@ export function HeaderActions({
 }) {
   return (
     <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div data-print="hide" className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Link
           href={primaryHref}
           data-magnetic
