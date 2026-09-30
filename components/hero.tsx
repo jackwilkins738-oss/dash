@@ -7,11 +7,9 @@ import { TrustBadges } from '@/components/trust-badges'
 const HEADLINE = "The digital infrastructure ambitious trade businesses run on."
 const WORDS = HEADLINE.split(' ')
 
-// A server component. The reveal (the headline rising word by word, then the
-// rest settling in behind it) is CSS in app/intro.css, timed to start as the
-// preloader curtain lifts. It used to be a GSAP effect that waited for the JS
-// to arrive and hydrate, then waited again for the preloader to finish - a
-// chain that, on a phone, kept the copy invisible for several seconds.
+// A server component. The reveal (the headline rising word by word, the rest
+// settling in behind it, the preview being built from a blueprint) is CSS in
+// app/intro.css and starts on the first paint.
 export function Hero() {
   return (
     <section className="relative flex min-h-svh items-center overflow-hidden">
@@ -70,7 +68,7 @@ export function Hero() {
                 <Link
                   href="/contact"
                   data-magnetic
-                  className="btn-chamfer btn-sheen group inline-flex items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
+                  className="hero-cta btn-chamfer btn-sheen group inline-flex items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
                 >
                   Start your build
                   <span className="transition-transform group-hover:translate-x-1">&rarr;</span>

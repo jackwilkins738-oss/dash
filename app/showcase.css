@@ -572,11 +572,10 @@
   animation-play-state: paused;
 }
 
-/* Entrance, timed to arrive as the preloader curtain lifts (app/intro.css).
-   Pure CSS, so it starts on the first paint. Returning visitors never see
-   it: intro.css turns .sc-tilt's animation off under .pl-seen. `backwards`
-   rather than `forwards` so that once it ends the element falls back to its
-   normal, cursor-driven transform. */
+/* Entrance, part of the hero's opening (app/intro.css): it flies in as a
+   blueprint that is then built in front of the visitor. Pure CSS, so it
+   starts on the first paint. `backwards` rather than `forwards` so that once
+   it ends the element falls back to its normal, cursor-driven transform. */
 @keyframes sc-intro {
   from {
     opacity: 0;
@@ -584,7 +583,7 @@
   }
 }
 .sc-tilt {
-  animation: sc-intro calc(1.5s * var(--k, 0.7)) cubic-bezier(0.16, 1, 0.3, 1) calc(1.05s * var(--k, 0.7)) backwards;
+  animation: sc-intro 1s cubic-bezier(0.16, 1, 0.3, 1) 0.05s backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
