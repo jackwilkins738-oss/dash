@@ -83,6 +83,9 @@ const nextConfig = {
               // homepage (components/speed-check.tsx) - it calls Google
               // directly from the visitor's own browser, no server involved.
               "connect-src 'self' https://admin.scalardigital.co.uk https://wfyzsnyfliohevpjpuib.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://www.googleapis.com",
+              // The Cal.com booking calendar on /contact and the preview pages
+              // (components/book-call.tsx) is an iframe of cal.com.
+              "frame-src https://cal.com https://app.cal.com",
               "frame-ancestors 'none'",
               "object-src 'none'",
               "base-uri 'self'",
