@@ -649,6 +649,79 @@ def build(folder: Path, draft: bool = False) -> dict:
     return {"folder": str(out), "pages": sorted(pages), "draft": draft}
 
 
+UK_POSTCODE = re.compile(r"\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\s*$", re.I)
+
+
+def _years(text: str, this_year: int) -> int | None:
+    """'Since 2009' / 'est. 2009' / '15 years' / '15' -> years trading; anything else -> None (left for you to ask)."""
+    t = str(text or "").lower()
+    year = re.search(r"\b(19[5-9]\d|20[0-4]\d)\b", t)
+    if year and int(year.group(1)) <= this_year:
+        return max(1, this_year - int(year.group(1)))
+    n = re.fullmatch(r"\s*(?:over |about |nearly )?(\d{1,2})\+?\s*(?:years?|yrs?)?\s*", t)
+    return int(n.group(1)) if n and int(n.group(1)) > 0 else None
+
+
+def _whatsapp(number: str) -> str:
+    """A UK mobile as wa.me wants it: 07700 900123 -> 447700900123. Anything else isn't guessed at."""
+    digits = re.sub(r"[^0-9]", "", str(number or ""))
+    if digits.startswith("07") and len(digits) == 11:
+        return "44" + digits[1:]
+    if digits.startswith("447") and len(digits) == 12:
+        return digits
+    return ""
+
+
+def _address(text: str) -> dict:
+    """'12 High St, Maidstone, ME14 1AB' -> the parts; the town is marked to confirm if it can't be told apart."""
+    raw = str(text or "").strip()
+    if not raw:
+        return {"show": False}
+    pc = UK_POSTCODE.search(raw)
+    rest = raw[: pc.start()].strip(" ,") if pc else raw
+    parts = [x.strip() for x in rest.split(",") if x.strip()]
+    town = parts[-1] if len(parts) >= 2 else f"[Confirm: town in \"{raw}\"]"
+    return {"show": True, "street": ", ".join(parts[:-1]) if len(parts) >= 2 else rest, "town": town,
+            "postcode": pc.group(1).upper() if pc else ""}
+
+
+def _review_quotes(text: str) -> list[dict]:
+    """One review per line (or paragraph): 'Brilliant job - Sue, Guildford' -> {text, name}. Only what they gave us."""
+    out = []
+    for line in re.split(r"\n\s*\n|\n", str(text or "")):
+        line = line.strip().strip("•*").strip()
+        if len(line) < 8:
+            continue
+        m = re.match(r'^(.*?)\s+[-–—]\s+([^-–—"“”]{2,60})$', line)
+        body, name = (m.group(1), m.group(2).strip()) if m else (line, "")
+        body = body.strip().strip('"“”').strip()
+        if body:
+            out.append({"text": body[:600], "name": name})
+    return out[:8]
+
+
+def _answer_faqs(faqs: list[dict], told: dict) -> list[dict]:
+    """Fill the trade's usual questions from what the client told us; unanswered ones stay [Confirm ...]."""
+    free, lead, callouts, planning, guarantee = (str(told.get(k) or "").strip() for k in
+                                                  ("free_quotes", "lead_time", "call_outs", "planning", "guarantee"))
+    out = []
+    for faq in faqs:
+        q, a = faq["q"], faq["a"]
+        ql = q.lower()
+        if "free quote" in ql and free:
+            a = ("Yes - quotes are free and there's no obligation." if free == "Yes" else "We charge for quotes, and take it off the price if you go ahead. [Confirm the details]") + (f" {lead}." if lead else "")
+        elif ("emergency" in ql or "call-out" in ql) and callouts:
+            a = callouts
+        elif "planning" in ql and planning:
+            a = planning
+        elif ("guarantee" in ql) and guarantee:
+            a = f"Yes - {guarantee[0].lower() + guarantee[1:]}."
+        elif ("how far ahead" in ql or "how soon" in ql) and lead:
+            a = lead
+        out.append({"q": q, "a": a.replace("..", ".")})
+    return out
+
+
 def starter_config(f: dict) -> dict:
     """A site.json from what "Draft their site" already knows (site_draft.facts plus the client's onboarding
     answers, if they've sent them). Whatever the client told us is taken as confirmed; whatever was only
@@ -663,22 +736,29 @@ def starter_config(f: dict) -> dict:
     cfg["trade"] = re.sub(r"[^a-z]", "", str(f.get("trade") or "").lower().split(" ")[0]) or "building"
     from urllib.parse import urlparse
 
-    website = str(f.get("website") or "")
+    website = str(told.get("domain") or f.get("website") or "")
     cfg["domain"] = confirm((urlparse(website if "//" in website else "//" + website).hostname or "").removeprefix("www."),
                             "their domain")
     cfg["phone"] = told.get("phone") or confirm(f.get("phone"), "the number customers should ring")
     cfg["email"] = told.get("enquiry_email") or confirm(f.get("email"), "the email to show")
+    cfg["whatsapp"] = _whatsapp(told.get("whatsapp") or "") or _whatsapp(cfg["phone"])
     cfg["hours"] = told.get("hours") or cfg["hours"]
     if site.get("colour") and HEX.match(str(site["colour"])):
         cfg["colour"] = site["colour"]
-    if told.get("years_trading") and str(told["years_trading"]).isdigit():
-        cfg["years_trading"] = int(told["years_trading"])
+    if told.get("years_trading"):
+        cfg["years_trading"] = _years(told["years_trading"], date.today().year)
     cfg["guarantee"] = told.get("guarantee") or ""
     extras = [told.get("memberships"), (f"£{told['insurance_amount']} public liability" if told.get("insurance_amount") else told.get("insurance"))]
     cfg["accreditations"] = [x for x in (lines(extras[0]) + [extras[1]]) if x][:3]
-    services = lines(told.get("services")) or [f"[Confirm: {x}]" for x in (site.get("services") or [])[:6]]
+    # One per line; commas only separate them when it's all on one line ("Roofs, gutters, chimneys"),
+    # so "Flat roofs - GRP and EPDM, 20-year guarantee" keeps its summary whole.
+    svc_text = str(told.get("services") or "")
+    services = ([x.strip(" -*•\t") for x in svc_text.splitlines() if x.strip(" -*•\t")] if "\n" in svc_text.strip()
+                else lines(svc_text)) or [f"[Confirm: {x}]" for x in (site.get("services") or [])[:6]]
     if services:
-        cfg["services"] = [{"name": n, "summary": "[Confirm: one line about it]", "details": "", "photo": ""} for n in services]
+        split = [re.split(r"\s+[-–—:]\s+", n, maxsplit=1) for n in services]
+        cfg["services"] = [{"name": p[0].strip(), "summary": p[1].strip() if len(p) > 1 else "[Confirm: one line about it]",
+                            "details": "", "photo": ""} for p in split]
     areas = lines(told.get("areas")) or ([f"[Confirm: {f['area']}]"] if f.get("area") else [])
     if areas:
         cfg["areas"] = [{"town": a, "note": ""} for a in areas]
@@ -694,9 +774,18 @@ def starter_config(f: dict) -> dict:
     for svc in cfg["services"]:
         name = re.sub(r"^\[Confirm: |\]$", "", svc["name"]).lower()
         match = known.get(name) or next((line for k, line in known.items() if k in name or name in k), None)
-        if match:
+        if match and svc["summary"].startswith("[Confirm"):  # their own words win over the trade's
             svc["summary"] = match
-    cfg["faqs"] = [{"q": q, "a": a} for q, a in copy.get("faqs") or []]
+    cfg["faqs"] = _answer_faqs([{"q": q, "a": a} for q, a in copy.get("faqs") or []], told)
+    link = str(told.get("reviews_link") or "").strip()
+    if link.startswith("https://"):
+        # The reviews section's link says "on Google", so only a Google link goes there; any other
+        # profile (Checkatrade, Trustpilot) is still linked from the business's structured data.
+        if re.search(r"(^https://(www\.)?google\.|g\.page/|maps\.app\.goo\.gl|goo\.gl/maps)", link):
+            cfg["reviews"]["google_url"] = link
+        else:
+            cfg["social"] = [link]
+    cfg["reviews"]["quotes"] = _review_quotes(told.get("review_quotes"))
     if told.get("about"):
         cfg["lede"] = str(told["about"]).strip()[:300]
     logo = next((x["path"] for x in files if x.get("kind") == "logo"), "")
@@ -707,7 +796,7 @@ def starter_config(f: dict) -> dict:
     if f.get("company_number"):
         cfg["company"] = {"legal_name": f.get("registered_name") or "", "number": f["company_number"],
                           "registered_office": f.get("address") or "", "vat": ""}
-    cfg["address"] = {"show": str(told.get("show_address") or "").lower() in ("yes", "true", "1")}
+    cfg["address"] = _address(told.get("show_address"))
     return cfg
 
 
