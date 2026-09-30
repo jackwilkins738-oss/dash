@@ -10,11 +10,13 @@ every email sent:
     replied   they wrote back (bounces and out-of-office don't count)
     keen      the reply read as interested
     quoted    you sent them a quote
-    won       you logged Won for them
+    won       you logged Won for them, or they accepted their quote online
 
 ...split by email version (A/B - see the panel's "Version B"), by trade, and
-for the last 7 days. Also counts your calls, and how many were real
-conversations. The autopilot texts it to you every Monday.
+for the last 7 days. Then the money - what's been quoted and won, and how
+many emails it takes to win a job - your letters (who scanned the code), and
+your calls, and how many were real conversations. The autopilot texts it to
+you every Monday.
 
 Small numbers mislead: a version isn't called better until each has 100+
 sends and at least 5 replies between them.
@@ -59,6 +61,8 @@ def gather(outreach: Path, views: dict[str, dict] | None, today: date | None = N
             keen_names.add(_lower(r.get("business")))
     quoted = {_lower(r.get("business")) for r in eb._rows(outreach / "quotes-sent.csv")[1]}
     won = {_lower(r.get("business")) for r in eb._rows(outreach / "calls.csv")[1] if r.get("outcome") == "Won"}
+    # A quote accepted online marks their prospect "won" on the dashboard - no call needed.
+    won_slugs = {slug for slug, v in (views or {}).items() if v.get("status") == "won"}
 
     out = []
     for r in eb._rows(outreach / eb.SENT)[1]:
@@ -78,7 +82,7 @@ def gather(outreach: Path, views: dict[str, dict] | None, today: date | None = N
             "replied": email in replied_from or (name and name in replied_names),
             "keen": email in keen_from or (name and name in keen_names),
             "quoted": bool(name) and name in quoted,
-            "won": bool(name) and name in won,
+            "won": (bool(name) and name in won) or slug in won_slugs,
         })
     return out
 
@@ -119,6 +123,40 @@ def verdict(rows: list[dict]) -> str:
     return f"Version {best} is getting clearly more replies - make it the main email, and test a new B against it."
 
 
+def _money(pounds: float) -> str:
+    return f"£{pounds:,.0f}"
+
+
+def money(outreach: Path, rows: list[dict]) -> list[str]:
+    """What's been quoted and won in pounds (each firm's latest quote), and emails sent per job won."""
+    latest: dict[str, float] = {}
+    for r in eb._rows(outreach / "quotes-sent.csv")[1]:
+        try:
+            latest[_lower(r.get("business"))] = float(r.get("total") or 0)
+        except ValueError:
+            continue
+    if not latest:
+        return []
+    won = {r["business"] for r in rows if r["won"]}
+    won_value = sum(v for k, v in latest.items() if k in won)
+    out = [f"Money: {_money(sum(latest.values()))} quoted to {len(latest)} firm{'s' if len(latest) != 1 else ''}"
+           + (f", {_money(won_value)} won from {len(won & latest.keys())}" if won_value else ", none won yet")]
+    wins = sum(bool(r["won"]) for r in rows)
+    if wins:
+        out.append(f"One job won for every {round(len(rows) / wins)} emails sent")
+    return out
+
+
+def letters(views: dict[str, dict] | None) -> str:
+    """Letters can't be tracked like emails - but a scan of the QR code is a view of their preview."""
+    sent = [v for v in (views or {}).values() if v.get("channel") == "letter"]
+    if not sent:
+        return ""
+    scanned = sum(1 for v in sent if (v.get("view_count") or 0) > 0)
+    won = sum(1 for v in sent if v.get("status") == "won")
+    return f"Letters: {len(sent)} sent · {_pct(scanned, len(sent))} scanned the code ({scanned})" + (f" · {won} won" if won else "")
+
+
 def scorecard(outreach: Path, views: dict[str, dict] | None, today: date | None = None) -> list[str]:
     today = today or date.today()
     rows = gather(outreach, views, today)
@@ -138,6 +176,9 @@ def scorecard(outreach: Path, views: dict[str, dict] | None, today: date | None 
     if len(by_trade) > 1:
         for trade, rs in sorted(by_trade.items(), key=lambda kv: -len(kv[1])):
             out.append(line(trade, rs))
+    out += money(outreach, rows)
+    if letters(views):
+        out.append(letters(views))
     calls = [r for r in eb._rows(outreach / "calls.csv")[1] if (r.get("at") or "")[:10] > (today - timedelta(days=7)).isoformat()]
     if calls:
         spoke = sum(1 for r in calls if r.get("outcome") in SPOKE)
