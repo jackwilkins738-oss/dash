@@ -211,10 +211,6 @@ class SiteKit(unittest.TestCase):
             sk.init(self.folder)  # never overwrites work
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class PanelButtons(unittest.TestCase):
     """Build site / Publish site on the panel: the right command, and never a draft made live."""
 
@@ -255,3 +251,72 @@ class PanelButtons(unittest.TestCase):
         self.assertIn("draft build", err)
         (site / "index.html").write_text("<h1>Live</h1>")
         self.assertIsNotNone(self.steps(action="publish_site")[0])
+
+
+class StarterFromOnboarding(unittest.TestCase):
+    """What the client typed on their onboarding page lands in the right place in site.json."""
+
+    TOLD = {
+        "services": "Flat roofs - GRP and EPDM, 20-year guarantee\nRoof repairs",
+        "areas": "Guildford\nWoking",
+        "years_trading": "Since 2009",
+        "whatsapp": "07700 900456",
+        "show_address": "Unit 4, Mill Lane, Guildford, GU1 2AB",
+        "reviews_link": "https://g.page/r/kerr",
+        "review_quotes": '"Brilliant job, tidy and on time" - Sue, Guildford\n\nFixed our leak the same day. - Tom',
+        "free_quotes": "Yes",
+        "lead_time": "Visit within a week",
+        "call_outs": "Yes, 7 days a week for leaks.",
+        "guarantee": "10 years on new roofs",
+        "domain": "https://www.kerrroofing.co.uk/",
+    }
+
+    def cfg(self, **told):
+        import site_draft
+
+        return sk.starter_config({"business": "Kerr Roofing", "trade": "Roofing", "phone": "01483 111222",
+                                  "told": {**self.TOLD, **told}, "copy": site_draft.TRADE_COPY["roofing"]})
+
+    def test_the_basics_they_typed(self):
+        c = self.cfg()
+        self.assertEqual(c["domain"], "kerrroofing.co.uk")
+        self.assertEqual(c["whatsapp"], "447700900456")
+        self.assertEqual(c["years_trading"], sk.date.today().year - 2009)
+        self.assertEqual(c["services"][0], {"name": "Flat roofs", "summary": "GRP and EPDM, 20-year guarantee", "details": "", "photo": ""})
+        self.assertEqual(c["services"][1]["name"], "Roof repairs")
+        self.assertNotIn("[Confirm", c["services"][1]["summary"])  # the trade's own line fills a gap, not their words
+
+    def test_address_is_kept_not_thrown_away(self):
+        self.assertEqual(self.cfg()["address"], {"show": True, "street": "Unit 4, Mill Lane", "town": "Guildford", "postcode": "GU1 2AB"})
+        self.assertEqual(self.cfg(show_address="")["address"], {"show": False})
+        self.assertIn("[Confirm", self.cfg(show_address="The yard behind the pub")["address"]["town"])
+
+    def test_reviews_and_faqs_come_from_them(self):
+        c = self.cfg()
+        self.assertEqual(c["reviews"]["google_url"], "https://g.page/r/kerr")
+        self.assertEqual(c["reviews"]["quotes"], [{"text": "Brilliant job, tidy and on time", "name": "Sue, Guildford"},
+                                                  {"text": "Fixed our leak the same day.", "name": "Tom"}])
+        self.assertIsNone(c["reviews"]["rating"])  # quotes never become an invented star rating
+        answers = {f["q"]: f["a"] for f in c["faqs"]}
+        self.assertEqual(answers["Do you give free quotes?"], "Yes - quotes are free and there's no obligation. Visit within a week.")
+        self.assertEqual(answers["Can you help with an emergency leak?"], "Yes, 7 days a week for leaks.")
+        self.assertEqual(answers["Is the work guaranteed?"], "Yes - 10 years on new roofs.")
+
+    def test_a_non_google_reviews_link_isnt_called_google(self):
+        c = self.cfg(reviews_link="https://www.checkatrade.com/trades/kerr")
+        self.assertEqual(c["reviews"]["google_url"], "")
+        self.assertEqual(c["social"], ["https://www.checkatrade.com/trades/kerr"])
+
+    def test_unanswered_stays_to_confirm(self):
+        c = self.cfg(free_quotes="", call_outs="", guarantee="", years_trading="a good while", whatsapp="")
+        self.assertTrue(all("[Confirm" in f["a"] for f in c["faqs"]))
+        self.assertIsNone(c["years_trading"])
+        self.assertEqual(c["whatsapp"], "")  # a landline isn't a WhatsApp number
+
+    def test_years_parsing(self):
+        for text, want in (("15 years", 15), ("over 20 yrs", 20), ("est. 1998", 2026 - 1998), ("2030", None), ("ages", None)):
+            self.assertEqual(sk._years(text, 2026), want, text)
+
+
+if __name__ == "__main__":
+    unittest.main()
