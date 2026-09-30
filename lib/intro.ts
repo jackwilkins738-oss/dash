@@ -21,4 +21,10 @@
 export const INTRO_SEEN_KEY = 'scalar-preloaded'
 export const INTRO_SEEN_CLASS = 'pl-seen'
 
-export const INTRO_HEAD_SCRIPT = `try{var d=document.documentElement,k="${INTRO_SEEN_KEY}";if(sessionStorage.getItem(k)==="1")d.classList.add("${INTRO_SEEN_CLASS}");else sessionStorage.setItem(k,"1")}catch(e){}`
+// A personalised preview page (/for/<firm>) never gets the intro: that visitor
+// came from a cold email to see their own site, and a second of curtain is a
+// second of them not seeing it. The class goes on before sessionStorage is
+// touched, so a blocked storage can't bring the curtain back there.
+export const NO_INTRO_PATH = /^\/for\//
+
+export const INTRO_HEAD_SCRIPT = `try{var d=document.documentElement,k="${INTRO_SEEN_KEY}";if(${NO_INTRO_PATH}.test(location.pathname))d.classList.add("${INTRO_SEEN_CLASS}");if(sessionStorage.getItem(k)==="1")d.classList.add("${INTRO_SEEN_CLASS}");else sessionStorage.setItem(k,"1")}catch(e){}`
