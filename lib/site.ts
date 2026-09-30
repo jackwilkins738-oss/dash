@@ -7,6 +7,8 @@ export const SITE = {
   email: 'hello@scalardigital.co.uk',
   phone: '+447401696272',
   linkedin: 'https://www.linkedin.com/in/scalar-digital-868841438/',
+  // A 15-minute call, for anyone who'd rather talk than type.
+  booking: 'https://cal.com/scalardigital/15min',
   logo: 'https://www.scalardigital.co.uk/brand/logo-square-512.png',
   description:
     'Fast, hand-coded websites for UK roofers, builders, loft conversion, driveway and landscaping firms. Fixed price from £750, and you own it outright.',
