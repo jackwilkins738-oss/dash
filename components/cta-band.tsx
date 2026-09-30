@@ -29,6 +29,12 @@ export function CtaBand() {
                 Start your build
                 <span className="transition-transform group-hover:translate-x-1">&rarr;</span>
               </Link>
+              <Link
+                href="/contact#book"
+                className="btn-chamfer inline-flex items-center justify-center gap-2 border border-blueprint/60 bg-blueprint/10 px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-foreground transition-colors hover:bg-blueprint hover:text-primary-foreground"
+              >
+                Book a 15-min call
+              </Link>
               <a
                 href="https://wa.me/66638306449"
                 target="_blank"
