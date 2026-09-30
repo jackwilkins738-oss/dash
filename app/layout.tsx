@@ -5,9 +5,7 @@ import './globals.css'
 import './showcase.css'
 import './race.css'
 import './intro.css'
-import { INTRO_HEAD_SCRIPT } from '@/lib/intro'
 import { SmoothScroll } from '@/components/smooth-scroll'
-import { Preloader } from '@/components/preloader'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
 import { WhatsAppButton } from '@/components/whatsapp-button'
@@ -146,21 +144,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    // suppressHydrationWarning: the script in <head> below adds `pl-seen` to
-    // this element before React hydrates, so its className legitimately
-    // differs from the server's by that one class. It only covers this
-    // element's own attributes, not anything inside it.
-    <html
-      lang="en-GB"
-      className={`${bricolage.variable} ${instrumentSans.variable} ${plexMono.variable}`}
-      suppressHydrationWarning
-    >
+    <html lang="en-GB" className={`${bricolage.variable} ${instrumentSans.variable} ${plexMono.variable}`}>
       <head>
-        {/* Decides, before the first paint, whether this visitor has already
-            seen the opening sequence this session (lib/intro.ts). It has to be
-            synchronous and inline: anything deferred runs after paint, which
-            for a returning visitor means the intro flashes first. ~150 bytes. */}
-        <script dangerouslySetInnerHTML={{ __html: INTRO_HEAD_SCRIPT }} />
         {/* Both are talked to on every page load (track.js itself, then
             its own pageview/lead calls to Supabase) - preconnecting gets
             the DNS+TLS handshake done ahead of when those requests
@@ -170,7 +155,6 @@ export default function RootLayout({
       </head>
       <body className="antialiased font-sans">
         <JsonLd data={structuredData} />
-        <Preloader />
         <SmoothScroll />
         <InteractionLayer />
         <RevealController />

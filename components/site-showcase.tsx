@@ -233,6 +233,8 @@ export function SiteShowcase({
 
           {/* ---- the website ---- */}
           <div className="sc-layer sc-window" style={{ '--z': '0px' } as Vars} aria-hidden="true">
+            {/* The blueprint the site is built from on first load (app/intro.css). */}
+            <span className="sc-blueprint" />
             <div className="sc-chrome">
               <span className="sc-dot" />
               <span className="sc-dot" />
