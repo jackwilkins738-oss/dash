@@ -338,6 +338,15 @@ def main() -> None:
                 pass
     counts = act(outreach, replies)
     alert(replies)
+    # A Mailmeteor batch waiting to be marked as sent: tick off whatever is already in Sent.
+    try:
+        import mailmeteor_sync
+
+        firsts, follows = mailmeteor_sync.sync(outreach, inboxes, host)
+        if firsts or follows:
+            print(f"Mailmeteor: {firsts} first email(s) and {follows} follow-up(s) found in Sent - marked as sent.")
+    except Exception as e:  # never let this stop the replies being reported
+        print(f"  (Couldn't check Sent for Mailmeteor sends: {e})")
     if not replies:
         print("No new replies from anyone you've contacted.")
         return

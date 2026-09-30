@@ -67,7 +67,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "34"
+PANEL_VERSION = "35"
 MAX_LOG_LINES = 5000
 
 
@@ -81,6 +81,44 @@ def outreach_dir() -> Path:
 
 OUTREACH = outreach_dir()
 SETTINGS_FILE = OUTREACH / "panel.env"
+
+
+# ---------------------------------------------------------------- mailmeteor
+
+_MM_LOCK = threading.Lock()
+_MM_LAST = [0.0]
+MM_EVERY = 600  # seconds between Sent-folder checks while the panel is open
+
+
+def _sync_mailmeteor_soon() -> None:
+    """With a Mailmeteor batch waiting, check Sent in the background - at most every 10 minutes.
+
+    The page asks for /api/batch every couple of minutes, so a batch Mailmeteor sends is ticked
+    off (and counted in "Sent today") without anyone pressing Mark batch as sent.
+    """
+    import mailmeteor_sync
+
+    if not OUTREACH.is_dir() or not mailmeteor_sync.waiting(OUTREACH) or time.time() - _MM_LAST[0] < MM_EVERY:
+        return
+    if JOB.running():
+        return  # a send (or anything else) writing the log right now - check again next time
+    if not _MM_LOCK.acquire(blocking=False):
+        return
+    _MM_LAST[0] = time.time()
+
+    def run() -> None:
+        try:
+            import mail_accounts
+
+            env = {**os.environ, **load_settings()}
+            host = env.get("MAIL_IMAP_HOST", "").strip() or "imap.gmail.com"
+            mailmeteor_sync.sync(OUTREACH, mail_accounts.accounts(env), host)
+        except Exception:
+            pass
+        finally:
+            _MM_LOCK.release()
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 # ---------------------------------------------------------------- settings
@@ -1057,6 +1095,7 @@ class Handler(BaseHTTPRequestHandler):
             import send_email
             from datetime import date
 
+            _sync_mailmeteor_soon()
             # Today's sending, per inbox. Only your own sending addresses and counts leave
             # this function - never a prospect's address.
             inboxes = [a.address for a in mail_accounts.accounts({**os.environ, **load_settings()})]
@@ -1380,7 +1419,7 @@ PAGE = r"""<!doctype html>
         <p>The next firms not yet emailed, every link re-checked (the autopilot makes one each morning). <span id="batch-info"></span></p>
         <p style="margin:6px 0 0"><b id="sent-today"></b><br><span class="hint" id="sent-by-inbox"></span></p>
         <div class="row"><button data-action="send_test" data-test-kind="batch">Send a test to yourself</button><button class="primary" data-action="send_batch">Send today's batch</button></div>
-        <p class="hint">Sends from your own email, 40-90 seconds apart (about half an hour for 20), each recorded as it goes - stop any time and press Send again to carry on. Anyone who said no or replied since is left out. Using Mailmeteor instead? Import <b>mailmeteor-batch-&lt;date&gt;.csv</b>, send, then <button data-action="batch_sent" style="padding:2px 8px">Mark batch as sent</button></p>
+        <p class="hint">Sends from your own email, 40-90 seconds apart (about half an hour for 20), each recorded as it goes - stop any time and press Send again to carry on. Anyone who said no or replied since is left out. Using Mailmeteor instead? Import <b>mailmeteor-batch-&lt;date&gt;.csv</b> and send - the panel spots them in your Sent folder and marks them itself (or <button data-action="batch_sent" style="padding:2px 8px">Mark batch as sent</button> now).</p>
       </div>
       <div class="action">
         <div class="row" style="margin:0"><button data-action="followups">Make follow-up batch</button><input type="number" id="followup-size" value="20" min="1" max="500"><span class="hint">after</span><input type="number" id="followup-days" value="5" min="1" max="60" style="width:60px"><span class="hint">days</span></div>
@@ -1892,6 +1931,9 @@ async function loadBatch() {
   }
 }
 $("batch-scope").addEventListener("change", loadBatch);
+// Keeps "Sent today" current while the panel is open - and lets the server tick off a Mailmeteor
+// batch from the Sent folder as it goes out.
+setInterval(() => { if (!document.hidden) loadBatch(); }, 120000);
 
 // ---- Letters
 async function loadLetters() {
