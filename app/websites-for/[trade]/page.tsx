@@ -112,7 +112,7 @@ export default async function TradePage({ params }: Props) {
           visitor lands first. */}
       <ExampleBuild />
 
-      <section data-wire-section className="border-t border-border py-20 sm:py-24">
+      <section className="border-t border-border py-20 sm:py-24">
         <div className="mx-auto max-w-2xl px-5 text-center sm:px-8">
           <Reveal>
             <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">

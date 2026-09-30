@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -86,17 +86,54 @@ function Panel({ title, aside, children }: { title: string; aside?: ReactNode; c
   )
 }
 
-function Kpi({ label, value, tone }: { label: string; value: string; tone?: 'critical' }) {
+function Kpi({ label, amount, format = String, tone }: { label: string; amount: number; format?: (n: number) => string; tone?: 'critical' }) {
   return (
     <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.hairline }}>
       <p className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: C.muted }}>
         {label}
       </p>
-      <p className="mt-1.5 font-display text-2xl font-bold" style={{ color: tone === 'critical' ? C.critical : C.ink }}>
-        {value}
+      <p className="mt-1.5 font-display text-2xl font-bold tabular-nums" style={{ color: tone === 'critical' ? C.critical : C.ink }}>
+        <CountUp to={amount} format={format} />
       </p>
     </div>
   )
+}
+
+// The figures run up from zero the first time the dashboard comes into view,
+// the way a real one fills in as it loads. The server renders the final value,
+// so without JavaScript (or under reduced motion, or if it's already on screen
+// when this runs) it simply reads correctly. It writes the text node directly
+// rather than through state: one DOM write per frame, no re-renders.
+function CountUp({ to, format }: { to: number; format: (n: number) => string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (el.getBoundingClientRect().top < window.innerHeight) return
+    el.textContent = format(0)
+    let raf = 0
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return
+        io.disconnect()
+        const start = performance.now()
+        const tick = (now: number) => {
+          const t = Math.min(1, (now - start) / 1400)
+          el.textContent = format(Math.round(to * (1 - Math.pow(1 - t, 3))))
+          if (t < 1) raf = requestAnimationFrame(tick)
+        }
+        raf = requestAnimationFrame(tick)
+      },
+      { threshold: 0.6 },
+    )
+    io.observe(el)
+    return () => {
+      io.disconnect()
+      cancelAnimationFrame(raf)
+      el.textContent = format(to)
+    }
+  }, [to, format])
+  return <span ref={ref}>{format(to)}</span>
 }
 
 function Table({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
@@ -158,10 +195,10 @@ function DashboardView() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Active jobs" value="3" />
-        <Kpi label="Live pipeline" value={gbp(166500)} />
-        <Kpi label="Outstanding" value={gbp(39650)} />
-        <Kpi label="Overdue" value={gbp(18400)} tone="critical" />
+        <Kpi label="Active jobs" amount={3} />
+        <Kpi label="Live pipeline" amount={166500} format={gbp} />
+        <Kpi label="Outstanding" amount={39650} format={gbp} />
+        <Kpi label="Overdue" amount={18400} format={gbp} tone="critical" />
       </div>
       <div className="grid gap-4 lg:grid-cols-5">
         <div className="lg:col-span-3">
@@ -210,10 +247,10 @@ function CashflowView() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Outstanding" value={gbp(39650)} />
-        <Kpi label="Overdue" value={gbp(18400)} tone="critical" />
-        <Kpi label="Due in 7 days" value={gbp(9250)} />
-        <Kpi label="Paid to date" value={gbp(26000)} />
+        <Kpi label="Outstanding" amount={39650} format={gbp} />
+        <Kpi label="Overdue" amount={18400} format={gbp} tone="critical" />
+        <Kpi label="Due in 7 days" amount={9250} format={gbp} />
+        <Kpi label="Paid to date" amount={26000} format={gbp} />
       </div>
       <Panel title="Who owes you, and for how long">
         <Bar label="Not yet due" pct={54} right={gbp(21250)} color={C.brand} />
@@ -447,7 +484,7 @@ export function DashShowcase() {
         </Reveal>
 
         <Reveal className="mt-12">
-          <div className="overflow-hidden rounded-2xl border border-border shadow-[0_30px_70px_-30px_rgba(232,147,94,0.35)]">
+          <div className="dash-rise overflow-hidden rounded-2xl border border-border shadow-[0_30px_70px_-30px_rgba(232,147,94,0.35)]">
             {/* Browser chrome */}
             <div className="flex items-center gap-2 border-b border-border bg-card/70 px-4 py-3">
               <span className="h-2.5 w-2.5 rounded-full bg-[#e8935e]/70" />

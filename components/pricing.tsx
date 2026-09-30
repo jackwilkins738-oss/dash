@@ -159,9 +159,10 @@ function PriceCard({
   return (
     <div
       className={`relative overflow-hidden rounded-2xl border p-8 sm:p-10 ${
-        highlighted ? 'border-blueprint/40 bg-card' : 'border-border bg-card/40'
+        highlighted ? 'border-blueprint/40 bg-card shadow-[0_30px_80px_-30px_oklch(0.62_0.135_244/0.55)]' : 'border-border bg-card/40'
       }`}
     >
+      {highlighted && <div className="price-beam" aria-hidden="true" />}
       {highlighted && (
         <div
           className="pointer-events-none absolute inset-0 opacity-70"

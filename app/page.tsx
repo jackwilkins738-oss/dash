@@ -1,5 +1,4 @@
 import { Hero } from '@/components/hero'
-import { PowerCable } from '@/components/power-cable-loader'
 import { ExampleBuild } from '@/components/example-build'
 import { DashShowcase } from '@/components/dash-showcase'
 import { CtaBand } from '@/components/cta-band'
@@ -11,6 +10,7 @@ import { Comparison } from '@/components/comparison'
 import { SpeedRace } from '@/components/speed-race'
 import { SpeedCheck } from '@/components/speed-check'
 import { CaseStudies } from '@/components/case-studies'
+import { CutWire } from '@/components/cut-wire'
 
 const PRINCIPLES = [
   {
@@ -38,7 +38,6 @@ const PRINCIPLES = [
 export default function HomePage() {
   return (
     <main className="relative isolate">
-      <PowerCable />
       {/* The order is the argument. Promise (hero), then proof before anything
           else is claimed (real builds), then "this is for me" (trades), then
           what actually sets the offer apart (the dashboard), then what waiting
@@ -51,7 +50,10 @@ export default function HomePage() {
       <CaseStudies />
       <TradesGrid />
       <DashShowcase />
-      <section data-wire-section className="relative border-y border-border py-24 sm:py-32">
+      <section className="relative border-y border-border py-24 sm:py-32">
+        <div className="px-5 sm:px-8">
+          <CutWire />
+        </div>
         <div className="mx-auto max-w-2xl px-5 text-center sm:px-8">
           <Reveal>
             <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">

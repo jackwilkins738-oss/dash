@@ -176,7 +176,7 @@ export function ExampleBuild() {
                 href={ex.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group relative block overflow-hidden rounded-2xl border border-border transition-all duration-300 ease-out hover:-translate-y-1.5 hover:[border-color:var(--card-border)] hover:[box-shadow:0_24px_48px_-20px_var(--card-glow)]"
+                className="build-swing group relative block overflow-hidden rounded-2xl border border-border transition-all duration-300 ease-out hover:-translate-y-1.5 hover:[border-color:var(--card-border)] hover:[box-shadow:0_24px_48px_-20px_var(--card-glow)]"
                 style={{ '--card-border': ex.border, '--card-glow': ex.glow } as CSSProperties}
               >
                 {/* Browser chrome */}

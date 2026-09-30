@@ -45,8 +45,7 @@ export function SmoothScroll() {
     }
     window.addEventListener('load', resync)
     document.fonts?.ready.then(resync)
-    // Kept clear of the power cable's own init window (see power-cable.tsx):
-    // a resize while its ~1.3s of WebGL work runs competes for the same thread.
+    // A late catch-all for anything that settles after load.
     const settleTimer = window.setTimeout(resync, 3800)
 
     return () => {
