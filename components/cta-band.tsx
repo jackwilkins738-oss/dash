@@ -5,22 +5,24 @@ export function CtaBand() {
   return (
     <section data-hide-action-bar className="border-t border-border">
       <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8 sm:py-32">
-        <Reveal spotlight className="relative overflow-hidden rounded-2xl border border-border bg-card p-8 sm:p-14">
+        <Reveal spotlight className="relative overflow-hidden rounded-3xl border border-border bg-card px-7 py-12 sm:px-14 sm:py-20 lg:px-20">
           <div className="blueprint-grid pointer-events-none absolute inset-0 opacity-30" aria-hidden="true" />
           <div
             className="pointer-events-none absolute inset-0"
             style={{ background: 'radial-gradient(70% 120% at 100% 0%, oklch(0.62 0.135 244 / 0.18), transparent 55%)' }}
             aria-hidden="true"
           />
-          <div className="relative max-w-2xl">
-            <h2 className="font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+          {/* The page's last word, so it gets the page's biggest type. */}
+          <div className="relative max-w-4xl">
+            <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Ready when you are</span>
+            <h2 className="mt-5 font-display text-balance text-4xl font-bold leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl">
               Ready to look like the best firm in town?
             </h2>
-            <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
+            <p className="mt-6 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
               Tell me about your trade and the jobs you want more of. I&apos;ll come back within 2 hours with a plan
               and a fixed price. No sales call, no jargon.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap [&>*]:whitespace-nowrap">
               <Link
                 href="/contact"
                 data-magnetic

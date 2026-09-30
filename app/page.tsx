@@ -81,43 +81,38 @@ export default function HomePage() {
       <SpeedRace />
       <SpeedCheck linkToFullPage />
       <Comparison />
-      <section className="py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-5 sm:px-8">
-          <Reveal className="max-w-2xl">
-            <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
-              How I work
-            </span>
-            <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
-              I treat your website like you treat a job well done.
-            </h2>
-            <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
-              Measure twice, build once, leave it right. The same standards you hold on site, applied to the thing
-              that brings the next customer through the door.
-            </p>
-          </Reveal>
+      {/* An editorial spread rather than another card grid: the argument stays
+          pinned on the left while the four principles pass on the right, each
+          coming up to full strength as it reaches the middle of the screen
+          (app/globals.css, .principle). */}
+      <section className="border-t border-border py-24 sm:py-32">
+        <div className="mx-auto grid max-w-6xl gap-12 px-5 sm:px-8 lg:grid-cols-12 lg:gap-16">
+          <div className="lg:col-span-5">
+            <Reveal className="lg:sticky lg:top-32">
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
+                How I work
+              </span>
+              <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+                I treat your website like you treat a job well done.
+              </h2>
+              <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
+                Measure twice, build once, leave it right. The same standards you hold on site, applied to the thing
+                that brings the next customer through the door.
+              </p>
+            </Reveal>
+          </div>
 
-          {/* Asymmetric - the founding principle gets real weight, not
-              equal billing with a uniform 3-up card grid. */}
-          <Reveal stagger className="mt-14 grid gap-5 md:grid-cols-2">
-            <div data-spotlight className="group rounded-xl border border-border bg-card/40 p-8 transition-colors hover:border-blueprint/40 md:p-10">
-              <span className="font-mono text-sm text-blueprint">{PRINCIPLES[0].n}</span>
-              <h3 className="mt-5 font-display text-2xl font-semibold sm:text-3xl">{PRINCIPLES[0].title}</h3>
-              <p className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground">{PRINCIPLES[0].body}</p>
-            </div>
-            <div className="flex flex-col gap-5">
-              {PRINCIPLES.slice(1).map((p) => (
-                <div
-                  key={p.n}
-                  data-spotlight
-                  className="group rounded-xl border border-border bg-card/40 p-6 transition-colors hover:border-blueprint/40"
-                >
-                  <span className="font-mono text-sm text-blueprint">{p.n}</span>
-                  <h3 className="mt-4 font-display text-lg font-semibold">{p.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
+          <ol className="lg:col-span-7">
+            {PRINCIPLES.map((p) => (
+              <li key={p.n} className="principle grid grid-cols-[auto_1fr] gap-x-6 border-t border-border py-9 first:border-t-0 first:pt-0 sm:gap-x-10 sm:py-12">
+                <span className="font-mono text-sm text-blueprint sm:pt-2">{p.n}</span>
+                <div>
+                  <h3 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">{p.title}</h3>
+                  <p className="mt-4 max-w-lg text-pretty text-base leading-relaxed text-muted-foreground">{p.body}</p>
                 </div>
-              ))}
-            </div>
-          </Reveal>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 

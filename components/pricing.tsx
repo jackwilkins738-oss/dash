@@ -193,7 +193,9 @@ function PriceCard({
           {included.map((f, i) => (
             <li key={i} className="flex items-start gap-3 text-sm text-foreground/90">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-blueprint" strokeWidth={2.5} />
-              {f}
+              {/* One child, so a bold phrase inside the text stays inline
+                  instead of becoming its own flex column. */}
+              <span>{f}</span>
             </li>
           ))}
         </ul>

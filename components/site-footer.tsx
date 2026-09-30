@@ -43,47 +43,9 @@ export function SiteFooter() {
       />
 
       <div className="mx-auto max-w-6xl px-5 pt-16 sm:px-8 sm:pt-20">
-        {/* Call to action */}
-        <div className="relative overflow-hidden rounded-2xl border border-blueprint/30 bg-card/60 p-8 sm:p-10">
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                'radial-gradient(70% 120% at 100% 0%, oklch(0.62 0.135 244 / 0.16), transparent 60%), radial-gradient(50% 100% at 0% 100%, oklch(0.78 0.1 80 / 0.07), transparent 60%)',
-            }}
-            aria-hidden="true"
-          />
-          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-xl">
-              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Ready when you are</span>
-              <h2 className="mt-3 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-                A site that wins the jobs worth having.
-              </h2>
-              <p className="mt-3 text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Tell me about your business and what you need. You get a fixed price before a line of code is written.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row lg:flex-none">
-              <Link
-                href="/contact"
-                className="group btn-chamfer inline-flex items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
-              >
-                Start your build
-                <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-              </Link>
-              <a
-                href={WHATSAPP}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-chamfer inline-flex items-center justify-center gap-2 border border-border px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-foreground transition-colors hover:border-blueprint hover:text-blueprint"
-              >
-                <MessageCircle className="h-4 w-4" />
-                WhatsApp
-              </a>
-            </div>
-          </div>
-        </div>
-
+        {/* No call-to-action band here: every page that sells ends with its
+            own (components/cta-band.tsx), and a second one straight after it
+            read as the page asking twice. */}
         {/* Main grid */}
         <div className="grid gap-12 py-14 lg:grid-cols-12">
           <div className="lg:col-span-4">

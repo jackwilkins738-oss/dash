@@ -418,6 +418,72 @@
   }
 }
 
+/* The trades index (components/trades-grid.tsx): big names, and a hover
+   that fills the name, draws a rule under the row and sends the arrow on. */
+.trade-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 1.1rem 0;
+  border-top: 1px solid var(--border);
+  color: color-mix(in oklch, var(--foreground) 55%, transparent);
+  transition: color 0.35s var(--ease-out4, ease);
+}
+.trade-row::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--blueprint), var(--brass));
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform 0.6s var(--ease-out4, ease);
+}
+.trade-name {
+  transition: transform 0.5s var(--ease-out4, ease);
+}
+.trade-arrow {
+  color: var(--muted-foreground);
+  opacity: 0;
+  transform: translateX(-12px);
+  transition:
+    opacity 0.35s ease,
+    transform 0.5s var(--ease-out4, ease),
+    color 0.35s ease;
+}
+.trade-row:hover,
+.trade-row:focus-visible {
+  color: var(--foreground);
+}
+.trade-row:hover::after,
+.trade-row:focus-visible::after {
+  transform: scaleX(1);
+}
+.trade-row:hover .trade-name,
+.trade-row:focus-visible .trade-name {
+  transform: translateX(10px);
+}
+.trade-row:hover .trade-arrow,
+.trade-row:focus-visible .trade-arrow {
+  opacity: 1;
+  transform: none;
+  color: var(--blueprint);
+}
+/* Touch has no hover: show every arrow so the rows still read as links. */
+@media (hover: none) {
+  .trade-row {
+    color: var(--foreground);
+  }
+  .trade-arrow {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ---------------------------------------------------------------------
    Scroll-driven motion. Pure CSS on the compositor - no scroll listeners,
    no JavaScript, nothing on the main thread - and only where the browser
@@ -499,6 +565,52 @@
       to {
         box-shadow: 0 0 0 5px color-mix(in oklch, var(--blueprint) 18%, transparent), 0 0 18px var(--blueprint);
         scale: 1.25;
+      }
+    }
+
+    /* Section headlines rise out of a mask as they arrive - the same move
+       the hero's headline makes on load, carried down the page. */
+    main h2.font-display {
+      animation: title-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 28%;
+    }
+    @keyframes title-rise {
+      from {
+        clip-path: inset(0 -1em 100% -1em);
+        translate: 0 0.45em;
+      }
+      to {
+        clip-path: inset(-0.2em -1em -0.35em -1em);
+        translate: 0 0;
+      }
+    }
+
+    /* How I work: each principle comes up to full strength as it reaches
+       the middle of the screen, so the eye is led down the list. */
+    .principle {
+      animation: principle-lit linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 45%;
+    }
+    @keyframes principle-lit {
+      from {
+        opacity: 0.25;
+        translate: 0 24px;
+      }
+    }
+
+    /* The comparison: every "typical website" line is struck through as the
+       reader passes it. */
+    .cmp-strike {
+      background: linear-gradient(currentColor, currentColor) 0 58% / 0% 1px no-repeat;
+      animation: cmp-strike linear both;
+      animation-timeline: view();
+      animation-range: entry 70% cover 45%;
+    }
+    @keyframes cmp-strike {
+      to {
+        background-size: 100% 1px;
       }
     }
 

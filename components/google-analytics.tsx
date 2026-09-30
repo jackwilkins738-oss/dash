@@ -74,23 +74,23 @@ gtag('config', '${GA_ID}');`}
         // whole first visit. A full-width strip reads as browser chrome,
         // costs ~56px, and covers no column of text.
         //
-        // pr-20/sm:pr-28 keeps the buttons clear of the WhatsApp button,
-        // which is fixed at bottom-right and sits on top of this bar.
+        // pr-16 keeps the buttons clear of the WhatsApp button, which is
+        // fixed at bottom-right. From sm up it becomes a single-line pill
+        // in the bottom-left corner - the same ~48px of height as the bar,
+        // but a third of the width, so it stops reading as a strip of
+        // browser chrome across every screen of the first visit.
         <div
           role="dialog"
           aria-label="Analytics cookies"
-          className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-card/95 backdrop-blur-xl"
+          className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-card/95 backdrop-blur-xl sm:inset-x-auto sm:bottom-5 sm:left-5 sm:rounded-full sm:border sm:shadow-[0_20px_50px_-20px_rgb(0_0_0/0.8)]"
         >
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-2.5 pr-16 text-xs leading-snug sm:gap-6 sm:px-8 sm:pr-28 sm:text-sm">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-2.5 pr-16 text-xs leading-snug sm:gap-5 sm:py-2 sm:pl-6 sm:pr-2 sm:text-[13px]">
             {/* Short form on phones. Beside the buttons there is only about
                 130px of column left, and the full sentence wrapped to four
                 lines - a 138px bar, taller than the card this replaced. */}
             <p className="leading-snug text-foreground/90">
               <span className="sm:hidden">Analytics cookies? Nothing is set unless you accept.</span>
-              <span className="hidden sm:inline">
-                I&apos;d like to use Google Analytics cookies to see which pages help people. Nothing is set
-                unless you accept.
-              </span>{' '}
+              <span className="hidden sm:inline">Analytics cookies? Nothing is set unless you accept.</span>{' '}
               <a href="/privacy#cookies" className="text-blueprint underline-offset-4 hover:underline">
                 Details
               </a>
