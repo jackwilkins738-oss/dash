@@ -15,6 +15,7 @@ export function WhatsAppButton() {
   // action bar (mobile-action-bar.tsx) instead of a second fixed element.
   return (
     <a
+      data-print="hide"
       href="https://wa.me/66638306449"
       target="_blank"
       rel="noopener noreferrer"

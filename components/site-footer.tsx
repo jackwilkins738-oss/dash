@@ -35,7 +35,7 @@ const PRINCIPLES = [
 
 export function SiteFooter() {
   return (
-    <footer className="relative overflow-hidden border-t border-border bg-card/30">
+    <footer data-print="hide" className="relative overflow-hidden border-t border-border bg-card/30">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-px"
         style={{ background: 'linear-gradient(90deg, transparent, oklch(0.62 0.135 244 / 0.7), transparent)' }}

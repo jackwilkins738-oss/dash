@@ -13,6 +13,8 @@ import { MIN_RACE_GAP_MS, SCALAR_BUILD } from '@/lib/speedRace'
 import { getProspect, type Prospect } from '@/lib/prospect-api'
 import { SHOWCASE_TRADES, showcaseIdForTradeText } from '@/lib/showcase'
 import { teardownFindings, teardownPasses } from '@/lib/teardown'
+import { PrintButton } from '@/components/print-button'
+import { SITE } from '@/lib/site'
 
 // A private page for one business Scalar is reaching out to: their real
 // Google speed score next to a concept of what a Scalar build would look
@@ -89,6 +91,11 @@ export default async function ProspectPreviewPage({ params }: Props) {
   return (
     <main>
       <PreviewBeacon slug={p.slug} />
+      {/* On paper only: whose report this is, and where the live version lives. */}
+      <div data-print="only" className="border-b border-border px-5 pb-3 pt-1 text-xs text-muted-foreground">
+        <strong className="text-foreground">{SITE.name}</strong> · Prepared for {p.business_name} ·{' '}
+        {SITE.url.replace('https://', '')}/for/{p.slug}
+      </div>
       <PageHeader
         eyebrow={`Prepared for ${p.business_name}`}
         title={slow ? `A faster, sharper website for ${p.business_name}.` : `A sharper website for ${p.business_name}.`}
@@ -184,6 +191,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
                 {passes > 0 ? ` — ${passes} other check${passes === 1 ? '' : 's'} came back fine` : ''}. Each of these
                 is something you can see for yourself.
               </p>
+              <PrintButton className="mt-4" />
             </Reveal>
 
             <Reveal stagger className="mt-10 divide-y divide-border border-y border-border">
@@ -213,6 +221,12 @@ export default async function ProspectPreviewPage({ params }: Props) {
       {p.website && <SpeedCheck initialUrl={p.website} />}
       <Pricing />
       <CtaBand />
+      <div data-print="only" className="border-t border-border px-5 py-6 text-sm">
+        <p className="font-semibold">Questions, or want to go ahead?</p>
+        <p className="mt-1 text-muted-foreground">
+          {SITE.email} · {SITE.phone.replace('+44', '0').replace(/^(\d{5})(\d+)$/, '$1 $2')} · {SITE.url.replace('https://', '')}
+        </p>
+      </div>
     </main>
   )
 }

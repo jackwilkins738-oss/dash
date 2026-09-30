@@ -787,3 +787,91 @@
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------
+   Print (and "Save as PDF"). Owners print their preview page to show a
+   partner, and people print the guides - on paper the site is a document:
+   dark text on white, everything visible (nothing waits for a scroll that
+   never happens), and the interactive parts - nav, calendar, speed race,
+   live speed check, floating buttons - left out.
+   --------------------------------------------------------------------- */
+@media print {
+  :root {
+    color-scheme: light;
+    --background: #fff;
+    --foreground: #111827;
+    --card: #fff;
+    --card-foreground: #111827;
+    --popover: #fff;
+    --popover-foreground: #111827;
+    --muted: #f3f4f6;
+    --muted-foreground: #4b5563;
+    --secondary: #f3f4f6;
+    --secondary-foreground: #111827;
+    --accent: #f3f4f6;
+    --accent-foreground: #111827;
+    --border: #d1d5db;
+    --input: #d1d5db;
+    --line: #e5e7eb;
+    --blueprint: #1d4e89;
+    --primary: #1d4e89;
+    --brass: #8a6116;
+  }
+  @page {
+    margin: 14mm 12mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #111827 !important;
+  }
+  [data-print='hide'],
+  .bp-progress,
+  .bp-cursor,
+  .blueprint-grid,
+  iframe {
+    display: none !important;
+  }
+  [data-print='only'] {
+    display: block !important;
+  }
+  /* Revealed-on-scroll and scroll-driven effects: shown as they finish. */
+  main *,
+  main *::before,
+  main *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  [data-reveal],
+  [data-reveal] > *,
+  .js-reveal {
+    opacity: 1 !important;
+  }
+  [data-reveal],
+  [data-reveal] > *,
+  .js-reveal {
+    transform: none !important;
+  }
+  section {
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem !important;
+    min-height: 0 !important;
+  }
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+  li,
+  figure,
+  .rounded-2xl {
+    break-inside: avoid;
+  }
+  a {
+    color: inherit !important;
+    text-decoration: underline;
+  }
+}
+[data-print='only'] {
+  display: none;
+}

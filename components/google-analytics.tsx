@@ -81,6 +81,7 @@ gtag('config', '${GA_ID}');`}
         // browser chrome across every screen of the first visit.
         <div
           role="dialog"
+          data-print="hide"
           aria-label="Analytics cookies"
           className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-card/95 backdrop-blur-xl sm:inset-x-auto sm:bottom-5 sm:left-5 sm:rounded-full sm:border sm:shadow-[0_20px_50px_-20px_rgb(0_0_0/0.8)]"
         >

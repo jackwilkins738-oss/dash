@@ -52,6 +52,7 @@ export function MobileActionBar() {
 
   return (
     <div
+      data-print="hide"
       className={`mab fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/85 px-4 pt-3 backdrop-blur-md sm:hidden ${
         visible ? 'mab-in' : ''
       }`}
