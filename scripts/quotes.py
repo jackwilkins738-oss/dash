@@ -7,7 +7,8 @@ for you to send from your own email (the panel opens a ready-written one).
 
 Prices, VAT and deposit come from the panel's Settings, defaulting to the
 website's own prices (lib/site.ts: £750 landing page, £2,500 Scalar build),
-no VAT, no deposit. Every quote is also kept in outreach/quotes-sent.csv.
+no VAT, no deposit. Each quote carries Scalar's terms of business (terms.py), which the
+client agrees to when they accept. Every quote is also kept in outreach/quotes-sent.csv.
 """
 
 from __future__ import annotations
@@ -41,11 +42,16 @@ def price(settings: dict[str, str], package: str) -> int:
 
 
 def create_quote(settings: dict[str, str], business: str, email: str, phone: str, package: str,
-                 slug: str | None = None, note: str = "") -> dict:
+                 slug: str | None = None, note: str = "", founding: bool = False) -> dict:
     """{quote_number, total_pence, quote_url} from the dashboard, or raises QuoteFailed with the reason."""
+    import terms
+
     if package not in PACKAGES:
         raise QuoteFailed("unknown package")
     _, _, description = PACKAGES[package]
+    founding = founding and package == "build"
+    if founding:
+        description += " (founding client)"
     vat = 20 if str(settings.get("QUOTE_VAT_RATE") or "0").strip() == "20" else 0
     try:
         deposit = max(0, min(100, int(float(settings.get("QUOTE_DEPOSIT_PERCENT") or 0))))
@@ -61,6 +67,9 @@ def create_quote(settings: dict[str, str], business: str, email: str, phone: str
         "vat_rate": vat,
         "deposit_percent": deposit,
         "note": note or "Quoted from the outreach call list",
+        "payment_terms": terms.payment_terms(deposit),
+        "exclusions": terms.EXCLUSIONS,
+        "terms": terms.terms(package, deposit, vat, founding),
     }
     api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
     req = urllib.request.Request(

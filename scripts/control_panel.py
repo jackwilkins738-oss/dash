@@ -68,7 +68,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "36"
+PANEL_VERSION = "37"
 MAX_LOG_LINES = 5000
 
 
@@ -676,16 +676,45 @@ def quote_action(body: dict) -> tuple[dict, int]:
     if len(settings["PROSPECTS_API_SECRET"]) < 32:
         return {"error": "Add PROSPECTS_API_SECRET in Settings first."}, 400
     slug = make_slug(business, website, settings["PROSPECTS_API_SECRET"]) if DOMAIN.match(website) else None
+    founding = bool(body.get("founding")) and package == "build"
     try:
-        result = quotes.create_quote(settings, business, email, phone, package, slug)
+        result = quotes.create_quote(settings, business, email, phone, package, slug, founding=founding)
     except quotes.QuoteFailed as e:
         return {"error": f"No quote made: {e}."}, 502
     quotes.record(OUTREACH, sheet, key, business, package, result)
+    try:
+        import proposal
+
+        proposal.make(OUTREACH, sheet, key, business, package, result, settings, founding,
+                      {"website": website, "contact": str(body.get("contact") or "")})
+        made_proposal = True
+    except (OSError, ValueError, KeyError):
+        made_proposal = False  # the quote exists either way; the proposal is the extra
     calls.log_call(OUTREACH, sheet, key, business, "Quoted", result.get("quote_number", ""))
     calls.mark_reply_handled(OUTREACH, business)
     signoff = settings.get("MAIL_FROM_NAME") or settings.get("LETTER_SIGNOFF") or "Scalar Digital"
     return {"ok": True, "quote_number": result.get("quote_number"), "total": (result.get("total_pence") or 0) / 100,
-            "url": result["quote_url"], "mailto": quotes.email_link(email, str(body.get("contact") or ""), business, result, signoff)}, 200
+            "url": result["quote_url"], "mailto": quotes.email_link(email, str(body.get("contact") or ""), business, result, signoff),
+            "proposal": made_proposal}, 200
+
+
+def proposal_open_action(body: dict) -> tuple[dict, int]:
+    """Calls tab "Open proposal": the printable proposal made with a quote, opened in your browser."""
+    import proposal
+    import quotes
+
+    key = str(body.get("key") or "")
+    sent = quotes.find_sent(OUTREACH, key, str(body.get("quote_number") or "")) if REVIEW_KEY.match(key) else None
+    if not sent:
+        return {"error": "Couldn't find that quote."}, 404
+    path = proposal.path_for(OUTREACH, sent.get("business", ""), sent["quote_number"])
+    if not path.exists():
+        return {"error": "No proposal was saved for that quote - make the quote again."}, 404
+    try:
+        open_folder(path)
+    except OSError as e:
+        return {"error": f"Couldn't open it ({e}) - it's at {path}"}, 500
+    return {"ok": True, "message": f"Opened - print it to PDF to attach it. Saved at outreach/sites/{path.parent.name}/{path.name}"}, 200
 
 
 def draft_site_action(body: dict) -> tuple[dict, int]:
@@ -1199,6 +1228,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(*call_action(body))
         if route == "/api/quote-email":
             return self._json(*quote_email_action(body))
+        if route == "/api/proposal-open":
+            return self._json(*proposal_open_action(body))
         if route == "/api/reply-templates":
             import saved_replies
 
@@ -1785,7 +1816,7 @@ function callRow(i, section) {
     <div class="why">${seen}${last}</div>
     <div class="btns">${(callData.outcomes || []).map((o) => `<button data-outcome="${esc(o)}" ${o === "Not interested" ? 'class="danger"' : o === "Interested" || o === "Won" ? 'class="primary"' : ""}>${esc(o)}</button>`).join("")}
       <input type="text" placeholder="note (optional)" data-note></div>
-    <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><button data-draft>Draft their site</button></div>
+    <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><label class="hint" title="One of the first three Scalar builds: 24 months' free dashboard, the speed guarantee, first in the queue - for a case study, video and review"><input type="checkbox" data-founding> founding client</label><button data-draft>Draft their site</button></div>
     <div class="why" data-quote-result></div>
     ${section === "replied" && i.email ? `<div class="btns" style="margin-top:6px">
       <select data-reply-pick><option value="">Reply with a saved answer...</option>${savedReplies.map((n) => `<option>${esc(n)}</option>`).join("")}</select></div>
@@ -1859,18 +1890,27 @@ let quotePrices = { build: "2500", landing: "750" };
 async function makeQuote(b) {
   const card = b.closest(".ritem");
   const item = (callData[card.dataset.sec] || []).find((x) => x.key === card.dataset.key);
-  const label = b.dataset.quote === "build" ? "Scalar build" : "landing page";
+  const founding = b.dataset.quote === "build" && !!card.querySelector("[data-founding]")?.checked;
+  const label = b.dataset.quote === "build" ? (founding ? "founding-client Scalar build" : "Scalar build") : "landing page";
   if (!confirm(`Make a ${label} quote for ${item.business}? It's added to your dashboard as a sent quote - you send the link.`)) return;
   b.disabled = true;
   const r = await post("/api/quote", { sheet: $("sheet").value, key: item.key, business: item.business, email: item.email,
-    phone: item.phone, website: item.website, contact: item.contact, package: b.dataset.quote });
+    phone: item.phone, website: item.website, contact: item.contact, package: b.dataset.quote,
+    founding });
   b.disabled = false;
   const box = card.querySelector("[data-quote-result]");
   if (r.error) { box.style.color = "var(--bad)"; box.textContent = r.error; return; }
   box.style.color = "var(--ok)";
   box.innerHTML = `Quote ${esc(r.quote_number)} (£${Number(r.total).toLocaleString()}) is ready: <a href="${esc(r.url)}" target="_blank" rel="noopener">open it ↗</a>
     <button data-copy="${esc(r.url)}">Copy link</button> <button class="primary" data-send-quote>Email it to them${item.email ? " (" + esc(item.email) + ")" : ""}</button>
-    <a href="${esc(r.mailto)}" class="hint">or open in your mail app</a> <span data-sent></span>`;
+    <a href="${esc(r.mailto)}" class="hint">or open in your mail app</a>${r.proposal ? ' <button data-open-proposal>Open proposal</button>' : ""} <span data-sent></span>`;
+  const openBtn = box.querySelector("[data-open-proposal]");
+  if (openBtn) openBtn.addEventListener("click", async () => {
+    const o = await post("/api/proposal-open", { key: item.key, quote_number: r.quote_number });
+    const note = box.querySelector("[data-sent]");
+    note.style.color = o.ok ? "var(--ok)" : "var(--bad)";
+    note.textContent = o.error || o.message;
+  });
   box.querySelector("[data-send-quote]").addEventListener("click", async (e) => {
     const btn = e.target;
     let to = item.email;
