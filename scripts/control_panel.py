@@ -46,6 +46,7 @@ AUTOPILOT = HERE / "autopilot.py"
 SEND = HERE / "send_email.py"
 LAUNCH = HERE / "launch_report.py"
 PUBLISH_SITE = HERE / "publish_site.py"
+SITE_KIT = HERE / "site_kit.py"
 SCORECARD = HERE / "scorecard.py"
 
 
@@ -67,7 +68,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "35"
+PANEL_VERSION = "36"
 MAX_LOG_LINES = 5000
 
 
@@ -253,6 +254,7 @@ ACTIONS = {
     "send_followups": "Send follow-ups",
     "send_test": "Send a test to yourself",
     "launch_report": "Launch report",
+    "build_site": "Build site",
     "publish_site": "Publish site",
     "scorecard": "Scorecard",
     "speed": "Speed check the next batch",
@@ -407,6 +409,14 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not settings.get("PAGESPEED_API_KEY"):
             return None, "Add PAGESPEED_API_KEY in Settings first."
         return (lambda job: [(LAUNCH, ["--old", old, "--new", new])]), ""
+    if action == "build_site":
+        folder = str(body.get("publish_folder") or "").strip().lower()
+        if not re.match(r"^[a-z0-9][a-z0-9-]{0,80}$", folder):
+            return None, "Type the firm's folder name under outreach/sites, e.g. kerr-roofing."
+        if not (OUTREACH / "sites" / folder).is_dir():
+            return None, f"There's no outreach/sites/{folder} - use Draft their site on the Calls tab first."
+        cmd = "init" if not (OUTREACH / "sites" / folder / "site.json").exists() else "build"
+        return (lambda job: [(SITE_KIT, [cmd, folder] + (["--draft"] if body.get("build_draft") and cmd == "build" else []))]), ""
     if action == "publish_site":
         folder = str(body.get("publish_folder") or "").strip().lower()
         account = str(body.get("publish_account") or "").strip().lower()
@@ -415,6 +425,9 @@ def build_steps(body: dict, settings: dict[str, str]):
             return None, "Type the firm's folder name under outreach/sites, e.g. kerr-roofing."
         if not settings.get("CLOUDFLARE_API_TOKEN"):
             return None, "Add CLOUDFLARE_API_TOKEN in Settings first."
+        home = OUTREACH / "sites" / folder / "site" / "index.html"
+        if home.exists() and 'class="draft-banner"' in home.read_text(encoding="utf-8", errors="ignore"):
+            return None, "That's a draft build (details still to confirm) - finish site.json and press Build site without the draft box first."
         args = ["--folder", folder] + (["--account", account] if account else []) + (["--project", project] if project else [])
         return (lambda job: [(PUBLISH_SITE, args)]), ""
     if action == "batch_sent":
@@ -1487,8 +1500,9 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
         <p>When a client's new site goes live: their old speed score and problems (from when you first checked them) next to the new site measured now. Writes a report for them in <b>outreach/sites/&lt;firm&gt;/</b> and adds a line to <b>case-studies.csv</b> - your proof for the next pitch.</p>
       </div>
       <div class="action">
-        <div class="row" style="margin:0"><input type="text" id="publish-folder" placeholder="Folder (e.g. kerr-roofing)"><input type="text" id="publish-account" placeholder="Their Cloudflare account id (first time)"><input type="text" id="publish-project" placeholder="Project name (optional)"><button data-action="publish_site">Publish site</button></div>
-        <p>Puts <b>outreach/sites/&lt;folder&gt;/site/</b> live on the client's own Cloudflare Pages - only that <b>site</b> folder, never their brief or photos. First time: they invite you to their Cloudflare account, you give the account id, and it makes the project; after that just the folder. Needs CLOUDFLARE_API_TOKEN in Settings and Node.js installed.</p>
+        <div class="row" style="margin:0"><input type="text" id="publish-folder" placeholder="Folder (e.g. kerr-roofing)"><input type="text" id="publish-account" placeholder="Their Cloudflare account id (first time)"><input type="text" id="publish-project" placeholder="Project name (optional)"><button data-action="build_site">Build site</button><button data-action="publish_site">Publish site</button></div>
+        <label class="check"><input type="checkbox" id="build-draft"> Draft build - preview it with details still to confirm (hidden from Google, can't be mistaken for the real thing)</label>
+        <p><b>Build site</b> turns <b>outreach/sites/&lt;folder&gt;/site.json</b> (Draft their site writes it, filled in from their answers) into the finished site in <b>site/</b>: every page, a page per town, the enquiry form wired to the dashboard, sitemap, redirects. It won't build while anything is still marked [Confirm - the log lists what. <b>Publish site</b> puts <b>outreach/sites/&lt;folder&gt;/site/</b> live on the client's own Cloudflare Pages - only that <b>site</b> folder, never their brief or photos. First time: they invite you to their Cloudflare account, you give the account id, and it makes the project; after that just the folder. Needs CLOUDFLARE_API_TOKEN in Settings and Node.js installed.</p>
       </div>
       <div class="action">
         <button data-action="contacts">Find missing emails &amp; phones</button>
@@ -1699,7 +1713,8 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
     batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "",
     launch_old: $("launch-old").value, launch_new: $("launch-new").value,
-    publish_folder: $("publish-folder").value, publish_account: $("publish-account").value, publish_project: $("publish-project").value });
+    publish_folder: $("publish-folder").value, publish_account: $("publish-account").value, publish_project: $("publish-project").value,
+    build_draft: $("build-draft").checked });
   if (r.error) $("run-msg").textContent = r.error;
   lastLines = -1;
   setTimeout(poll, 150);

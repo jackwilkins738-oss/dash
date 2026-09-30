@@ -648,6 +648,12 @@ def make(outreach: Path, sheet: str, key: str, fallback: dict | None = None, fet
             f["files"] = download_files(onboarding, folder)
     (folder / "index.html").write_text(draft_html(f), encoding="utf-8")
     (folder / "brief.md").write_text(brief_md(f, str(folder / "index.html")), encoding="utf-8")
+    # The starting point for the real build (site_kit.py): filled from all of the above, with
+    # anything unconfirmed marked. Never overwritten - once it's been worked on, it's the source.
+    if not (folder / "site.json").exists():
+        import site_kit
+
+        site_kit.init(folder, {**f, "copy": TRADE_COPY[trade_key(f["trade"])]})
     return folder
 
 
