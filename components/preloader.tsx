@@ -30,7 +30,10 @@ export function Preloader() {
       <div className="pl-panel absolute inset-0 blueprint-grid bg-background" style={at(0)} />
       <div className="pl-panel absolute inset-0 bg-background/60" style={at(1)} />
 
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      {/* The drawing rides up with the curtain. It used to stay put while
+          the panels lifted, so for a fifth of a second the house, wordmark
+          and counter hung over the freshly revealed hero before vanishing. */}
+      <div className="pl-panel absolute inset-0 flex flex-col items-center justify-center" style={at(0)}>
         <svg
           viewBox="0 0 300 230"
           className="w-[280px] max-w-[76vw] sm:w-[360px]"
@@ -105,8 +108,9 @@ export function Preloader() {
             A-101
           </text>
 
-          {/* Materialize flash */}
-          <rect className="bp-flash" x="0" y="0" width="300" height="230" fill="var(--blueprint)" opacity="0" />
+          {/* Materialize flash - the house's own outline, not the whole
+              drawing's bounding box, which flashed as a hard-edged square. */}
+          <path className="bp-flash" d="M150 178 L237 128 L237 52 L157 10 L77 60 L77 136 Z" fill="var(--blueprint)" opacity="0" />
         </svg>
 
         <div className="pl-word mt-6 flex items-center gap-3">

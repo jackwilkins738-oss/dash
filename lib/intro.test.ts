@@ -6,7 +6,7 @@ import { INTRO_HEAD_SCRIPT, INTRO_SEEN_CLASS, INTRO_SEEN_KEY } from './intro.ts'
 // right and it has to never throw. It is a string, so it is exercised here by
 // running it against a stand-in document and sessionStorage.
 
-function run(store: Record<string, string> | 'throws') {
+function run(store: Record<string, string> | 'throws', pathname = '/') {
   const classes = new Set<string>()
   const document = { documentElement: { classList: { add: (c: string) => classes.add(c) } } }
   const sessionStorage =
@@ -25,7 +25,7 @@ function run(store: Record<string, string> | 'throws') {
             store[k] = v
           },
         }
-  new Function('document', 'sessionStorage', INTRO_HEAD_SCRIPT)(document, sessionStorage)
+  new Function('document', 'sessionStorage', 'location', INTRO_HEAD_SCRIPT)(document, sessionStorage, { pathname })
   return { classes, store }
 }
 
@@ -48,6 +48,15 @@ describe('INTRO_HEAD_SCRIPT', () => {
 
   it('ignores an unexpected stored value', () => {
     assert.equal(run({ [INTRO_SEEN_KEY]: 'yes' }).classes.has(INTRO_SEEN_CLASS), false)
+  })
+
+  it('never plays the intro on a personalised preview page', () => {
+    assert.equal(run({}, '/for/acme-driveways').classes.has(INTRO_SEEN_CLASS), true)
+    assert.equal(run('throws', '/for/acme-driveways').classes.has(INTRO_SEEN_CLASS), true)
+  })
+
+  it('still plays it on other pages whose path merely contains "for"', () => {
+    assert.equal(run({}, '/websites-for/plumbers').classes.has(INTRO_SEEN_CLASS), false)
   })
 
   it('is small enough to sit in <head> without costing anything', () => {
