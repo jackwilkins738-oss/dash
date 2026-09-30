@@ -4,6 +4,7 @@ import { MessageCircle, Phone, Mail } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ContactForm } from '@/components/contact-form'
+import { BookCallLine } from '@/components/book-call'
 import { Reveal } from '@/components/reveal'
 import { ReplyStatus } from '@/components/reply-status'
 
@@ -124,6 +125,7 @@ export default function ContactPage() {
               <Suspense fallback={null}>
                 <ContactForm />
               </Suspense>
+              <BookCallLine className="mt-5 text-center" />
             </Reveal>
           </div>
 

@@ -5,6 +5,7 @@ import { SiteShowcase } from '@/components/site-showcase'
 import { SpeedCheck } from '@/components/speed-check'
 import { Pricing } from '@/components/pricing'
 import { CtaBand } from '@/components/cta-band'
+import { BookCallBand } from '@/components/book-call'
 import { Reveal } from '@/components/reveal'
 import { PreviewBeacon } from '@/components/preview-beacon'
 import { PreviewRace } from '@/components/preview-race'
@@ -208,6 +209,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
         </section>
       )}
 
+      <BookCallBand contactHref={contactHref} firmName={p.business_name} />
       {p.website && <SpeedCheck initialUrl={p.website} />}
       <Pricing />
       <CtaBand />

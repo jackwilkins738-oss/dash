@@ -6,7 +6,7 @@ import { track } from '@vercel/analytics'
 type Gtag = (...args: unknown[]) => void
 
 // Most trades ring or WhatsApp rather than fill in a form, so a tap on any
-// tel:, WhatsApp or mailto: link is counted as a conversion - otherwise the
+// tel:, WhatsApp, mailto: or booking (cal.com) link is counted as a conversion - otherwise the
 // analytics only ever see the minority who use the contact form, and there's
 // no telling which pages actually bring enquiries in.
 //
@@ -27,7 +27,9 @@ export function ContactClickTracking() {
           ? 'whatsapp'
           : href.startsWith('mailto:')
             ? 'email'
-            : null
+            : /(^|\/\/)cal\.com\//.test(href)
+              ? 'book_call'
+              : null
       if (!kind) return
       // Preview pages are grouped under /for, so one prospect's page doesn't become its own row.
       const page = window.location.pathname.startsWith('/for/') ? '/for/[prospect]' : window.location.pathname
