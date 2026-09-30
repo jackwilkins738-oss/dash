@@ -211,3 +211,52 @@ class MultipleInboxes(SendEmail):
         write(self.out / eb.SENT, eb.SENT_FIELDS, [{"email": f"x{i}@y.co.uk", "sent": "2026-09-28", "sent_from": ""} for i in range(se.DAILY_CAP)])
         self.assertEqual(se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None), 3)
         self.assertEqual(list(self.by_inbox), ["jack@getscalar.co.uk"])  # the main inbox is full today
+
+
+class TodaySummary(unittest.TestCase):
+    """What the panel shows under the batch: sent today, left today, and the same per inbox."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.out = Path(self.tmp.name)
+        self.today = date(2026, 9, 30)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def log(self, rows):
+        write(self.out / eb.SENT, eb.SENT_FIELDS, rows)
+
+    def test_counts_first_emails_and_followups_per_inbox(self):
+        self.log([
+            {"email": "a@x.co.uk", "sent": "2026-09-30", "sent_from": "me@scalar.co.uk"},
+            {"email": "b@x.co.uk", "sent": "2026-09-25", "followup_sent": "2026-09-30", "sent_from": "me@scalar.co.uk"},
+            {"email": "c@x.co.uk", "sent": "2026-09-30", "sent_from": "two@scalar.co.uk"},
+            {"email": "d@x.co.uk", "sent": "2026-09-29", "sent_from": "two@scalar.co.uk"},
+        ])
+        s = se.today_summary(self.out, self.today, ["me@scalar.co.uk", "two@scalar.co.uk"])
+        self.assertEqual(s["sent"], 3)
+        self.assertEqual(s["cap"], 2 * se.DAILY_CAP)
+        self.assertEqual(s["left"], 2 * se.DAILY_CAP - 3)
+        self.assertEqual([(r["inbox"], r["sent"]) for r in s["by_inbox"]], [("me@scalar.co.uk", 2), ("two@scalar.co.uk", 1)])
+
+    def test_mailmeteor_rows_count_to_the_main_inbox(self):
+        self.log([{"email": "a@x.co.uk", "sent": "2026-09-30"}, {"email": "b@x.co.uk", "sent": "2026-09-30"}])
+        s = se.today_summary(self.out, self.today, ["me@scalar.co.uk"])
+        self.assertEqual(s["by_inbox"], [{"inbox": "me@scalar.co.uk", "sent": 2, "left": se.DAILY_CAP - 2}])
+
+    def test_no_inboxes_set_up_still_counts(self):
+        self.log([{"email": "a@x.co.uk", "sent": "2026-09-30"}])
+        s = se.today_summary(self.out, self.today, [])
+        self.assertEqual((s["sent"], s["left"], s["by_inbox"][0]["inbox"]), (1, se.DAILY_CAP - 1, "main inbox"))
+
+    def test_a_removed_inbox_still_shows_with_nothing_left(self):
+        self.log([{"email": "a@x.co.uk", "sent": "2026-09-30", "sent_from": "old@scalar.co.uk"}])
+        s = se.today_summary(self.out, self.today, ["me@scalar.co.uk"])
+        self.assertEqual(s["sent"], 1)
+        self.assertIn({"inbox": "old@scalar.co.uk", "sent": 1, "left": 0}, s["by_inbox"])
+        self.assertEqual(s["left"], se.DAILY_CAP)
+
+    def test_never_over_the_cap(self):
+        self.log([{"email": f"x{i}@y.co.uk", "sent": "2026-09-30", "sent_from": "me@scalar.co.uk"} for i in range(se.DAILY_CAP + 5)])
+        self.assertEqual(se.today_summary(self.out, self.today, ["me@scalar.co.uk"])["left"], 0)
