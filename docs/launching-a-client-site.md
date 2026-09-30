@@ -18,10 +18,33 @@ From their onboarding page (dashboard → `/onboarding`) you should already have
 - [ ] Where their email is hosted (Google Workspace, Microsoft 365, their registrar...)
 - [ ] Logo, photos, services, areas, guarantee, insurance, reviews link
 
-If they don't know where their email is hosted, find out now (step 4 shows how).
+If they don't know where their email is hosted, find out now (step 5 shows how).
 It's the one thing that turns a launch into an emergency.
 
-## 2. Hosting: Cloudflare Pages, on the client's account
+## 2. Build the site (the starter kit)
+
+1. **Calls tab → Draft their site** writes `outreach/sites/<firm>/site.json`,
+   already filled in from everything known: their sheet row, their old site,
+   and their onboarding answers and uploads. What they told you counts as
+   confirmed; anything only guessed is marked `[Confirm: ...]`.
+2. Go through `site.json` with them (or from their answers): headline, a line
+   per service, towns covered, guarantee, reviews, FAQs. Add the dashboard's
+   `tenant_id` and `site_key` from `/admin`. Put photos in `client-files/` and
+   list them (`hero_photo`, `gallery.photos`, a `photo` per service).
+3. **Automation tab → Build site** (folder name). It builds `site/`: home,
+   services, gallery, reviews, contact (photos too), a page per town, thanks,
+   privacy, 404, sitemap, redirects and security headers, all wired to the
+   dashboard. It **won't build** while anything still says `[Confirm` or the
+   dashboard ids are missing - the log lists exactly what. Tick **Draft build**
+   to preview it anyway (yellow banner, hidden from Google; Publish refuses it).
+4. Check it on your phone (open `site/index.html`), then publish.
+
+A star rating only appears if both `reviews.rating` and `reviews.count` are
+filled in - real numbers from their Google profile, never estimated. Limited
+companies must show their registered details on their website; the footer does
+it from `company`.
+
+## 3. Hosting: Cloudflare Pages, on the client's account
 
 Free, fast everywhere, commercial use allowed. (Vercel's free plan forbids
 commercial use, so client sites don't go there.)
@@ -38,7 +61,7 @@ commercial use, so client sites don't go there.)
 their account id the first time; later publishes need only the folder name. Only the
 `site` folder goes live - never their brief or uploaded photos.
 
-## 3. Forms and enquiries (every client)
+## 4. Forms and enquiries (every client)
 
 Every client gets a business on your dashboard, even on the £750 landing page -
 it's what catches their enquiries.
@@ -59,7 +82,7 @@ it's what catches their enquiries.
    dashboard isn't offered on the landing page; it comes only with the full build
    (free for 12 months, then £39 a month, optional).
 
-## 4. Pointing the domain - without breaking their email
+## 5. Pointing the domain - without breaking their email
 
 1. **Before touching anything**, screenshot or export every DNS record at their
    registrar. The ones that matter most:
@@ -74,7 +97,7 @@ it's what catches their enquiries.
    `theirdomain.co.uk` and `www.theirdomain.co.uk`. SSL is automatic.
 5. Send a test email **to** and **from** their address once it's live.
 
-## 5. Keeping their Google ranking
+## 6. Keeping their Google ranking
 
 - **Redirect old pages.** List the old site's URLs first (`site:theirdomain.co.uk`
   on Google, or their old sitemap). Any page that's moved gets a line in a
@@ -83,17 +106,17 @@ it's what catches their enquiries.
   you), then submit `sitemap.xml`.
 - Google Business Profile: check the website link points at the new site.
 
-## 6. Launch checks (15 minutes)
+## 7. Launch checks (15 minutes)
 
 - [ ] On your own phone: every page, tap-to-call works, WhatsApp opens, menu works
 - [ ] Send a test enquiry through the form - it arrives in the dashboard and by email
 - [ ] `https://` everywhere, no warnings; `www` and non-`www` both work
 - [ ] A made-up URL shows a proper 404 page
-- [ ] Their email still sends and receives (step 4.5)
+- [ ] Their email still sends and receives (step 5.5)
 - [ ] **Launch report** on the panel (their old website, new site if the domain
       changed) - 90+ speed score before you send it
 
-## 7. After launch
+## 8. After launch
 
 - [ ] Send them the launch report
 - [ ] `/admin` → their card → set **launched on** (starts their aftercare reminders)
