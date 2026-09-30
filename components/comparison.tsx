@@ -42,7 +42,9 @@ export function Comparison() {
           </div>
           {ROWS.map(([against, forIt], i) => (
             <div key={i} className={`cmp-row grid grid-cols-2 ${i !== ROWS.length - 1 ? 'border-b border-border' : ''}`}>
-              <div className="px-5 py-5 text-sm leading-relaxed text-muted-foreground sm:px-8">{against}</div>
+              <div className="px-5 py-5 text-sm leading-relaxed text-muted-foreground sm:px-8">
+                <span className="cmp-strike">{against}</span>
+              </div>
               <div
                 className={`border-l border-border bg-blueprint/[0.04] px-5 py-5 text-sm leading-relaxed sm:px-8 ${
                   i === ROWS.length - 1 ? 'font-semibold text-blueprint' : 'text-foreground/90'
