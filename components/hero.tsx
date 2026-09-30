@@ -4,7 +4,9 @@ import { BlueprintCanvas } from '@/components/blueprint-canvas'
 import { SiteShowcase } from '@/components/site-showcase'
 import { TrustBadges } from '@/components/trust-badges'
 
-const HEADLINE = "The digital infrastructure ambitious trade businesses run on."
+// Said the way a trade owner would say it: what the site does for them, not
+// what category of product it is.
+const HEADLINE = "Websites that win the jobs worth having."
 const WORDS = HEADLINE.split(' ')
 
 // A server component. The reveal (the headline rising word by word, the rest
@@ -37,11 +39,11 @@ export function Hero() {
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-4 py-1.5 backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-blueprint" />
               <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
-                Digital infrastructure for UK trades
+                Hand-coded websites for UK trades
               </span>
             </div>
 
-            <h1 className="mt-7 font-display text-balance text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl xl:text-[3.4rem] 2xl:text-6xl">
+            <h1 className="mt-7 font-display text-balance text-4xl font-bold leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl xl:text-[4.4rem] 2xl:text-[4.75rem]">
               {WORDS.map((word, i) => (
                 <Fragment key={i}>
                   {/* Each word sits in its own mask. The padding and matching
@@ -59,8 +61,7 @@ export function Hero() {
 
             <p className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
               Fast, hand-coded websites for trades — and with the full build, the private dashboard that runs your
-              enquiries, quotes and jobs behind it. Built by someone who&apos;s stood on the tools, to win the jobs
-              worth having.
+              enquiries, quotes and jobs behind it. Built by someone who&apos;s stood on the tools.
             </p>
 
             <div className="mt-9">

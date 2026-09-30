@@ -22,7 +22,6 @@ type Example = {
   wide?: boolean
   body?: string
   mark?: string
-  signupPlaceholder?: string
 }
 
 const EXAMPLES: Example[] = [
@@ -99,7 +98,6 @@ const EXAMPLES: Example[] = [
     wide: true,
     body: 'MIKE helps you talk things through, understand what is affecting you and build better structure across mental wellbeing, physical health, nutrition, sleep, routine, community and life direction.',
     mark: '/examples/mike-mark.png',
-    signupPlaceholder: 'you@example.com',
   },
 ]
 
@@ -171,35 +169,13 @@ export function ExampleBuild() {
                         {ex.body}
                       </span>
                     )}
-                    {ex.signupPlaceholder ? (
-                      <span className="mt-3 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:items-center">
-                        <span
-                          className="min-w-0 flex-1 truncate rounded-lg border px-4 py-2.5 text-sm"
-                          style={{
-                            borderColor: 'rgba(255,255,255,0.14)',
-                            background: 'rgba(255,255,255,0.05)',
-                            color: 'rgba(255,255,255,0.5)',
-                          }}
-                        >
-                          {ex.signupPlaceholder}
-                        </span>
-                        <span
-                          className="inline-flex w-fit items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-transform group-hover:translate-x-1"
-                          style={{ background: ex.ctaBg, color: ex.ctaColor }}
-                        >
-                          {ex.cta}
-                          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-                        </span>
-                      </span>
-                    ) : (
-                      <span
-                        className="mt-3 inline-flex w-fit items-center gap-2 rounded px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] transition-transform group-hover:translate-x-1"
-                        style={{ background: ex.ctaBg, color: ex.ctaColor }}
-                      >
-                        {ex.cta}
-                        <ArrowUpRight className="h-3 w-3" strokeWidth={2.5} />
-                      </span>
-                    )}
+                    <span
+                      className="mt-3 inline-flex w-fit items-center gap-2 rounded px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] transition-transform group-hover:translate-x-1"
+                      style={{ background: ex.ctaBg, color: ex.ctaColor }}
+                    >
+                      {ex.cta}
+                      <ArrowUpRight className="h-3 w-3" strokeWidth={2.5} />
+                    </span>
                   </div>
                   {ex.mark && (
                     // eslint-disable-next-line @next/next/no-img-element
