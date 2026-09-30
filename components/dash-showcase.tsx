@@ -229,6 +229,7 @@ function DashboardView() {
           </Panel>
         </div>
       </div>
+      <div className="hidden sm:block">
       <Panel title="Projects">
         <Table
           head={['Ref', 'Client', 'Stage', 'PM', 'Target', 'Value', 'Status']}
@@ -239,6 +240,7 @@ function DashboardView() {
           ]}
         />
       </Panel>
+      </div>
     </div>
   )
 }
@@ -396,11 +398,9 @@ const VIEWS: Record<ViewId, () => ReactNode> = {
   audit: AuditView,
 }
 
+// Only what the "With the dash" list above the preview doesn't already say:
+// enquiries, quotes, variations and invoices are covered there.
 const FEATURES: { Icon: typeof Users; title: string; body: string }[] = [
-  { Icon: Users, title: 'Every enquiry, captured', body: 'Your site’s contact form drops straight into the dash. Leads nobody has followed up get flagged.' },
-  { Icon: FileText, title: 'Quotes customers accept online', body: 'Send a branded PDF quote with a private link. They accept or decline — no login, no app.' },
-  { Icon: Check, title: 'Scope changes agreed in writing', body: 'Variations go to your customer’s portal to approve or decline, and it’s logged.' },
-  { Icon: Wallet, title: 'Invoices and who owes what', body: 'Invoices as PDFs, a cashflow view of what’s overdue, and a nudge before it becomes a chase.' },
   { Icon: HardHat, title: 'Jobs at risk, trades booked', body: 'Spot the job slipping and see which trades are fully booked before you promise a start date.' },
   { Icon: CalendarClock, title: 'A calendar that warns you', body: 'Site visits sit alongside your jobs, with clash warnings and optional Google Calendar sync.' },
   { Icon: History, title: 'Roles and an audit trail', body: 'Owner and member access, and a record of who changed what and when.' },
@@ -412,7 +412,7 @@ export function DashShowcase() {
   const View = VIEWS[view]
 
   return (
-    <section id="dash" className="relative overflow-hidden border-y border-[#e8935e]/25 py-24 sm:py-32">
+    <section id="dash" className="relative overflow-hidden border-y border-[#e8935e]/25 py-20 sm:py-28">
       {/* A distinct product zone: the dash has its own brand (warm orange, dark
           sidebar) inside the mockup below - this wash carries that identity out
           into the marketing section itself, so the eye registers "a different
@@ -426,12 +426,15 @@ export function DashShowcase() {
         aria-hidden="true"
       />
       <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
-        <Reveal className="max-w-3xl">
+        {/* The pitch and the handoff sit side by side on desktop: the handoff
+            is the pitch happening, so it belongs next to it, not under it. */}
+        <div className="grid items-center gap-10 lg:grid-cols-[1fr_22rem] lg:gap-14">
+        <Reveal>
           <span className="inline-flex items-center gap-2 rounded-full border border-[#e8935e]/40 bg-[#e8935e]/10 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.25em] text-[#e8935e]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#e8935e]" />
             Included with every Scalar build — not an add-on
           </span>
-          <h2 className="mt-5 font-display text-balance text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
+          <h2 className="mt-5 font-display text-balance text-4xl font-bold tracking-tight sm:text-5xl lg:text-[3.1rem] lg:leading-[1.05]">
             The site brings the lead in.
             <br className="hidden sm:block" /> <span className="text-[#e8935e]">The dash runs the job after.</span>
           </h2>
@@ -442,16 +445,17 @@ export function DashShowcase() {
           </p>
         </Reveal>
 
-        <Reveal className="mt-10">
+        <Reveal>
           <EnquiryHandoff />
         </Reveal>
+        </div>
 
-        <Reveal stagger className="mt-8 grid gap-5 md:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-card/40 p-7">
+        <Reveal stagger className="mt-10 grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-border bg-card/40 p-6">
             <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
               Most trades today
             </span>
-            <ul className="mt-5 space-y-3.5 text-sm text-muted-foreground">
+            <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
               {[
                 'Enquiries scattered across WhatsApp, texts and voicemail',
                 'Quotes typed up in Word and emailed one by one',
@@ -465,9 +469,9 @@ export function DashShowcase() {
               ))}
             </ul>
           </div>
-          <div className="rounded-2xl border border-[#e8935e]/40 bg-card p-7">
+          <div className="rounded-2xl border border-[#e8935e]/40 bg-card p-6">
             <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-[#e8935e]">With the dash</span>
-            <ul className="mt-5 space-y-3.5 text-sm text-foreground/90">
+            <ul className="mt-4 space-y-2.5 text-sm text-foreground/90">
               {[
                 'Every enquiry in one list, and the ones nobody has followed up get flagged',
                 'Branded quotes your customer accepts online, with no login',
@@ -483,7 +487,7 @@ export function DashShowcase() {
           </div>
         </Reveal>
 
-        <Reveal className="mt-12">
+        <Reveal className="mt-10">
           <div className="dash-rise overflow-hidden rounded-2xl border border-border shadow-[0_30px_70px_-30px_rgba(232,147,94,0.35)]">
             {/* Browser chrome */}
             <div className="flex items-center gap-2 border-b border-border bg-card/70 px-4 py-3">
@@ -550,43 +554,34 @@ export function DashShowcase() {
           </p>
         </Reveal>
 
-        <Reveal stagger className="mt-16 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal stagger className="mt-10 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map(({ Icon, title, body }) => (
-            <div key={title}>
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e8935e]/30 bg-[#e8935e]/10 text-[#e8935e]">
-                <Icon className="h-4 w-4" strokeWidth={2.25} />
-              </span>
-              <h3 className="mt-4 font-display text-lg font-semibold">{title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{body}</p>
+            <div key={title} className="border-t border-[#e8935e]/20 pt-5">
+              <h3 className="flex items-center gap-2.5 font-display text-base font-semibold">
+                <Icon className="h-4 w-4 flex-none text-[#e8935e]" strokeWidth={2.25} />
+                {title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
             </div>
           ))}
         </Reveal>
 
-        <Reveal className="mt-16">
-          <div className="relative overflow-hidden rounded-2xl border border-[#e8935e]/40 bg-card p-8 sm:p-10">
-            <div
-              className="pointer-events-none absolute inset-0 opacity-70"
-              style={{ background: 'radial-gradient(80% 70% at 100% 0%, rgba(232,147,94,0.18), transparent 60%)' }}
-              aria-hidden="true"
-            />
-            <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-              <div className="max-w-xl">
-                <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-[#e8935e]">Included, not an add-on</span>
-                <p className="mt-3 font-display text-2xl font-bold sm:text-3xl">
-                  The dash comes with The Scalar build. <span className="text-[#e8935e]">£2,500, fixed.</span>
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Your five-page site and your own dashboard, agreed as one price before a line of code is written. Dashboard hosting is free for your first 12 months; after that it is £{PRICES.dashboardMonthly} a month if you want to keep it, and optional. Your website is always yours, with or without the dashboard.
-                </p>
-              </div>
-              <Link
-                href="/contact"
-                className="btn-chamfer group inline-flex flex-none items-center justify-center gap-2 bg-[#e8935e] px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-[#1a0f08] transition-colors hover:bg-[#f5b488]"
-              >
-                Start your build
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </Link>
-            </div>
+        <Reveal className="mt-10">
+          <div className="flex flex-col gap-5 rounded-2xl border border-[#e8935e]/40 bg-card px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+            <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+              <span className="font-display text-lg font-bold text-foreground">
+                Comes with The Scalar build. <span className="text-[#e8935e]">£2,500, fixed.</span>
+              </span>{' '}
+              Dashboard hosting is free for your first 12 months, then £{PRICES.dashboardMonthly} a month if you want to
+              keep it, and optional. Your website is always yours, with or without it.
+            </p>
+            <Link
+              href="/contact"
+              className="btn-chamfer group inline-flex flex-none items-center justify-center gap-2 whitespace-nowrap bg-[#e8935e] px-6 py-3 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-[#1a0f08] transition-colors hover:bg-[#f5b488]"
+            >
+              Start your build
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Link>
           </div>
         </Reveal>
       </div>
