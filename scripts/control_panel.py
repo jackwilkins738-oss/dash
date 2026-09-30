@@ -67,7 +67,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "33"
+PANEL_VERSION = "34"
 MAX_LOG_LINES = 5000
 
 
@@ -1053,7 +1053,16 @@ class Handler(BaseHTTPRequestHandler):
                 with pending.open(encoding="utf-8") as f:
                     rows = list(csv.DictReader(f))
                 batch = f"{rows[0]['batch']} ({len(rows)})" if rows else ""
-            return self._json({"remaining": email_batches.remaining(OUTREACH, scope) if OUTREACH.is_dir() else 0, "pending": batch})
+            import mail_accounts
+            import send_email
+            from datetime import date
+
+            # Today's sending, per inbox. Only your own sending addresses and counts leave
+            # this function - never a prospect's address.
+            inboxes = [a.address for a in mail_accounts.accounts({**os.environ, **load_settings()})]
+            today = send_email.today_summary(OUTREACH, date.today(), inboxes) if OUTREACH.is_dir() else None
+            return self._json({"remaining": email_batches.remaining(OUTREACH, scope) if OUTREACH.is_dir() else 0, "pending": batch,
+                               "today": today})
         if route == "/api/email-template":
             import send_email
 
@@ -1369,6 +1378,7 @@ PAGE = r"""<!doctype html>
       <div class="action">
         <div class="row" style="margin:0"><button data-action="batch">Make email batch</button><input type="number" id="batch-size" value="20" min="1" max="500"><select id="batch-scope" style="width:auto"><option value="all">from every list</option><option value="sheet">from this list</option></select></div>
         <p>The next firms not yet emailed, every link re-checked (the autopilot makes one each morning). <span id="batch-info"></span></p>
+        <p style="margin:6px 0 0"><b id="sent-today"></b><br><span class="hint" id="sent-by-inbox"></span></p>
         <div class="row"><button data-action="send_test" data-test-kind="batch">Send a test to yourself</button><button class="primary" data-action="send_batch">Send today's batch</button></div>
         <p class="hint">Sends from your own email, 40-90 seconds apart (about half an hour for 20), each recorded as it goes - stop any time and press Send again to carry on. Anyone who said no or replied since is left out. Using Mailmeteor instead? Import <b>mailmeteor-batch-&lt;date&gt;.csv</b>, send, then <button data-action="batch_sent" style="padding:2px 8px">Mark batch as sent</button></p>
       </div>
@@ -1875,6 +1885,11 @@ async function loadBatch() {
   const q = `?sheet=${encodeURIComponent($("sheet").value || "")}&scope=${$("batch-scope").value}`;
   const r = await (await fetch("/api/batch" + q)).json();
   $("batch-info").textContent = `${r.remaining} waiting to be emailed.` + (r.pending ? ` Last batch not marked as sent yet: ${r.pending}.` : "");
+  const t = r.today;
+  if (t) {
+    $("sent-today").textContent = `Sent today: ${t.sent} of ${t.cap} · ${t.left} left today`;
+    $("sent-by-inbox").textContent = t.by_inbox.map(b => `${b.inbox}: ${b.sent} sent, ${b.left} left`).join("  ·  ");
+  }
 }
 $("batch-scope").addEventListener("change", loadBatch);
 

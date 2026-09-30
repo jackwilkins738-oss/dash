@@ -220,6 +220,28 @@ def sent_today(outreach: Path, today: date, by_inbox: bool = False, main: str = 
     return counts if by_inbox else sum(counts.values())
 
 
+def today_summary(outreach: Path, today: date, inboxes: list[str]) -> dict:
+    """Today's sending for the panel: total sent, the day's cap, what's left, and the same per inbox.
+
+    Counted exactly as the sender counts against DAILY_CAP (first emails + follow-ups). Rows with no
+    sent_from - Mailmeteor batches marked as sent, and older sends - count to the main inbox, the
+    first of `inboxes`. An inbox that sent today but has since been removed still shows, with no
+    allowance left, so the total always matches the log.
+    """
+    main = inboxes[0].lower() if inboxes else ""
+    used = sent_today(outreach, today, by_inbox=True, main=main)
+    order = [a.lower() for a in inboxes] or [""]
+    order += [a for a in used if a not in order]
+    rows = []
+    for address in order:
+        sent = used.get(address, 0)
+        live = address in [a.lower() for a in inboxes] or (not inboxes and address == "")
+        rows.append({"inbox": address or "main inbox", "sent": sent, "left": max(0, DAILY_CAP - sent) if live else 0})
+    total = sum(r["sent"] for r in rows)
+    cap = DAILY_CAP * max(1, len(inboxes))
+    return {"sent": total, "cap": cap, "left": sum(r["left"] for r in rows), "by_inbox": rows}
+
+
 def _still_ok(outreach: Path, email: str, business: str) -> str:
     """'' if they may still be emailed, else why not (checked again just before sending)."""
     stop = eb.do_not_email(outreach)
