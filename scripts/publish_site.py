@@ -8,10 +8,10 @@ must contain index.html.
 
 How the access works (docs/launching-a-client-site.md): the client's
 Cloudflare account is theirs, and they invite you as an Administrator. One
-API token of yours - Cloudflare > My Profile > API Tokens > Create Token >
-"Edit Cloudflare Workers" template, or a custom token with Account >
-Cloudflare Pages > Edit, for All accounts - then publishes to every client
-you're a member of. Save it as CLOUDFLARE_API_TOKEN in the panel's Settings.
+API token of yours - Cloudflare > My Profile > API Tokens > Create Custom
+Token with just Account > Cloudflare Pages > Edit, Account Resources: All
+accounts, and no zone or DNS access - then publishes to every client you're
+a member of. Save it as CLOUDFLARE_API_TOKEN in the panel's Settings.
 
 Uses Cloudflare's own `wrangler` tool through npx, so Node.js must be
 installed (nodejs.org, the LTS version). The first publish creates the Pages

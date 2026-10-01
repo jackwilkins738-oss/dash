@@ -69,7 +69,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "40"
+PANEL_VERSION = "41"
 MAX_LOG_LINES = 5000
 
 
@@ -90,6 +90,19 @@ SETTINGS_FILE = OUTREACH / "panel.env"
 _MM_LOCK = threading.Lock()
 _MM_LAST = [0.0]
 MM_EVERY = 600  # seconds between Sent-folder checks while the panel is open
+
+
+def _domain_warnings() -> list[str]:
+    """The Scorecard's per-domain warnings (bouncing, or far fewer replies than the rest), for Today -
+    so a domain going bad is seen the day it happens, not at the next Scorecard. Only your own sending
+    domains and counts, never a prospect."""
+    import scorecard
+
+    try:
+        lines = scorecard.domains(scorecard.gather(OUTREACH, None)) if OUTREACH.is_dir() else []
+    except Exception:  # an odd CSV must never break the Today screen
+        return []
+    return [x.strip() for x in lines if any(w in x for w in ("STOP", "bounces are high", "under half"))]
 
 
 def _reply_watch_last() -> dict | None:
@@ -1176,7 +1189,7 @@ class Handler(BaseHTTPRequestHandler):
             inboxes = [a.address for a in mail_accounts.accounts({**os.environ, **load_settings()})]
             today = send_email.today_summary(OUTREACH, date.today(), inboxes) if OUTREACH.is_dir() else None
             return self._json({"remaining": email_batches.remaining(OUTREACH, scope) if OUTREACH.is_dir() else 0, "pending": batch,
-                               "today": today})
+                               "today": today, "domain_warnings": _domain_warnings()})
         if route == "/api/email-template":
             import send_email
 
@@ -1380,6 +1393,7 @@ PAGE = r"""<!doctype html>
   ol.steps li { margin:4px 0; }
   button.link { background:none; border:0; padding:0; color:var(--accent); text-decoration:underline; font-size:inherit; }
   .badge.good { background:var(--ok); }
+  .card.warn { border-color:var(--bad); background:rgba(255,107,107,.08); }
   .dot { width:9px; height:9px; border-radius:50%; background:var(--dim); }
   .dot.run { background:var(--warn); animation:pulse 1s infinite; } .dot.ok { background:var(--ok); } .dot.bad { background:var(--bad); }
   @keyframes pulse { 50% { opacity:.3; } }
@@ -1451,6 +1465,7 @@ PAGE = r"""<!doctype html>
 
   <!-- ============================== TODAY -->
   <section data-section="today">
+    <div class="card warn" id="domain-warnings" hidden></div>
     <div class="glance">
       <button class="tile" data-goto="calls"><b id="todo-calls">–</b><span>on Calls - replies and people who opened their preview</span></button>
       <button class="tile" data-goto="review"><b id="todo-review">–</b><span>to decide on Review</span></button>
@@ -1789,7 +1804,7 @@ Scalar Digital · 07401 696272</textarea>
         <div><label>Phone alerts bot <code>TELEGRAM_BOT_TOKEN</code> <span id="set-tg"></span></label><input type="password" id="TELEGRAM_BOT_TOKEN" autocomplete="off"></div>
         <div><label>Phone alerts chat <code>TELEGRAM_CHAT_ID</code></label><input type="text" id="TELEGRAM_CHAT_ID" placeholder="same as in Vercel"></div>
       </div>
-      <p class="hint">Cloudflare token: My Profile → API Tokens → "Edit Cloudflare Workers" template, All accounts. Telegram texts you when a long run finishes.</p>
+      <p class="hint">Cloudflare token: My Profile → API Tokens → Create Custom Token, permission <b>Account → Cloudflare Pages → Edit</b> only, Account Resources <b>All accounts</b>, no zones. Telegram texts you when a long run finishes.</p>
       <details style="margin-top:8px"><summary>Advanced</summary>
         <div class="grid2">
           <div><label><code>DASHBOARD_API_URL</code></label><input type="text" id="DASHBOARD_API_URL" placeholder="https://admin.scalardigital.co.uk"></div>
@@ -2182,6 +2197,9 @@ async function loadBatch() {
     $("sent-today").textContent = `Sent today: ${t.sent} of ${t.cap} · ${t.left} left today`;
     $("sent-by-inbox").textContent = t.by_inbox.map(b => `${b.inbox}: ${b.sent} sent, ${b.left} left`).join("  ·  ");
   }
+  const w = r.domain_warnings || [];
+  $("domain-warnings").hidden = !w.length;
+  $("domain-warnings").innerHTML = w.length ? `<h2>Sending domain needs attention</h2>${w.map((x) => `<p style="margin:4px 0">${esc(x)}</p>`).join("")}` : "";
 }
 $("batch-scope").addEventListener("change", loadBatch);
 // Keeps "Sent today" current while the panel is open - and lets the server tick off a Mailmeteor

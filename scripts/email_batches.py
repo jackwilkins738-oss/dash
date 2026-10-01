@@ -106,13 +106,60 @@ def remaining(outreach: Path, sheet: str | None = None) -> int:
     return len(seen)
 
 
-def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, today: date | None = None) -> tuple[Path | None, list[str]]:
-    """(batch file, notes). check(url) -> None if the link loads, else why not."""
+RECHECK_AFTER_DAYS = 30
+
+
+def verified(outreach: Path, verify, today: date):
+    """email -> (ok, result): the saved check if it's recent, else a fresh one (saved), so every batch
+    only holds addresses that can take mail. Mailmeteor sends without the panel's own safeguards, so
+    this is where bounces are stopped - each one costs the sending domain's reputation."""
+    from datetime import datetime, timedelta, timezone
+
+    from email_check import is_bad
+
+    path = outreach / "email-checks.csv"
+    fields, rows = _rows(path)
+    fields = fields or ["email", "result", "checked_at"]
+    saved = {(r.get("email") or "").lower(): r for r in rows}
+    cache: dict[str, str] = {}
+    changed = [False]
+
+    def look(email: str) -> tuple[bool, str]:
+        e = email.lower()
+        row = saved.get(e)
+        if row:
+            try:
+                fresh = today - datetime.fromisoformat(row.get("checked_at", "")).date() < timedelta(days=RECHECK_AFTER_DAYS)
+            except ValueError:
+                fresh = False
+            if fresh or row.get("result") == "bounced":
+                return not is_bad(row.get("result", "")), row.get("result", "")
+        result = verify(e, cache)
+        if result != "unknown":
+            saved[e] = {**(row or {}), "email": e, "result": result, "checked_at": datetime.now(timezone.utc).isoformat()}
+            changed[0] = True
+        return not is_bad(result), result
+
+    def save() -> None:
+        if changed[0]:
+            with path.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(saved.values())
+
+    return look, save
+
+
+def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, today: date | None = None,
+               verify=None) -> tuple[Path | None, list[str]]:
+    """(batch file, notes). check(url) -> None if the link loads, else why not. verify(email, cache) ->
+    an email_check result (None skips address checks - the tests' default)."""
     if check is None:
         from push_prospects import link_loads as check
     today = today or date.today()
     done = sent_emails(outreach)
     stop = do_not_email(outreach)
+    look, save = verified(outreach, verify, today) if verify else (None, lambda: None)
     picked, fields, notes, seen = [], [], [], set()
     for src in sources(outreach, sheet):
         src_fields, rows = _rows(src)
@@ -124,6 +171,11 @@ def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, 
             if email in stop:
                 notes.append(f"skipped {r.get('business')}: {stop[email]}")
                 continue
+            if look:
+                ok, result = look(email)
+                if not ok:
+                    notes.append(f"skipped {r.get('business')}: {email} can't take mail ({result}) - they'll get a letter instead")
+                    continue
             why = check(r.get("preview_url") or "")
             if why:
                 notes.append(f"skipped {r.get('business')}: link {why}")
@@ -134,6 +186,7 @@ def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, 
                 break
         if len(picked) >= size:
             break
+    save()
     if not picked:
         return None, notes
     path = outreach / f"mailmeteor-batch-{today.isoformat()}.csv"
@@ -390,10 +443,12 @@ def main() -> None:
     if pending:
         print(f"Note: the last batch ({pending[0].get('batch')}) was never marked as sent - it's being replaced.")
     print(f"Picking the next {args.size} firms not yet emailed{' from ' + args.sheet if args.sheet else ' from every list'}, "
-          "and checking each link ...", flush=True)
+          "and checking each address and link ...", flush=True)
     if block_optouts(outreach, preview_views()):
         print("  Some firms said 'not for us' on their preview - they're on do-not-contact now.")
-    path, notes = make_batch(outreach, args.size, args.sheet)
+    from email_check import check as verify_email
+
+    path, notes = make_batch(outreach, args.size, args.sheet, verify=verify_email)
     for n in notes[:10]:
         print(f"  {n}")
     if not path:
