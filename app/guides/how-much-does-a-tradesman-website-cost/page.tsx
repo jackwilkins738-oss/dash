@@ -137,6 +137,17 @@ export default function CostGuidePage() {
               </tbody>
             </table>
           </div>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Weighing up a builder? See{' '}
+            <Link href="/guides/wix-or-hand-coded-website-for-tradesmen" className="text-blueprint underline underline-offset-4">
+              Wix, Squarespace or hand-coded
+            </Link>
+            . Paying a directory for leads? See{' '}
+            <Link href="/guides/checkatrade-or-your-own-website" className="text-blueprint underline underline-offset-4">
+              Checkatrade or your own website
+            </Link>
+            .
+          </p>
 
           <Reveal className="mt-14">
             <h2 className="font-display text-balance text-3xl font-bold tracking-tight">What actually changes the price</h2>

@@ -23,6 +23,16 @@ const GUIDES = [
     body: 'A fair comparison of running your trade business on a Facebook or Instagram page versus your own website, and where relying on one alone costs you jobs.',
   },
   {
+    href: '/guides/checkatrade-or-your-own-website',
+    title: 'Checkatrade or your own website?',
+    body: 'What trade directories are genuinely good at, what you give up by relying on one, and how most established firms use both.',
+  },
+  {
+    href: '/guides/wix-or-hand-coded-website-for-tradesmen',
+    title: 'Wix, Squarespace or hand-coded?',
+    body: 'When a DIY website builder is the right choice for a trade business, when it quietly costs you jobs, and five things to do if you use one.',
+  },
+  {
     href: '/guides/google-business-profile-for-tradesmen',
     title: 'How to get your trade business on Google Maps.',
     body: 'Setting up a free Google Business Profile properly: service areas, categories, verification, photos, and the mistakes that get profiles suspended.',
