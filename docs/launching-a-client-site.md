@@ -84,6 +84,12 @@ it's what catches their enquiries.
 
 ## 5. Pointing the domain - without breaking their email
 
+**On the panel:** Clients → *Go live without breaking their email* → type their
+domain → **1. Save their DNS** does steps 1 and 5 for you: it saves every record
+their email needs (`outreach/sites/<firm>/dns-before.json`) and says who hosts
+their email. After the switch, **2. Check the launch** compares, and lists any
+record that went missing with exactly what to add in Cloudflare.
+
 1. **Before touching anything**, screenshot or export every DNS record at their
    registrar. The ones that matter most:
    - `MX` records - their email. Lose these and their email stops.
@@ -107,6 +113,11 @@ it's what catches their enquiries.
 - Google Business Profile: check the website link points at the new site.
 
 ## 7. Launch checks (15 minutes)
+
+**Check the launch** on the panel does every box below that a computer can tick
+(https, www, http → https, a real 404, sitemap and robots, no draft or noindex,
+tracking and the quote form wired up, certificate, email records) and says
+READY or what's wrong. The phone, enquiry and email tests are still by hand.
 
 - [ ] On your own phone: every page, tap-to-call works, WhatsApp opens, menu works
 - [ ] Send a test enquiry through the form - it arrives in the dashboard and by email

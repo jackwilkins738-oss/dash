@@ -417,6 +417,17 @@ Scalar Digital · 07401 696272</textarea>
     </div>
 
     <div class="card">
+      <h2>Go live without breaking their email</h2>
+      <div class="grid2"><input type="text" id="golive-domain" placeholder="Their domain (e.g. kerrroofing.co.uk)"><span class="hint" style="align-self:center">Uses the folder above too, if filled in.</span></div>
+      <div class="row"><button data-action="dns_snapshot">1. Save their DNS</button><button class="primary" data-action="launch_check">2. Check the launch</button></div>
+      <ol class="steps">
+        <li><b>Before touching anything</b>, press <b>Save their DNS</b>: it saves every record their email needs and says who hosts it.</li>
+        <li>Add the domain in Cloudflare, check the records came across, change the nameservers, add the custom domains.</li>
+        <li><b>Check the launch</b>: https, www, a real 404, sitemap, no draft or noindex, tracking and the quote form wired up, certificate - and every email record still there. Anything missing is listed with what to add.</li>
+      </ol>
+    </div>
+
+    <div class="card">
       <h2>Launch report</h2>
       <div class="grid2"><input type="text" id="launch-old" placeholder="Their old website"><input type="text" id="launch-new" placeholder="New site (if a different domain)"></div>
       <div class="row"><button class="primary" data-action="launch_report">Make launch report</button></div>
@@ -615,6 +626,7 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
     batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "",
     launch_old: $("launch-old").value, launch_new: $("launch-new").value,
+    golive_domain: $("golive-domain").value,
     publish_folder: $("publish-folder").value, publish_account: $("publish-account").value, publish_project: $("publish-project").value,
     build_draft: $("build-draft").checked });
   if (r.error) $("run-msg").textContent = r.error;
