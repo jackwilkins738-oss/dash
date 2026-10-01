@@ -71,7 +71,8 @@ STARTER = {
     "areas": [{"town": "[Confirm: main town]", "note": ""}],
     "reviews": {"google_url": "", "rating": None, "count": None, "quotes": []},
     "faqs": [],
-    "gallery": {"photos": [], "from_dashboard": True},
+    "gallery": {"photos": [], "before_after": [], "from_dashboard": True},
+    "notice": "",
     "company": {"legal_name": "", "number": "", "registered_office": "", "vat": ""},
     "dashboard": {"tenant_id": "[Confirm: from /admin]", "site_key": "[Confirm: from /admin]"},
     "redirects": [],
@@ -177,6 +178,15 @@ def validate(cfg: dict, folder: Path, draft: bool = False) -> list[str]:
     for p in (cfg.get("gallery") or {}).get("photos") or []:
         if not (folder / p).is_file():
             out.append(f"gallery.photos: {p} not found")
+    for i, pair in enumerate((cfg.get("gallery") or {}).get("before_after") or []):
+        for side in ("before", "after"):
+            if not pair.get(side):
+                out.append(f"gallery.before_after[{i}]: needs both a before and an after photo")
+                break
+            if not (folder / pair[side]).is_file():
+                out.append(f"gallery.before_after[{i}].{side}: {pair[side]} not found")
+    if len(str(cfg.get("notice") or "")) > 120:
+        out.append("notice: keep it to one short line (120 characters at most)")
     dash = cfg.get("dashboard") or {}
     if not draft and not (dash.get("tenant_id") and dash.get("site_key")):
         out.append("dashboard: tenant_id and site_key from /admin - without them the enquiry form goes nowhere")
@@ -197,17 +207,19 @@ def copy_asset(folder: Path, out: Path, rel: str) -> tuple[str, int | None, int 
     dest = out / "img" / name
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
-        from PIL import Image  # optional: keeps photos a sensible weight
-
+        from PIL import Image, UnidentifiedImageError  # optional: keeps photos a sensible weight
+    except ImportError:
+        shutil.copyfile(src, dest)
+        return f"/img/{name}", None, None
+    try:
         with Image.open(src) as im:
             im = im.convert("RGB") if src.suffix.lower() in (".jpg", ".jpeg") else im
             if im.width > 1600:
                 im = im.resize((1600, round(im.height * 1600 / im.width)))
             im.save(dest, quality=82, optimize=True) if src.suffix.lower() in (".jpg", ".jpeg", ".webp") else im.save(dest)
             return f"/img/{name}", im.width, im.height
-    except ImportError:
-        shutil.copyfile(src, dest)
-        return f"/img/{name}", None, None
+    except (UnidentifiedImageError, OSError) as e:
+        raise SiteError(f"{rel} isn't a photo that can be opened ({type(e).__name__}) - re-save it as a JPEG and build again.")
 
 
 def img(url: str, w: int | None, h: int | None, alt: str, cls: str = "", eager: bool = False) -> str:
@@ -263,6 +275,11 @@ def page(cfg: dict, *, path: str, title: str, description: str, body: str, crumb
                  f'{esc(company["number"])}{". Registered office: " + esc(company["registered_office"]) if company.get("registered_office") else ""}'
                  f'{". VAT no. " + esc(company["vat"]) if company.get("vat") else ""}.</p>')
     banner = ('<div class="draft-banner">Draft for review - not live. Some details still to confirm.</div>' if draft else "")
+    # One short line across the top of every page, e.g. "Booking spring jobs now - 2 weeks' lead time".
+    # Changed in site.json and republished; empty means no strip at all.
+    if str(cfg.get("notice") or "").strip():
+        banner += f'<div class="notice">{esc(str(cfg["notice"]).strip())}</div>'
+
     return f"""<!doctype html>
 <html lang="en-GB">
 <head>
@@ -457,16 +474,34 @@ def home(cfg: dict, draft: bool) -> str:
                 schema=[local_business(cfg)] + faq_schema(cfg.get("faqs") or []), draft=draft)
 
 
+def before_after(cfg: dict, limit: int | None = None) -> str:
+    """Before-and-after pairs, side by side (stacked on a phone) - for a roof or a driveway, the most
+    convincing photo there is. No slider: two honest photos load faster and work everywhere."""
+    pairs = (cfg.get("_pairs") or [])[:limit] if limit else cfg.get("_pairs") or []
+    out = []
+    for b, a, cap in pairs:
+        what = f"{cfg['business']} - {cap or 'a job'}"
+        out.append(
+            '<figure class="pair"><div class="pair__photos">'
+            f'<div><span class="pair__tag">Before</span>{img(b[0], b[1], b[2], what + " before")}</div>'
+            f'<div><span class="pair__tag after">After</span>{img(a[0], a[1], a[2], what + " after")}</div></div>'
+            + (f"<figcaption>{esc(cap)}</figcaption>" if cap else "") + "</figure>")
+    return "".join(out)
+
+
 def gallery_section(cfg: dict, limit: int | None = None, heading: str = "Our work", more: bool = False) -> str:
+    pairs = before_after(cfg, 1 if limit else None)
     photos = cfg.get("_gallery") or []
     shown = photos[:limit] if limit else photos
     tiles = "".join(f'<figure>{img(u, w, h, cfg["business"] + " - completed job")}</figure>' for u, w, h in shown)
     live = ('<div data-project-gallery hidden><div id="project-gallery" class="gallery"></div></div>'
             if (cfg.get("gallery") or {}).get("from_dashboard", True) and connected(cfg) and not limit else "")
-    if not (tiles or live):
+    if not (tiles or live or pairs):
         return ""
     link = '<p><a class="text-link" href="/gallery.html">See more of our work</a></p>' if more else ""
-    return f'<section class="section"><div class="wrap"><h2>{esc(heading)}</h2><div class="gallery">{tiles}</div>{live}{link}</div></section>'
+    pairs_html = f'<div class="pairs">{pairs}</div>' if pairs else ""
+    grid = f'<div class="gallery">{tiles}</div>' if tiles else ""
+    return f'<section class="section"><div class="wrap"><h2>{esc(heading)}</h2>{pairs_html}{grid}{live}{link}</div></section>'
 
 
 def services_page(cfg: dict, draft: bool) -> str:
@@ -598,6 +633,8 @@ def build(folder: Path, draft: bool = False) -> dict:
     for s in cfg["services"]:
         s["_photo"] = copy_asset(folder, out, s["photo"]) if s.get("photo") else None
     cfg["_gallery"] = [copy_asset(folder, out, p) for p in (cfg.get("gallery") or {}).get("photos") or []]
+    cfg["_pairs"] = [(copy_asset(folder, out, p["before"]), copy_asset(folder, out, p["after"]), str(p.get("caption") or "").strip())
+                     for p in (cfg.get("gallery") or {}).get("before_after") or []]
 
     pages: dict[str, str] = {
         "index.html": home(cfg, draft),

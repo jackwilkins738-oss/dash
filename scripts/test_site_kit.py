@@ -40,6 +40,15 @@ def config(**over) -> dict:
     return cfg
 
 
+def write_photo(path: Path) -> None:
+    """A real (tiny) JPEG when Pillow is installed - the build opens it - else just bytes, copied as-is."""
+    try:
+        from PIL import Image
+        Image.new("RGB", (40, 30), "#888").save(path)
+    except ImportError:
+        path.write_bytes(b"\xff\xd8\xff\xd9")
+
+
 class Links(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -147,6 +156,44 @@ class SiteKit(unittest.TestCase):
         self.assertIn(f'gallery.js" data-tenant="{TENANT}"', gallery)
         self.assertIn('id="testimonials-list"', reviews)
         self.assertIn(f'testimonials.js" data-tenant="{TENANT}"', reviews)
+
+    def test_before_and_after_pairs_and_the_notice_strip(self):
+        files = self.folder / "client-files"
+        files.mkdir()
+        for name in ("old-roof.jpg", "new-roof.jpg"):
+            write_photo(files / name)
+        self.build(notice="Booking spring jobs now - 2 weeks' lead time",
+                   gallery={"photos": [], "from_dashboard": False,
+                            "before_after": [{"before": "client-files/old-roof.jpg", "after": "client-files/new-roof.jpg", "caption": "Slate roof, Maidstone"}]})
+        gallery, home, contact = self.page("gallery.html"), self.page("index.html"), self.page("contact.html")
+        self.assertIn('class="pair__tag">Before', gallery)
+        self.assertIn("Slate roof, Maidstone after", gallery)  # the alt text says which is which
+        self.assertIn('<figcaption>Slate roof, Maidstone</figcaption>', gallery)
+        self.assertIn('class="pair"', home)  # the first pair leads the homepage's recent work
+        self.assertTrue((self.folder / "site" / "img" / "new-roof.jpg").exists())
+        for page in (home, contact):
+            self.assertIn('<div class="notice">Booking spring jobs now - 2 weeks&#x27; lead time</div>', page)
+
+    def test_a_photo_that_wont_open_is_a_clear_error_not_a_crash(self):
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("Pillow isn't installed - photos are copied as-is")
+        (self.folder / "client-files").mkdir()
+        (self.folder / "client-files" / "hero.jpg").write_bytes(b"not a photo")
+        with self.assertRaises(sk.SiteError) as e:
+            self.build(hero_photo="client-files/hero.jpg")
+        self.assertIn("client-files/hero.jpg isn't a photo", str(e.exception))
+
+    def test_no_notice_no_strip_and_a_half_pair_is_refused(self):
+        self.build()
+        self.assertNotIn('class="notice"', self.page("index.html"))
+        with self.assertRaises(sk.SiteError) as e:
+            self.build(gallery={"photos": [], "before_after": [{"before": "client-files/x.jpg"}]})
+        self.assertIn("needs both a before and an after", str(e.exception))
+        with self.assertRaises(sk.SiteError) as e:
+            self.build(notice="x" * 121)
+        self.assertIn("notice", str(e.exception))
 
     def test_nothing_unconfirmed_goes_live(self):
         with self.assertRaises(sk.SiteError) as e:
