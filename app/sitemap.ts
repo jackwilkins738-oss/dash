@@ -20,6 +20,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     at('/guides/website-or-facebook-page-for-tradesmen', UPDATED, 0.8),
     at('/guides/google-business-profile-for-tradesmen', '2026-09-28', 0.7),
     at('/guides/how-to-get-more-google-reviews', '2026-09-28', 0.7),
+    at('/guides/checkatrade-or-your-own-website', '2026-10-01', 0.7),
+    at('/guides/wix-or-hand-coded-website-for-tradesmen', '2026-10-01', 0.7),
     at('/process', UPDATED, 0.6),
     at('/speed-test', UPDATED, 0.7),
     at('/contact', UPDATED, 0.7),
