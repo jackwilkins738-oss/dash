@@ -1,0 +1,47 @@
+# Texts you about interested replies every 15 minutes through the day, even with your PC off
+# (scripts/cloud_reply_watch.py). Read-only on the inboxes; this repository is public, so the
+# script prints counts only - never an address or a message. Skips quietly until the
+# REPLY_WATCH_INBOXES, TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID secrets are set.
+name: Reply watch
+
+on:
+  schedule:
+    - cron: "*/15 6-20 * * *"  # UTC - covers 7am to 9pm UK time all year
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reply-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Which replies were already texted, as one-way hashes - so nothing is texted twice.
+      - uses: actions/cache/restore@v4
+        with:
+          path: .reply-watch
+          key: reply-watch-${{ github.run_id }}
+          restore-keys: reply-watch-
+      - name: Check inboxes for replies
+        env:
+          REPLY_WATCH_INBOXES: ${{ secrets.REPLY_WATCH_INBOXES }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MAIL_IMAP_HOST: ${{ secrets.MAIL_IMAP_HOST }}
+        run: python scripts/cloud_reply_watch.py
+      - uses: actions/cache/save@v4
+        if: always() && hashFiles('.reply-watch/seen.txt') != ''
+        with:
+          path: .reply-watch
+          key: reply-watch-${{ github.run_id }}
