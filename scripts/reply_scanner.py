@@ -285,12 +285,25 @@ def act(outreach: Path, replies: list[dict]) -> dict[str, int]:
     return counts
 
 
+def alert_text(replies: list[dict]) -> str:
+    """The phone alert for replies worth answering now: who, from where, and what they said."""
+    hot = [r for r in replies if r["kind"] == "interested"]
+    if not hot:
+        return ""
+    lines = []
+    for r in hot[:5]:
+        said = " ".join(str(r.get("snippet") or "").split())[:160]
+        lines.append(f"{r['business'] or r['from']} replied and sounds interested ({r['from']})" + (f':\n"{said}"' if said else ""))
+    if len(hot) > 5:
+        lines.append(f"...and {len(hot) - 5} more.")
+    return "\n\n".join(lines) + "\n\nAnswer from the panel's Calls tab - the sooner the better."
+
+
 def alert(replies: list[dict]) -> None:
     token, chat = os.environ.get("TELEGRAM_BOT_TOKEN", ""), os.environ.get("TELEGRAM_CHAT_ID", "")
-    hot = [r for r in replies if r["kind"] == "interested"]
-    if not (token and chat and hot):
+    text = alert_text(replies)
+    if not (token and chat and text):
         return
-    text = "\n".join(f"{r['business']} replied and sounds interested - check the Calls tab." for r in hot[:5])
     try:
         req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",
                                      data=json.dumps({"chat_id": chat, "text": text}).encode(),
@@ -300,14 +313,57 @@ def alert(replies: list[dict]) -> None:
         pass
 
 
+LOCK = ".reply-check.lock"
+LOCK_STALE_S = 15 * 60  # a check that died mid-way never blocks the next one for long
+
+
+class Busy(Exception):
+    pass
+
+
+class reply_lock:
+    """One reply check at a time - the panel's button and the 15-minute watch both write replies.csv."""
+
+    def __init__(self, outreach: Path):
+        self.path = outreach / LOCK
+
+    def __enter__(self):
+        import time
+
+        try:
+            if self.path.exists() and time.time() - self.path.stat().st_mtime > LOCK_STALE_S:
+                self.path.unlink()
+            fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+        except FileExistsError as e:
+            raise Busy("Another reply check is running right now - skipped this one.") from e
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
+        return False
+
+
 def main() -> None:
+    outreach = outreach_dir()
+    outreach.mkdir(exist_ok=True)
+    try:
+        with reply_lock(outreach):
+            _check(outreach)
+    except Busy as e:
+        print(e)
+
+
+def _check(outreach: Path) -> None:
     import mail_accounts
 
     inboxes = mail_accounts.accounts()
     host = os.environ.get("MAIL_IMAP_HOST", "").strip() or "imap.gmail.com"
     if not inboxes:
         sys.exit("Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first (a Gmail app password - see the note there).")
-    outreach = outreach_dir()
     last = [r["date"] for r in _rows(outreach / REPLIES)]
     since = (date.fromisoformat(max(last)[:10]) - timedelta(days=2)) if last else date.today() - timedelta(days=30)
     # Every sending inbox - replies land wherever the email came from.
