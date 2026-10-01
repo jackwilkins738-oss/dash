@@ -917,12 +917,21 @@ class Quotes(unittest.TestCase):
         self.assertEqual(b["line_items"][0]["unit_price_pence"], 250000)
         self.assertIn("A 50% deposit is due when you accept", b["terms"])
         self.assertTrue(b["exclusions"] and b["payment_terms"].startswith("50% deposit"))
+        self.assertEqual(b["optional_items"][0], {"description": "Extra page", "price_pence": 15000})
         link = quotes.email_link("info@kerr.co.uk", "Bill Kerr", "Kerr Roofing", out, "Jack")
         self.assertTrue(link.startswith("mailto:info%40kerr.co.uk?subject="))
         body = urllib.parse.unquote(link.split("body=", 1)[1])
         self.assertIn("Hi Bill,", body)
         self.assertIn("(£2,500)", body)
         self.assertIn("https://admin.scalardigital.co.uk/quote/q1/t1", body)
+
+    def test_quote_extras_from_settings(self):
+        import quotes
+
+        self.assertEqual(len(quotes.extras({})), 4)  # blank: the defaults
+        self.assertEqual(quotes.extras({"QUOTE_EXTRAS": "none"}), [])
+        self.assertEqual(quotes.extras({"QUOTE_EXTRAS": "Extra page £175; Logo 99.50; no price here; Free 0"}),
+                         [{"description": "Extra page", "price_pence": 17500}, {"description": "Logo", "price_pence": 9950}])
 
     def test_a_dashboard_without_the_update_says_so(self):
         import urllib.error

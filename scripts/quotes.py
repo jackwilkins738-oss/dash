@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,6 +40,26 @@ def price(settings: dict[str, str], package: str) -> int:
     except ValueError:
         value = default
     return value if 1 <= value <= 100_000 else default
+
+
+# Optional extras on every quote (QUOTE_EXTRAS in Settings): the client ticks the ones they want on
+# the quote page before signing, and they're added to the price. One line, "name price; name price",
+# prices in pounds before VAT. Blank uses these; "none" turns them off.
+DEFAULT_EXTRAS = "Extra page 150; Google Business Profile set up and optimised 150; Logo tidy-up 250; Writing your website's words 200"
+MAX_EXTRAS = 8
+
+
+def extras(settings: dict[str, str]) -> list[dict]:
+    """[{description, price_pence}] from the QUOTE_EXTRAS setting - entries without a price are skipped."""
+    raw = str(settings.get("QUOTE_EXTRAS") or "").strip() or DEFAULT_EXTRAS
+    if raw.lower() in ("none", "off", "-"):
+        return []
+    out = []
+    for part in raw.split(";"):
+        m = re.fullmatch(r"\s*(.+?)\s+£?(\d{1,5}(?:\.\d{1,2})?)\s*", part)
+        if m:
+            out.append({"description": m.group(1)[:120], "price_pence": round(float(m.group(2)) * 100)})
+    return [e for e in out if e["price_pence"] > 0][:MAX_EXTRAS]
 
 
 def create_quote(settings: dict[str, str], business: str, email: str, phone: str, package: str,
@@ -70,6 +91,7 @@ def create_quote(settings: dict[str, str], business: str, email: str, phone: str
         "payment_terms": terms.payment_terms(deposit),
         "exclusions": terms.EXCLUSIONS,
         "terms": terms.terms(package, deposit, vat, founding),
+        "optional_items": extras(settings),
     }
     api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
     req = urllib.request.Request(

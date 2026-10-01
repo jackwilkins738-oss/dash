@@ -475,7 +475,9 @@ Scalar Digital · 07401 696272</textarea>
         <div><label>VAT % (0 or 20)</label><input type="text" id="QUOTE_VAT_RATE" placeholder="0 if blank"></div>
         <div><label>Deposit %</label><input type="text" id="QUOTE_DEPOSIT_PERCENT" placeholder="0 if blank - set 50"></div>
       </div>
-      <p class="hint">Used by the Quote buttons on Calls, the terms the client signs, and the proposal. VAT 0 unless you're VAT-registered.</p>
+      <label style="margin-top:10px">Optional extras (the client ticks them on the quote page) - <code>name price; name price</code>, £ before VAT</label>
+      <input type="text" id="QUOTE_EXTRAS" placeholder="Extra page 150; Google Business Profile set up and optimised 150; Logo tidy-up 250; Writing your website's words 200">
+      <p class="hint">Used by the Quote buttons on Calls, the terms the client signs, and the proposal. VAT 0 unless you're VAT-registered. Extras: blank uses the ones shown; type <code>none</code> for no extras.</p>
     </div>
 
     <div class="card">
@@ -580,7 +582,7 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "BOOKING_LINK", "CLOUD_REPLY_ALERTS"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "CLOUD_REPLY_ALERTS"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     if (!s.settings.PROSPECTS_API_SECRET) showTab("settings");  // nothing works until it's set
   }
@@ -1059,7 +1061,7 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (callsWanted()) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"]) $(k).value = "";
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
