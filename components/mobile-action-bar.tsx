@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { SITE } from '@/lib/site'
 
 // Phones only. Once the hero - and its own buttons - have scrolled away, the
 // next step stays under the thumb instead of 12,000px back up the page. It
@@ -68,7 +69,7 @@ export function MobileActionBar() {
           Start your build <span aria-hidden="true">&rarr;</span>
         </Link>
         <a
-          href="https://wa.me/66638306449"
+          href={SITE.whatsapp}
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Message on WhatsApp"

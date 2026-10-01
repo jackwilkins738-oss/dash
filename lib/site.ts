@@ -6,6 +6,8 @@ export const SITE = {
   url: 'https://www.scalardigital.co.uk',
   email: 'hello@scalardigital.co.uk',
   phone: '+447401696272',
+  // The WhatsApp chat link everywhere on the site (header button, footer, contact page, mobile bar).
+  whatsapp: 'https://wa.me/66638306449',
   linkedin: 'https://www.linkedin.com/in/scalar-digital-868841438/',
   // A 15-minute call, for anyone who'd rather talk than type.
   booking: 'https://cal.com/scalardigital/15min',

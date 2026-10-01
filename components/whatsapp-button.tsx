@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { SITE } from '@/lib/site'
 
 // Deliberately WhatsApp's own green, not the site's blueprint blue -
 // customers recognise the colour instantly, and that recognition is the
@@ -16,7 +17,7 @@ export function WhatsAppButton() {
   return (
     <a
       data-print="hide"
-      href="https://wa.me/66638306449"
+      href={SITE.whatsapp}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Message on WhatsApp"

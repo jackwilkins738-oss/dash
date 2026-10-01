@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Reveal } from '@/components/reveal'
+import { SITE } from '@/lib/site'
 
 export function CtaBand() {
   return (
@@ -38,7 +39,7 @@ export function CtaBand() {
                 Book a 15-min call
               </Link>
               <a
-                href="https://wa.me/66638306449"
+                href={SITE.whatsapp}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-chamfer inline-flex items-center justify-center gap-2 border border-border px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:border-blueprint hover:text-blueprint"

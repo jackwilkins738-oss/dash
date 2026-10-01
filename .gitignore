@@ -27,3 +27,4 @@ SCALAR/
 
 # Python bytecode from scripts/
 __pycache__/
+.lighthouseci/

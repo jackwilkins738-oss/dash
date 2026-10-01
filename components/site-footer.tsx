@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import { TRADES } from '@/lib/trades'
 import { ArrowUp, ArrowUpRight, BadgeCheck, Code2, KeyRound, Mail, MessageCircle, Phone, Tag } from 'lucide-react'
+import { SITE } from '@/lib/site'
 
-const WHATSAPP = 'https://wa.me/66638306449'
+const WHATSAPP = SITE.whatsapp
 const LINKEDIN = 'https://www.linkedin.com/in/scalar-digital-868841438/'
 
 const linkClass = 'text-sm text-foreground/75 transition-colors hover:text-blueprint'
@@ -93,7 +94,7 @@ export function SiteFooter() {
                   <Link href={s.href} className={`${linkClass} group flex items-baseline gap-2 whitespace-nowrap`}>
                     {s.label}
                     {s.note && (
-                      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                         {s.note}
                       </span>
                     )}

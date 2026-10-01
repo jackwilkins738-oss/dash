@@ -7,6 +7,7 @@ import { ContactForm } from '@/components/contact-form'
 import { BookCallButton, BookCallSection } from '@/components/book-call'
 import { Reveal } from '@/components/reveal'
 import { ReplyStatus } from '@/components/reply-status'
+import { SITE } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: 'Get a Quote for Your Trade Website',
@@ -20,7 +21,7 @@ const CHANNELS = [
     icon: MessageCircle,
     label: 'WhatsApp',
     value: 'Message me directly',
-    href: 'https://wa.me/66638306449',
+    href: SITE.whatsapp,
     external: true,
   },
   {

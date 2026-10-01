@@ -247,7 +247,7 @@ export function SpeedCheck({
           {status === 'loading' && (
             <p className="mt-4 text-center font-mono text-xs uppercase tracking-[0.15em] text-muted-foreground">
               Running Google&apos;s real test&hellip; {elapsed}s
-              <span className="block normal-case tracking-normal text-muted-foreground/70">
+              <span className="block normal-case tracking-normal text-muted-foreground">
                 {elapsed < 20
                   ? 'A genuine Lighthouse audit, not a shortcut — real ones can take a minute or two.'
                   : elapsed < 60
