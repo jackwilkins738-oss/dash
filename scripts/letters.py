@@ -108,10 +108,10 @@ def render(letters: list[dict], sender: dict[str, str], today: date | None = Non
     dated = f"{today.day} {today.strftime('%B %Y')}"
     sender_block = "<br>".join(html.escape(x) for x in (sender.get("name", ""), sender.get("email", ""), sender.get("phone", ""), sender.get("site", "")) if x)
     pages = []
-    for l in letters:
-        to = [l["contact"]] if l.get("contact") else []
-        to += [l["business"]] + address_lines(l.get("address", ""))
-        paragraphs = "".join(f"<p>{html.escape(p).replace(chr(10), '<br>')}</p>" for p in re.split(r"\n\s*\n", l["body"].strip()))
+    for letter in letters:
+        to = [letter["contact"]] if letter.get("contact") else []
+        to += [letter["business"]] + address_lines(letter.get("address", ""))
+        paragraphs = "".join(f"<p>{html.escape(p).replace(chr(10), '<br>')}</p>" for p in re.split(r"\n\s*\n", letter["body"].strip()))
         pages.append(f"""
 <section class="letter">
   <div class="from">{sender_block}</div>
@@ -119,8 +119,8 @@ def render(letters: list[dict], sender: dict[str, str], today: date | None = Non
   <div class="date">{dated}</div>
   <div class="body">{paragraphs}</div>
   <div class="qr">
-    <img src="{l['qr']}" alt="QR code">
-    <div>Scan with your phone's camera, or type:<br><b>{html.escape(l['short_url'])}</b></div>
+    <img src="{letter['qr']}" alt="QR code">
+    <div>Scan with your phone's camera, or type:<br><b>{html.escape(letter['short_url'])}</b></div>
   </div>
 </section>""")
     return f"""<!doctype html>

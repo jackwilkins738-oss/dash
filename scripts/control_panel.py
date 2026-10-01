@@ -1043,7 +1043,7 @@ def phone_alert(label: str, code: int, stopped: bool, seconds: float, lines: lis
     mins = int(seconds // 60)
     took = f"{mins // 60}h {mins % 60}m" if mins >= 60 else f"{mins}m"
     head = ("Stopped: " if stopped else "Done: " if code == 0 else "Failed: ") + f"{label} ({took})"
-    summary = [l.strip() for l in lines if ALERT_LINE.match(l)][-6:]
+    summary = [ln.strip() for ln in lines if ALERT_LINE.match(ln)][-6:]
     text = "\n".join([head, *summary])
     try:
         req = urllib.request.Request(
@@ -1161,8 +1161,8 @@ class Handler(BaseHTTPRequestHandler):
             log = OUTREACH / "autopilot-log.txt"
             last = ""
             if log.exists():
-                lines = [l.split("  ", 1)[-1] for l in log.read_text(encoding="utf-8").splitlines() if l.strip()]
-                tail = [l for l in lines if l.startswith(("Autopilot done", "Replies:", "READY", "Next:")) or "had problems" in l]
+                lines = [ln.split("  ", 1)[-1] for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
+                tail = [ln for ln in lines if ln.startswith(("Autopilot done", "Replies:", "READY", "Next:")) or "had problems" in ln]
                 last = f"Last run {time.strftime('%a %d %b %H:%M', time.localtime(log.stat().st_mtime))}: " + " · ".join(tail[-6:])
             return self._json({"config": cfg, "last": last, "running": autopilot.is_running(), "windows": sys.platform == "win32"})
         if route.startswith("/api/batch"):
