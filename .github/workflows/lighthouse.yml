@@ -2,6 +2,8 @@
 # key pages of a production build, and the PR goes red if the median drops below the budget in
 # lighthouserc.json. The site sells "90+ on Google's mobile speed test", so its own pages
 # shouldn't quietly slip. Reports are uploaded to a temporary public link shown in the log.
+# third-party-cookies and inspector-issues are skipped: the only hits are the Cal.com booking
+# calendar embedded on /contact on purpose (its own cookies), which no change here can remove.
 name: Lighthouse
 
 on:
