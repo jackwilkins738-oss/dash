@@ -49,6 +49,7 @@ LAUNCH = HERE / "launch_report.py"
 PUBLISH_SITE = HERE / "publish_site.py"
 SITE_KIT = HERE / "site_kit.py"
 SCORECARD = HERE / "scorecard.py"
+GO_LIVE = HERE / "go_live.py"
 
 
 def replies_first(settings: dict[str, str]) -> list:
@@ -69,7 +70,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "41"
+PANEL_VERSION = "42"
 MAX_LOG_LINES = 5000
 
 
@@ -279,6 +280,8 @@ ACTIONS = {
     "send_followups": "Send follow-ups",
     "send_test": "Send a test to yourself",
     "launch_report": "Launch report",
+    "dns_snapshot": "Save their DNS (before the switch)",
+    "launch_check": "Check the launch",
     "build_site": "Build site",
     "publish_site": "Publish site",
     "scorecard": "Scorecard",
@@ -438,6 +441,15 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not settings.get("PAGESPEED_API_KEY"):
             return None, "Add PAGESPEED_API_KEY in Settings first."
         return (lambda job: [(LAUNCH, ["--old", old, "--new", new])]), ""
+    if action in ("dns_snapshot", "launch_check"):
+        from push_prospects import domain_of
+
+        domain = domain_of(str(body.get("golive_domain") or "").strip().lower())
+        if not (domain and DOMAIN.match(domain)):
+            return None, "Type their domain, e.g. kerrroofing.co.uk"
+        folder = str(body.get("publish_folder") or "").strip().lower()
+        extra = ["--folder", folder] if re.match(r"^[a-z0-9][a-z0-9-]{0,80}$", folder) else []
+        return (lambda job: [(GO_LIVE, ["dns" if action == "dns_snapshot" else "check", domain, *extra])]), ""
     if action == "build_site":
         folder = str(body.get("publish_folder") or "").strip().lower()
         if not re.match(r"^[a-z0-9][a-z0-9-]{0,80}$", folder):
