@@ -24,7 +24,7 @@ export function BookingCalendar({ className = '' }: { className?: string }) {
       />
       <p className="border-t border-border px-4 py-3 text-center text-xs text-muted-foreground">
         Calendar not loading?{' '}
-        <a href={SITE.booking} target="_blank" rel="noopener" className="text-blueprint underline-offset-4 hover:underline">
+        <a href={SITE.booking} target="_blank" rel="noopener" className="text-blueprint underline underline-offset-4">
           Open it in a new tab
         </a>
         .

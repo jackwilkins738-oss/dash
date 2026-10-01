@@ -1,0 +1,37 @@
+# Speed, accessibility and SEO budget for the website: Lighthouse (mobile) runs 3 times on the
+# key pages of a production build, and the PR goes red if the median drops below the budget in
+# lighthouserc.json. The site sells "90+ on Google's mobile speed test", so its own pages
+# shouldn't quietly slip. Reports are uploaded to a temporary public link shown in the log.
+# third-party-cookies and inspector-issues are skipped: the only hits are the Cal.com booking
+# calendar embedded on /contact on purpose (its own cookies), which no change here can remove.
+name: Lighthouse
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'scripts/**'
+      - '**/*.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lighthouse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: npx --yes @lhci/cli@0.15.1 autorun

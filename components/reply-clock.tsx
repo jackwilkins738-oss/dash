@@ -155,7 +155,7 @@ export function ReplyClock() {
               <span className="font-semibold text-foreground">{stop.label}.</span> {stop.note}
             </p>
           </div>
-          <p className="max-w-[15rem] font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-muted-foreground/70 sm:text-right">
+          <p className="max-w-[15rem] font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-muted-foreground sm:text-right">
             Source: Harvard Business Review, &ldquo;The Short Life of Online Sales Leads&rdquo;, 2011 — 2,241 firms
           </p>
         </div>
