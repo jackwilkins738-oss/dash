@@ -13,7 +13,10 @@ every email sent:
     won       you logged Won for them, or they accepted their quote online
 
 ...split by email version (A/B - see the panel's "Version B"), by trade, and
-for the last 7 days. Then the money - what's been quoted and won, and how
+for the last 7 days, and by sending domain - with a warning when one is
+bouncing too much or getting far fewer replies than the others (a sign it's
+landing in spam), so a burnt domain is caught before it drags the rest
+down. Then the money - what's been quoted and won, and how
 many emails it takes to win a job - your letters (who scanned the code), and
 your calls, and how many were real conversations. The autopilot texts it to
 you every Monday.
@@ -34,6 +37,8 @@ sys.path.insert(0, str(HERE))
 import email_batches as eb  # noqa: E402
 
 REPLY_KINDS = {"interested", "read it", "not interested"}
+BOUNCE_WARN, BOUNCE_STOP = 0.03, 0.05  # the usual danger lines for cold email
+MIN_DOMAIN_SENT = 100
 SPOKE = {"Replied to them", "Interested", "Quoted", "Not interested", "Won", "Call back"}
 MIN_SENT, MIN_REPLIES = 100, 5
 
@@ -51,6 +56,7 @@ def gather(outreach: Path, views: dict[str, dict] | None, today: date | None = N
             if r.get("email"):
                 trades[_lower(r["email"])] = (r.get("trade") or "").strip() or "Unknown"
     replied_from, replied_names, keen_from, keen_names = set(), set(), set(), set()
+    bounced = {_lower(r.get("from")) for r in eb._rows(outreach / "replies.csv")[1] if r.get("kind") == "bounce"}
     for r in eb._rows(outreach / "replies.csv")[1]:
         if r.get("kind") not in REPLY_KINDS:
             continue
@@ -78,6 +84,8 @@ def gather(outreach: Path, views: dict[str, dict] | None, today: date | None = N
         out.append({
             "email": email, "business": name, "sent": sent, "trade": trades.get(email, "Unknown"),
             "variant": (r.get("variant") or "").strip() or "-",
+            "inbox": _lower(r.get("sent_from")),
+            "bounced": email in bounced,
             "opened": opened,
             "replied": email in replied_from or (name and name in replied_names),
             "keen": email in keen_from or (name and name in keen_names),
@@ -121,6 +129,36 @@ def verdict(rows: list[dict]) -> str:
         return "No clear winner yet - the two versions are within normal chance of each other."
     best = "B" if rate_b > rate_a else "A"
     return f"Version {best} is getting clearly more replies - make it the main email, and test a new B against it."
+
+
+def domains(rows: list[dict]) -> list[str]:
+    """Sends, bounces and replies per sending domain, and a plain warning when one is in trouble."""
+    by: dict[str, list[dict]] = {}
+    for r in rows:
+        dom = r["inbox"].split("@")[-1] if r["inbox"] else "main inbox"  # older sends didn't record it
+        by.setdefault(dom, []).append(r)
+    if len(by) < 2 and not any(r["bounced"] for r in rows):
+        return []
+    out, rates = [], {}
+    for dom, rs in sorted(by.items(), key=lambda kv: -len(kv[1])):
+        n = len(rs)
+        bounces = sum(bool(r["bounced"]) for r in rs)
+        replies = sum(bool(r["replied"]) for r in rs)
+        rates[dom] = (n, replies / n if n else 0)
+        line = f"{dom}: {n} sent · {_pct(bounces, n)} bounced ({bounces}) · {_pct(replies, n)} replied ({replies})"
+        if n >= 20 and bounces / n >= BOUNCE_STOP:
+            line += " - STOP sending from it: clean the list (Check emails) and rest it for a week"
+        elif n >= 20 and bounces / n >= BOUNCE_WARN:
+            line += " - bounces are high: run Check emails before the next batch"
+        out.append(line)
+    big = {d: r for d, (n, r) in rates.items() if n >= MIN_DOMAIN_SENT}
+    if len(big) >= 2:
+        best = max(big.values())
+        for d, rate in big.items():
+            if best > 0 and rate < best / 2:
+                out.append(f"{d} gets under half the replies of your best domain - it may be landing in spam. "
+                           "Send it a test at mail-tester.com and slow it down until it recovers.")
+    return ["By sending domain:"] + ["  " + x for x in out]
 
 
 def _money(pounds: float) -> str:
@@ -176,6 +214,7 @@ def scorecard(outreach: Path, views: dict[str, dict] | None, today: date | None 
     if len(by_trade) > 1:
         for trade, rs in sorted(by_trade.items(), key=lambda kv: -len(kv[1])):
             out.append(line(trade, rs))
+    out += domains(rows)
     out += money(outreach, rows)
     if letters(views):
         out.append(letters(views))

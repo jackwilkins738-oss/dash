@@ -65,5 +65,33 @@ class Scorecard(unittest.TestCase):
         self.assertNotIn("One job won", text)
 
 
+class Domains(unittest.TestCase):
+    def rows(self, dom, n, replies=0, bounces=0):
+        return [{"inbox": f"me@{dom}", "replied": i < replies, "bounced": i < bounces} for i in range(n)]
+
+    def test_each_domain_on_its_own_line(self):
+        out = sc.domains(self.rows("scalardigital.co.uk", 120, 6) + self.rows("getscalar.co.uk", 110, 5))
+        self.assertEqual(out[0], "By sending domain:")
+        self.assertIn("scalardigital.co.uk: 120 sent · 0% bounced (0) · 5% replied (6)", out[1])
+        self.assertEqual(len(out), 3)  # nothing to warn about
+
+    def test_bouncing_domain_is_called_out(self):
+        out = "\n".join(sc.domains(self.rows("a.co.uk", 100, 5, bounces=6) + self.rows("b.co.uk", 100, 5, bounces=3)))
+        self.assertIn("a.co.uk: 100 sent · 6% bounced (6) · 5% replied (5) - STOP sending from it", out)
+        self.assertIn("b.co.uk: 100 sent · 3% bounced (3) · 5% replied (5) - bounces are high", out)
+
+    def test_a_domain_far_behind_on_replies_may_be_in_spam(self):
+        out = "\n".join(sc.domains(self.rows("good.co.uk", 150, 9) + self.rows("spam.co.uk", 150, 2)))
+        self.assertIn("spam.co.uk gets under half the replies of your best domain", out)
+        self.assertNotIn("good.co.uk gets under", out)
+
+    def test_too_few_sends_to_judge(self):
+        out = "\n".join(sc.domains(self.rows("good.co.uk", 150, 9) + self.rows("new.co.uk", 30, 0)))
+        self.assertNotIn("under half", out)
+
+    def test_one_domain_and_no_bounces_says_nothing(self):
+        self.assertEqual(sc.domains(self.rows("a.co.uk", 50, 3)), [])
+
+
 if __name__ == "__main__":
     unittest.main()

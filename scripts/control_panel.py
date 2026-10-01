@@ -42,6 +42,7 @@ FIND = HERE / "find_prospects.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
+REPLY_WATCH = HERE / "reply_watch.py"
 AUTOPILOT = HERE / "autopilot.py"
 SEND = HERE / "send_email.py"
 LAUNCH = HERE / "launch_report.py"
@@ -68,7 +69,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "38"
+PANEL_VERSION = "39"
 MAX_LOG_LINES = 5000
 
 
@@ -89,6 +90,15 @@ SETTINGS_FILE = OUTREACH / "panel.env"
 _MM_LOCK = threading.Lock()
 _MM_LAST = [0.0]
 MM_EVERY = 600  # seconds between Sent-folder checks while the panel is open
+
+
+def _reply_watch_last() -> dict | None:
+    import reply_watch
+
+    try:
+        return reply_watch.last_check(OUTREACH)
+    except OSError:
+        return None
 
 
 def _sync_mailmeteor_soon() -> None:
@@ -246,6 +256,8 @@ ACTIONS = {
     "export": "Export to Excel",
     "batch": "Make email batch",
     "replies": "Check replies",
+    "reply_watch_on": "Turn on the 15-minute reply check",
+    "reply_watch_off": "Turn off the 15-minute reply check",
     "followups": "Make follow-up batch",
     "followups_sent": "Mark follow-ups as sent",
     "autopilot_now": "Autopilot (run now)",
@@ -386,6 +398,10 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
             return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first."
         return (lambda job: [(REPLIES, [])]), ""
+    if action in ("reply_watch_on", "reply_watch_off"):
+        if action == "reply_watch_on" and not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
+            return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first."
+        return (lambda job: [(REPLY_WATCH, ["--install" if action == "reply_watch_on" else "--remove"])]), ""
     if action in ("send_batch", "send_followups", "send_test"):
         if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
             return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first (the Gmail app password)."
@@ -1066,6 +1082,7 @@ class Handler(BaseHTTPRequestHandler):
                     "sheets": sheets(),
                     "latest_sheet": latest_sheet(),
                     "files": output_files(),
+                    "reply_watch": _reply_watch_last(),
                     "settings": {
                         k: (bool(settings[k]) if k in SECRET_KEYS else settings[k]) for k in SETTING_KEYS
                     },
@@ -1426,7 +1443,11 @@ PAGE = r"""<!doctype html>
     <div class="card">
       <h2>1 · Check replies</h2>
       <div class="row"><button class="primary" data-action="replies">Check replies</button><button data-goto="calls">Open Calls →</button></div>
-      <p class="hint">Reads your inbox (read-only). No's are blocked, bounces move to letters, real replies go to Calls.</p>
+      <p class="hint">Reads your inboxes (read-only). No's are blocked, bounces move to letters, real replies go to Calls.</p>
+      <div class="row wrap" style="border-top:1px solid var(--line); padding-top:10px">
+        <span id="rw-last" class="hint" style="margin:0; flex:1"></span>
+        <button data-action="reply_watch_on">Check every 15 min</button><button class="link" data-action="reply_watch_off">turn off</button>
+      </div>
     </div>
 
     <div class="card">
@@ -1816,6 +1837,9 @@ function render() {
     loadBatch();
     if (callsWanted()) loadCalls();
   }
+  const rw = s.reply_watch;
+  $("rw-last").textContent = rw ? `Auto-check: last ran ${rw.at.slice(11)} on ${rw.at.slice(8, 10)}/${rw.at.slice(5, 7)} - ${rw.line}`
+    : "Auto-check is off. Turn it on and an interested reply texts you within 15 minutes, 8am-8pm.";
   $("files").innerHTML = s.files.map((f) => `<li>${f.name.replace(/</g, "&lt;")}<span>${ago(f.modified)}</span></li>`).join("") || "<li><span>None yet</span></li>";
   if (!settingsLoaded) {
     settingsLoaded = true;
