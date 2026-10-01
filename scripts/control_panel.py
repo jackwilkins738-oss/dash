@@ -68,7 +68,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "37"
+PANEL_VERSION = "38"
 MAX_LOG_LINES = 5000
 
 
@@ -1280,11 +1280,27 @@ PAGE = r"""<!doctype html>
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
-  header { display:flex; align-items:center; gap:16px; padding:14px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
-  header h1 { font-size:16px; margin:0; margin-right:auto; }
-  header a { color:var(--dim); text-decoration:none; } header a:hover { color:var(--text); }
-  main { display:grid; grid-template-columns: 380px 1fr; gap:16px; padding:16px 20px; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  header { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:18px; padding:10px 20px; background:var(--bg); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  header .ver { color:var(--dim); font-weight:400; font-size:12px; }
+  .jobbar { display:flex; align-items:center; gap:10px; flex:1; min-width:260px; padding:6px 12px; background:var(--card); border:1px solid var(--line); border-radius:8px; }
+  .jobbar #stop { margin-left:auto; padding:4px 10px; }
+  .jobbar .msg { margin:0; min-height:0; }
+  nav.links { display:flex; gap:14px; }
+  nav.links a { color:var(--dim); text-decoration:none; font-size:13px; } nav.links a:hover { color:var(--text); }
+  nav.sections { position:sticky; top:53px; z-index:4; display:flex; align-items:center; gap:2px; padding:0 20px; background:var(--bg); border-bottom:1px solid var(--line); overflow-x:auto; }
+  .listpick { margin-left:auto; display:flex; align-items:center; gap:8px; padding-left:16px; }
+  .listpick label { margin:0; white-space:nowrap; }
+  .listpick select { width:auto; max-width:260px; padding:5px 8px; }
+  main { display:grid; grid-template-columns: minmax(0, 1fr) 460px; gap:16px; padding:16px 20px; align-items:start; }
+  main.wide { grid-template-columns: minmax(0, 1fr); }
+  main.wide aside.output { display:none; }
+  .content { min-width:0; max-width:900px; }
+  main.wide .content { max-width:none; }
+  aside.output { position:sticky; top:110px; }
+  aside.output h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0 0 8px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } aside.output { position:static; } aside.output pre { height:50vh; } }
+  @media (max-width: 700px) { header, nav.sections { position:static; } .card.savebar { position:static; } nav.links { flex-wrap:wrap; } }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:16px; }
   .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0 0 10px; }
   label { display:block; color:var(--dim); font-size:12px; margin:8px 0 4px; }
@@ -1306,8 +1322,31 @@ PAGE = r"""<!doctype html>
   .stat b { display:block; font-size:20px; } .stat span { color:var(--dim); font-size:11px; }
   .bar { height:6px; background:#0f1115; border-radius:3px; overflow:hidden; margin-top:10px; display:flex; }
   .bar i { display:block; height:100%; }
-  pre { margin:0; background:#0b0d11; border:1px solid var(--line); border-radius:8px; padding:12px; height:calc(100vh - 260px); min-height:320px; overflow:auto; white-space:pre-wrap; word-break:break-word; font:12.5px/1.5 ui-monospace, Consolas, monospace; }
-  .status { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  pre { margin:0; background:#0b0d11; border:1px solid var(--line); border-radius:8px; padding:12px; height:calc(100vh - 160px); min-height:320px; overflow:auto; white-space:pre-wrap; word-break:break-word; font:12.5px/1.5 ui-monospace, Consolas, monospace; }
+  .dim { color:var(--dim); }
+  .row.wrap { flex-wrap:wrap; }
+  .row input[type=text] { flex:1; }
+  .card h2 { font-size:13px; color:var(--text); text-transform:none; letter-spacing:0; }
+  .glance { display:grid; grid-template-columns:1fr 1fr 1.6fr; gap:10px; margin-bottom:16px; }
+  .tile { display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left; white-space:normal; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; color:var(--dim); font-size:12px; }
+  .tile b { font-size:24px; color:var(--text); }
+  .tile.hero { border-color:rgba(79,140,255,.45); }
+  .tile.hero b { font-size:15px; }
+  @media (max-width: 700px) { .glance { grid-template-columns:1fr; } }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .grid4 { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+  label code { color:var(--dim); font-size:10.5px; opacity:.8; }
+  .card.savebar { position:sticky; bottom:0; border-color:rgba(79,140,255,.45); }
+  @media (max-width: 700px) { .grid2, .grid3, .grid4 { grid-template-columns:1fr; } }
+  table.tools { width:100%; border-collapse:collapse; }
+  table.tools td { padding:9px 8px 9px 0; border-top:1px solid var(--line); vertical-align:top; color:var(--dim); font-size:12.5px; }
+  table.tools tr:first-child td { border-top:0; }
+  table.tools td:first-child { width:46%; color:var(--text); }
+  table.tools .check { margin-top:6px; }
+  ol.steps { margin:10px 0 0; padding-left:20px; color:var(--dim); font-size:12.5px; }
+  ol.steps li { margin:4px 0; }
+  button.link { background:none; border:0; padding:0; color:var(--accent); text-decoration:underline; font-size:inherit; }
+  .badge.good { background:var(--ok); }
   .dot { width:9px; height:9px; border-radius:50%; background:var(--dim); }
   .dot.run { background:var(--warn); animation:pulse 1s infinite; } .dot.ok { background:var(--ok); } .dot.bad { background:var(--bad); }
   @keyframes pulse { 50% { opacity:.3; } }
@@ -1317,6 +1356,7 @@ PAGE = r"""<!doctype html>
   .msg { color:var(--bad); font-size:13px; margin-top:8px; min-height:1em; }
   .saved { color:var(--ok); font-size:12px; }
   details summary { cursor:pointer; color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+  .card > details > summary { font-size:13px; font-weight:700; color:var(--text); text-transform:none; letter-spacing:0; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; }
   .chip { display:inline-flex; align-items:center; gap:5px; margin:0; padding:5px 9px; border:1px solid var(--line); border-radius:999px; color:var(--text); font-size:13px; cursor:pointer; user-select:none; }
   .chip:has(input:checked) { border-color:var(--accent); background:rgba(79,140,255,.14); }
@@ -1325,10 +1365,11 @@ PAGE = r"""<!doctype html>
   .hint { color:var(--dim); font-size:12px; margin:4px 0 0; }
   .card.find { border-color:rgba(79,140,255,.45); }
   .tabs { display:flex; gap:4px; margin-bottom:10px; border-bottom:1px solid var(--line); }
-  .tab { background:none; border:0; border-bottom:2px solid transparent; border-radius:0; padding:8px 12px; color:var(--dim); }
+  .tab { background:none; border:0; border-bottom:2px solid transparent; border-radius:0; padding:11px 12px; color:var(--dim); }
+  .tab:hover { color:var(--text); border-color:transparent; border-bottom-color:var(--line); }
   .tab.on { color:var(--text); border-bottom-color:var(--accent); }
   .badge { display:inline-block; min-width:18px; padding:0 6px; margin-left:6px; border-radius:9px; background:var(--warn); color:#111; font-size:11px; font-weight:700; }
-  #review { height:calc(100vh - 260px); min-height:320px; overflow:auto; }
+  #review, #calls { min-height:200px; }
   .ritem { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#0f1115; }
   .ritem .top { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
   .ritem b { font-size:14px; } .ritem a { color:var(--accent); font-size:12px; text-decoration:none; }
@@ -1343,18 +1384,125 @@ PAGE = r"""<!doctype html>
 </head>
 <body>
 <header>
-  <h1>Prospect Control Panel <span style="color:var(--dim); font-weight:400; font-size:12px">v__VERSION__ · __HERE__</span></h1>
-  <a id="lnk-dash" href="#" target="_blank" rel="noopener">Dashboard ↗</a>
-  <a id="lnk-site" href="#" target="_blank" rel="noopener">Website ↗</a>
-  <a href="https://pagespeed.web.dev/" target="_blank" rel="noopener">PageSpeed ↗</a>
-  <a href="https://mailmeteor.com/" target="_blank" rel="noopener">Mailmeteor ↗</a>
-  <a href="https://www.tpsonline.org.uk/" target="_blank" rel="noopener">TPS check ↗</a>
+  <h1>Control Panel <span class="ver">v__VERSION__</span></h1>
+  <div class="jobbar">
+    <span class="dot" id="dot"></span><b id="job-label">Nothing running</b><span id="job-time" class="dim"></span>
+    <button class="danger" id="stop" disabled>Stop</button>
+    <span class="msg" id="run-msg"></span>
+  </div>
+  <nav class="links">
+    <a id="lnk-dash" href="#" target="_blank" rel="noopener">Dashboard ↗</a>
+    <a id="lnk-site" href="#" target="_blank" rel="noopener">Website ↗</a>
+    <a href="https://mailmeteor.com/" target="_blank" rel="noopener">Mailmeteor ↗</a>
+    <a href="https://pagespeed.web.dev/" target="_blank" rel="noopener">PageSpeed ↗</a>
+    <a href="https://www.tpsonline.org.uk/" target="_blank" rel="noopener">TPS ↗</a>
+  </nav>
 </header>
-<main>
-  <div>
-    <div class="card find">
+
+<nav class="sections" id="sections">
+  <button class="tab on" data-tab="today">Today</button>
+  <button class="tab" data-tab="calls">Calls<span class="badge good" id="calls-count" hidden></span></button>
+  <button class="tab" data-tab="review">Review<span class="badge" id="review-count" hidden></span></button>
+  <button class="tab" data-tab="find">Find firms</button>
+  <button class="tab" data-tab="list">Work the list</button>
+  <button class="tab" data-tab="emails">Emails &amp; letters</button>
+  <button class="tab" data-tab="clients">Clients</button>
+  <button class="tab" data-tab="results">Results</button>
+  <button class="tab" data-tab="settings">Settings</button>
+  <span class="listpick"><label for="sheet">List</label><select id="sheet"></select></span>
+</nav>
+
+<main id="layout">
+<div class="content">
+
+  <!-- ============================== TODAY -->
+  <section data-section="today">
+    <div class="glance">
+      <button class="tile" data-goto="calls"><b id="todo-calls">–</b><span>on Calls - replies and people who opened their preview</span></button>
+      <button class="tile" data-goto="review"><b id="todo-review">–</b><span>to decide on Review</span></button>
+      <div class="tile hero"><b id="sent-today"></b><span id="sent-by-inbox"></span><span id="batch-info"></span></div>
+    </div>
+
+    <div class="card">
+      <h2>1 · Check replies</h2>
+      <div class="row"><button class="primary" data-action="replies">Check replies</button><button data-goto="calls">Open Calls →</button></div>
+      <p class="hint">Reads your inbox (read-only). No's are blocked, bounces move to letters, real replies go to Calls.</p>
+    </div>
+
+    <div class="card">
+      <h2>2 · First emails</h2>
+      <div class="row">
+        <button data-action="batch">Make batch</button>
+        <input type="number" id="batch-size" value="20" min="1" max="500" title="How many">
+        <select id="batch-scope" style="width:auto"><option value="all">from every list</option><option value="sheet">from this list</option></select>
+      </div>
+      <div class="row">
+        <button data-action="send_test" data-test-kind="batch">Send test to me</button>
+        <button class="primary" data-action="send_batch">Send today's batch</button>
+      </div>
+      <p class="hint">Sends from your own email, 40-90 s apart. Stop any time, press Send again to carry on. Using Mailmeteor? Import <b>mailmeteor-batch-&lt;date&gt;.csv</b> - sends are spotted in your Sent folder automatically (or <button class="link" data-action="batch_sent">mark batch as sent</button>).</p>
+    </div>
+
+    <div class="card">
+      <h2>3 · Follow-ups</h2>
+      <div class="row">
+        <button data-action="followups">Make follow-ups</button>
+        <input type="number" id="followup-size" value="20" min="1" max="500" title="How many">
+        <span class="dim">after</span><input type="number" id="followup-days" value="5" min="1" max="60"><span class="dim">days</span>
+      </div>
+      <div class="row">
+        <button data-action="send_test" data-test-kind="followups">Send test to me</button>
+        <button class="primary" data-action="send_followups">Send follow-ups</button>
+      </div>
+      <p class="hint">One short second email to anyone who hasn't replied or opened their preview - never a third. Mailmeteor: import <b>mailmeteor-followup-&lt;date&gt;.csv</b>, send, then <button class="link" data-action="followups_sent">mark follow-ups as sent</button>.</p>
+    </div>
+
+    <div class="card">
+      <details id="autopilot-box">
+      <summary>Autopilot <span id="ap-state" class="hint"></span></summary>
+      <p class="hint">Every day at your time: check replies, find new firms with the saved search, run the list, make the batches, update Excel, text you. It never sends - the PC must be on.</p>
+      <div class="grid2">
+        <div><label for="ap-time">Time</label><input type="text" id="ap-time" value="07:30"></div>
+        <div><label for="ap-batch">Emails a day</label><input type="number" id="ap-batch" value="20" min="1" max="500"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="ap-followups" checked> Also follow-ups after <input type="number" id="ap-fdays" value="5" min="1" max="60" style="width:52px"> days, up to <input type="number" id="ap-fsize" value="20" min="1" max="500" style="width:60px"></label>
+      <p class="hint" id="ap-search">Search: none saved yet.</p>
+      <div class="row wrap">
+        <button id="ap-use-search">Use the search in Find firms</button>
+        <button class="primary" id="ap-on">Save &amp; turn on</button>
+        <button id="ap-off">Turn off</button>
+        <button data-action="autopilot_now">Run now</button>
+      </div>
+      <p class="hint" id="ap-last"></p>
+      <div class="msg" id="ap-msg"></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============================== CALLS -->
+  <section data-section="calls" id="pane-calls" hidden>
+    <div class="card">
+      <div class="row" style="margin:0 0 8px"><button class="primary" data-action="replies">Check replies</button><span class="hint">Replies, people who opened their preview, and call-backs - newest first.</span></div>
+      <div class="toast" id="calls-toast"></div>
+      <div id="calls"></div>
+    </div>
+  </section>
+
+  <!-- ============================== REVIEW -->
+  <section data-section="review" id="pane-review" hidden>
+    <div class="card">
+      <p class="hint" style="margin:0 0 8px">Firms the checks weren't sure about. Decide each one - your choice is kept and the sheet is never changed.</p>
+      <div class="chips" id="review-filters" style="margin-bottom:8px"></div>
+      <div class="toast" id="review-toast"></div>
+      <div id="review"></div>
+    </div>
+  </section>
+
+  <!-- ============================== FIND -->
+  <section data-section="find" hidden>
+    <div class="card">
       <details id="finder-box" open>
-      <summary class="card-title">Find new prospects</summary>
+      <summary>Find new prospects</summary>
       <label>Trades</label>
       <div class="chips" id="f-trades">
         <label class="chip"><input type="checkbox" value="roofing" checked> Roofing</label>
@@ -1365,7 +1513,7 @@ PAGE = r"""<!doctype html>
       </div>
       <label for="f-areas">Areas</label>
       <input type="text" id="f-areas" placeholder="Guildford, Woking, GU21">
-      <p class="hint">Towns or postcode districts, separated by commas. Matched against where the company is registered.</p>
+      <p class="hint">Towns or postcode districts, comma separated - matched to where the company is registered.</p>
       <div class="grid2">
         <div>
           <label for="f-age">Company age</label>
@@ -1390,7 +1538,7 @@ PAGE = r"""<!doctype html>
         <input type="text" id="f-exclude" value="holdings, investments, estates, lettings, capital, finance">
         <label class="check"><input type="checkbox" id="f-email-only"> Only firms with an email found</label>
         <label class="check"><input type="checkbox" id="f-website-only"> Only firms with a website found</label>
-        <p class="hint">With either ticked, Max counts the firms kept - it keeps looking until it has that many.</p>
+        <p class="hint">With either ticked, Max counts the firms kept.</p>
         <label class="check"><input type="checkbox" id="f-no-directors"> Skip director names (a little faster)</label>
         <label class="check"><input type="checkbox" id="f-no-websites"> Skip the website search (much faster - every firm goes on the No website tab)</label>
       </details>
@@ -1398,36 +1546,17 @@ PAGE = r"""<!doctype html>
         <button data-find="count">Count matches</button>
         <button class="primary" data-find="find" style="flex:1">Find &amp; build list</button>
       </div>
-      <p class="hint">Makes a new sheet in outreach/ - your existing sheets are never changed, and firms already in any of them are skipped, so running the same search again gives you the next batch.</p>
+      <p class="hint">Makes a new sheet in outreach/. Firms already in any sheet are skipped, so the same search again gives the next batch.</p>
       <div class="msg" id="find-msg"></div>
       </details>
     </div>
+  </section>
 
+  <!-- ============================== WORK THE LIST -->
+  <section data-section="list" hidden>
     <div class="card">
-      <details id="autopilot-box">
-      <summary class="card-title">Autopilot <span id="ap-state" class="hint"></span></summary>
-      <p class="hint">Every day at your time: check replies, run the saved search for new firms, run the whole list, make today's email batch and follow-ups, update the Excel export, and text you. It never sends an email - you import the READY files and send. The PC must be on.</p>
-      <div class="grid2">
-        <div><label for="ap-time">Time</label><input type="text" id="ap-time" value="07:30"></div>
-        <div><label for="ap-batch">Emails a day</label><input type="number" id="ap-batch" value="20" min="1" max="500"></div>
-      </div>
-      <label class="check"><input type="checkbox" id="ap-followups" checked> Also make follow-ups (after <input type="number" id="ap-fdays" value="5" min="1" max="60" style="width:52px"> days, up to <input type="number" id="ap-fsize" value="20" min="1" max="500" style="width:60px">)</label>
-      <p class="hint" id="ap-search">Search: none saved yet.</p>
-      <div class="row" style="flex-wrap:wrap">
-        <button id="ap-use-search">Use the search in Find new prospects</button>
-        <button class="primary" id="ap-on">Save &amp; turn on</button>
-        <button id="ap-off">Turn off</button>
-        <button data-action="autopilot_now">Run now</button>
-      </div>
-      <p class="hint" id="ap-last"></p>
-      <div class="msg" id="ap-msg"></div>
-      </details>
-    </div>
-
-    <div class="card">
-      <h2>List</h2>
-      <select id="sheet"></select>
-      <div class="stats" style="margin-top:10px">
+      <h2>This list</h2>
+      <div class="stats">
         <div class="stat"><b id="s-total">–</b><span>prospects</span></div>
         <div class="stat"><b id="s-checked">–</b><span>speed checked</span></div>
         <div class="stat"><b id="s-failed">–</b><span>couldn't check</span></div>
@@ -1438,71 +1567,39 @@ PAGE = r"""<!doctype html>
     </div>
 
     <div class="card">
-      <h2>Run</h2>
-      <div class="action">
-        <button class="primary" data-action="all">Run the whole list</button>
-        <p>Looks up company types, finds missing emails &amp; phones, checks emails, guesses trades, then speed checks every site left (4 at once, pushed every 10). Keeps the PC awake; start it and walk away - Stop loses nothing.</p>
-      </div>
-      <label class="check" style="margin:14px 0 4px; border-top:1px solid var(--line); padding-top:10px"><input type="checkbox" id="dry"> Dry run - write the CSVs, send nothing to the dashboard</label>
+      <h2>Do everything</h2>
+      <div class="row"><button class="primary" data-action="all">Run the whole list</button><label class="check" style="margin:0"><input type="checkbox" id="dry"> Dry run (nothing sent to the dashboard)</label></div>
+      <p class="hint">Company types → missing emails &amp; phones → email checks → trades → speed checks, pushing as it goes. Can take hours; Stop loses nothing.</p>
+    </div>
 
-      <div class="action">
-        <div class="row" style="margin:0"><button data-action="speed">Speed check next</button><input type="number" id="limit" value="10" min="1" max="100"><span style="color:var(--dim)">sites</span></div>
-        <label class="check"><input type="checkbox" id="recheck"> Include sites already checked</label>
-        <p>Google mobile score + LCP and the website teardown, then pushed to their preview pages. ~20-60s a site.</p>
-      </div>
-      <div class="action">
-        <div class="row" style="margin:0"><input type="text" id="only" placeholder="Business name or website"><button data-action="one">Check one</button></div>
-        <p>Speed check + teardown on just the firms matching this text.</p>
-      </div>
-      <div class="action">
-        <button class="primary" data-action="prepare">Prepare Mailmeteor send</button>
-        <p>Pushes this sheet, then opens every link in the Mailmeteor file (not counted as a visit) and takes out any that don't load. When the log ends with <b>READY</b>, import the file into Mailmeteor and schedule.</p>
-      </div>
-      <div class="action">
-        <div class="row" style="margin:0"><button data-action="batch">Make email batch</button><input type="number" id="batch-size" value="20" min="1" max="500"><select id="batch-scope" style="width:auto"><option value="all">from every list</option><option value="sheet">from this list</option></select></div>
-        <p>The next firms not yet emailed, every link re-checked (the autopilot makes one each morning). <span id="batch-info"></span></p>
-        <p style="margin:6px 0 0"><b id="sent-today"></b><br><span class="hint" id="sent-by-inbox"></span></p>
-        <div class="row"><button data-action="send_test" data-test-kind="batch">Send a test to yourself</button><button class="primary" data-action="send_batch">Send today's batch</button></div>
-        <p class="hint">Sends from your own email, 40-90 seconds apart (about half an hour for 20), each recorded as it goes - stop any time and press Send again to carry on. Anyone who said no or replied since is left out. Using Mailmeteor instead? Import <b>mailmeteor-batch-&lt;date&gt;.csv</b> and send - the panel spots them in your Sent folder and marks them itself (or <button data-action="batch_sent" style="padding:2px 8px">Mark batch as sent</button> now).</p>
-      </div>
-      <div class="action">
-        <div class="row" style="margin:0"><button data-action="followups">Make follow-up batch</button><input type="number" id="followup-size" value="20" min="1" max="500"><span class="hint">after</span><input type="number" id="followup-days" value="5" min="1" max="60" style="width:60px"><span class="hint">days</span></div>
-        <p>One short second email to firms who haven't replied or opened their preview (those who opened it are on your Calls list - ring them instead). Never a third. It goes as a reply in the same thread as the first email.</p>
-        <div class="row"><button data-action="send_test" data-test-kind="followups">Send a test to yourself</button><button class="primary" data-action="send_followups">Send follow-ups</button></div>
-        <p class="hint">Using Mailmeteor instead? Import <b>mailmeteor-followup-&lt;date&gt;.csv</b> with the follow-up email below, send, then <button data-action="followups_sent" style="padding:2px 8px">Mark follow-ups as sent</button></p>
-        <details style="margin-top:6px"><summary>Follow-up email (edit here - Send uses it)</summary>
-          <textarea id="fu-subject" rows="1">Following up - {{business}}</textarea>
-          <textarea id="fu-body" rows="12" style="margin-top:6px">Hi {{greeting_name}},
+    <div class="card">
+      <h2>One step at a time</h2>
+      <table class="tools">
+        <tr><td><div class="row" style="margin:0"><button data-action="speed">Speed check next</button><input type="number" id="limit" value="10" min="1" max="100"><span class="dim">sites</span></div>
+          <label class="check"><input type="checkbox" id="recheck"> Include sites already checked</label></td>
+          <td>Google mobile score + website checks, pushed to their preview pages. 20-60 s a site.</td></tr>
+        <tr><td><div class="row" style="margin:0"><input type="text" id="only" placeholder="Business or website"><button data-action="one">Check one</button></div></td>
+          <td>Speed check just the firms matching this.</td></tr>
+        <tr><td><button data-action="companies">Look up company types</button></td><td>Companies House: Ltd/LLP can be emailed, the rest get a letter.</td></tr>
+        <tr><td><button data-action="contacts">Find missing emails &amp; phones</button></td><td>From their own site and directors.</td></tr>
+        <tr><td><button data-action="emails">Check emails</button></td><td>Dead addresses move to a letter.</td></tr>
+        <tr><td><button data-action="trades">Guess missing trades</button></td><td>Reads their homepage.</td></tr>
+        <tr><td><button data-action="push">Push to dashboard</button></td><td>Sends names, trades, areas and scores to the dashboard.</td></tr>
+        <tr><td><button data-action="links">Refresh preview links</button></td><td>Rewrites the preview-links and Mailmeteor CSVs. Sends nothing.</td></tr>
+        <tr><td><button data-action="prepare">Prepare Mailmeteor send</button></td><td>Pushes, then checks every link loads. Import the file when the log says <b>READY</b>.</td></tr>
+      </table>
+    </div>
+  </section>
 
-Just following up on my note last week about {{business}}'s website. {{issue_line}}
-
-The preview I put together is still here if you'd like a look - no sign-up:
-
-{{preview_url}}
-
-If it's not for you, just reply and say so and I won't get in touch again.
-
-Kind regards,
-[your name]
-Scalar Digital · 07401 696272</textarea>
-          <div class="row"><button id="fu-copy-subject">Copy subject</button><button class="primary" id="fu-copy-body">Copy body</button><span class="saved" id="fu-copied"></span></div>
-        </details>
-      </div>
-      <div class="action">
-        <details><summary>Saved replies (the Calls tab's Reply box uses these)</summary>
-          <p class="hint">Each starts with a line like <code>=== How much? ===</code>. Fields: {{greeting_name}} {{business}} {{your_name}} {{preview_url}} {{booking_link}} {{price_build}} {{price_landing}}. A line with {{booking_link}} is left out until you set a booking link in Settings.</p>
-          <textarea id="sr-text" rows="18" style="width:100%"></textarea>
-          <div class="row"><button class="primary" id="sr-save">Save replies</button><button id="sr-reset">Back to the originals</button><span class="saved" id="sr-saved"></span></div>
-        </details>
-      </div>
-      <div class="action">
-        <button data-action="links">Refresh preview links + Mailmeteor CSV</button>
-        <p>Rewrites preview-links and mailmeteor CSVs from the sheet. Never sends anything - and the Mailmeteor file only includes firms whose preview page is on your dashboard, so no email links to a 404. Push first to add new firms.</p>
-        <details style="margin-top:6px"><summary>First email (edit here - Send uses it)</summary>
-          <p class="hint">Subject</p>
-          <textarea id="mm-subject" rows="1">A quick look at {{business}}'s website</textarea>
-          <p class="hint">Body - {{score_line}} and {{issue_line}} are whole sentences, left empty when a site hasn't been checked, so it always reads right.</p>
-          <textarea id="mm-body" rows="15">Hi {{greeting_name}},
+  <!-- ============================== EMAILS & LETTERS -->
+  <section data-section="emails" hidden>
+    <div class="card">
+      <h2>First email</h2>
+      <p class="hint">Fields: {{business}} {{greeting_name}} {{score_line}} {{issue_line}} {{preview_url}} {{trade}} {{area}} {{your_name}}. The score and issue lines are left out when a site wasn't checked.</p>
+      <label>Subject</label>
+<textarea id="mm-subject" rows="1">A quick look at {{business}}'s website</textarea>
+      <label>Body</label>
+<textarea id="mm-body" rows="15">Hi {{greeting_name}},
 
 I had a look at {{business}}'s website on my phone and ran it through Google's own speed test. {{score_line}} {{issue_line}}
 
@@ -1517,131 +1614,164 @@ Kind regards,
 Scalar Digital · 07401 696272 · scalardigital.co.uk
 
 If you'd rather not hear from me again, just reply and say so and I won't get in touch.</textarea>
-          <details style="margin-top:8px"><summary>Version B - test a second first email against this one (optional)</summary>
-            <p class="hint">Fill both boxes and each new firm gets one version or the other, about half each. The Scorecard shows which gets more replies - give it 100+ sends each before deciding. Leave both blank to send only the email above.</p>
-            <textarea id="mm-subject-b" rows="1" placeholder="Version B subject"></textarea>
-            <textarea id="mm-body-b" rows="12" placeholder="Version B body - same {{fields}} as above" style="margin-top:6px"></textarea>
-          </details>
-          <div class="row"><button class="primary" id="em-save">Save both emails</button><button id="em-reset">Back to original</button><button id="mm-copy-subject">Copy subject</button><button id="mm-copy-body">Copy body</button><span class="saved" id="mm-copied"></span></div>
-          <p class="hint">Fields: {{business}} {{greeting_name}} {{score_line}} {{issue_line}} {{preview_url}} {{trade}} {{area}} {{your_name}} (MAIL_FROM_NAME in Settings). For Mailmeteor, copy and swap {{your_name}} for your name.</p>
-        </details>
-      </div>
-      <div class="action">
-        <div class="row" style="margin:0"><input type="text" id="launch-old" placeholder="Their old website"><input type="text" id="launch-new" placeholder="New site (if a different domain)"><button data-action="launch_report">Launch report</button></div>
-        <p>When a client's new site goes live: their old speed score and problems (from when you first checked them) next to the new site measured now. Writes a report for them in <b>outreach/sites/&lt;firm&gt;/</b> and adds a line to <b>case-studies.csv</b> - your proof for the next pitch.</p>
-      </div>
-      <div class="action">
-        <div class="row" style="margin:0"><input type="text" id="publish-folder" placeholder="Folder (e.g. kerr-roofing)"><input type="text" id="publish-account" placeholder="Their Cloudflare account id (first time)"><input type="text" id="publish-project" placeholder="Project name (optional)"><button data-action="build_site">Build site</button><button data-action="publish_site">Publish site</button></div>
-        <label class="check"><input type="checkbox" id="build-draft"> Draft build - preview it with details still to confirm (hidden from Google, can't be mistaken for the real thing)</label>
-        <p><b>Build site</b> turns <b>outreach/sites/&lt;folder&gt;/site.json</b> (Draft their site writes it, filled in from their answers) into the finished site in <b>site/</b>: every page, a page per town, the enquiry form wired to the dashboard, sitemap, redirects. It won't build while anything is still marked [Confirm - the log lists what. <b>Publish site</b> puts <b>outreach/sites/&lt;folder&gt;/site/</b> live on the client's own Cloudflare Pages - only that <b>site</b> folder, never their brief or photos. First time: they invite you to their Cloudflare account, you give the account id, and it makes the project; after that just the folder. Needs CLOUDFLARE_API_TOKEN in Settings and Node.js installed.</p>
-      </div>
-      <div class="action">
-        <button data-action="contacts">Find missing emails &amp; phones</button>
-        <p>For firms with a blank email, phone or contact name: reads their own site, and takes the contact from their directors once Look up company types has confirmed them. Your sheet is never changed.</p>
-      </div>
-      <div class="action">
-        <button data-action="emails">Check emails</button>
-        <p>Finds addresses that can't take mail (typos, dead domains) and moves them to a letter. Free, a second or two each.</p>
-      </div>
-      <div class="action">
-        <button data-action="companies">Look up company types</button>
-        <p>Fills blank Company types from Companies House: Ltd/LLP can be emailed, the rest get a letter. Unsure = letter. Dissolved firms are left out.</p>
-      </div>
-      <div class="action">
-        <button data-action="trades">Guess missing trades</button>
-        <p>Reads each homepage with no Trade in the sheet, guesses one, and pushes it.</p>
-      </div>
-      <div class="action">
-        <div class="row" style="margin:0"><button data-action="letters">Make letters</button><span id="letters-links" class="hint"></span></div>
-        <label class="check"><input type="checkbox" id="letters-all"> Include firms already sent one</label>
-        <p>A print-ready A4 letter for every letter-channel firm (and a finder sheet's No website tab): their address in the envelope window, their speed score and worst problem, and a QR code to their preview page. Also pushes, so every code works.</p>
-        <details style="margin-top:6px"><summary>Edit letter text</summary>
-          <p class="hint">Filled in per firm: {greeting} {business} {website} {score_sentence} {issue_sentence} {trade_plural} {area} {sender_email} {sender_phone} {signoff}</p>
-          <label>Firms with a website</label><textarea id="tpl-site" rows="12"></textarea>
-          <label>Firms with no website</label><textarea id="tpl-nosite" rows="10"></textarea>
-          <div class="row"><button class="primary" id="tpl-save">Save text</button><button id="tpl-reset">Back to the original</button><span class="saved" id="tpl-saved"></span></div>
-        </details>
-      </div>
-      <div class="action">
-        <button data-action="push">Push to dashboard</button>
-        <p>Sends the sheet's changes (names, trades, areas, scores) to the dashboard.</p>
-      </div>
-      <div class="msg" id="run-msg"></div>
+      <details style="margin-top:8px"><summary>Version B - test a second email (optional)</summary>
+        <p class="hint">Fill both and each new firm gets A or B. The Scorecard says which wins - give it 100+ sends each.</p>
+        <textarea id="mm-subject-b" rows="1" placeholder="Version B subject"></textarea>
+        <textarea id="mm-body-b" rows="12" placeholder="Version B body - same {{fields}}" style="margin-top:6px"></textarea>
+      </details>
+      <div class="row wrap"><button class="primary" id="em-save">Save</button><button id="em-reset">Back to original</button><button id="mm-copy-subject">Copy subject</button><button id="mm-copy-body">Copy body</button><span class="saved" id="mm-copied"></span></div>
     </div>
 
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center"><h2 style="margin:0">Files in outreach/</h2><button id="open-folder">Open folder</button></div>
-      <div class="row" style="margin-top:10px"><button class="primary" data-action="export">Export to Excel</button><button data-action="scorecard">Scorecard</button><button id="open-results">Open results in Excel</button></div>
-      <p class="hint">One workbook for every list: outreach-results.xlsx, grouped by the date each firm was added, with a Notes column that's kept every time. Also updated automatically at the end of Run the whole list and Prepare Mailmeteor send. Close it in Excel before exporting.</p>
-      <ul class="files" id="files" style="margin-top:10px"></ul>
+      <h2>Follow-up email</h2>
+<textarea id="fu-subject" rows="1">Following up - {{business}}</textarea>
+          <textarea id="fu-body" rows="12" style="margin-top:6px">Hi {{greeting_name}},
+
+Just following up on my note last week about {{business}}'s website. {{issue_line}}
+
+The preview I put together is still here if you'd like a look - no sign-up:
+
+{{preview_url}}
+
+If it's not for you, just reply and say so and I won't get in touch again.
+
+Kind regards,
+[your name]
+Scalar Digital · 07401 696272</textarea>
+      <div class="row"><button id="fu-copy-subject">Copy subject</button><button class="primary" id="fu-copy-body">Copy body</button><span class="saved" id="fu-copied"></span></div>
     </div>
 
     <div class="card">
-      <details id="settings-box">
-        <summary>Settings</summary>
-        <label>PROSPECTS_API_SECRET <span id="set-secret"></span></label>
-        <input type="password" id="PROSPECTS_API_SECRET" placeholder="leave blank to keep the saved one" autocomplete="off">
-        <label>PAGESPEED_API_KEY <span id="set-psi"></span></label>
-        <input type="password" id="PAGESPEED_API_KEY" placeholder="leave blank to keep the saved one" autocomplete="off">
-        <label>COMPANIES_HOUSE_API_KEY <span id="set-ch"></span></label>
-        <input type="password" id="COMPANIES_HOUSE_API_KEY" placeholder="leave blank to keep the saved one" autocomplete="off">
-        <label>TELEGRAM_BOT_TOKEN <span id="set-tg"></span></label>
-        <input type="password" id="TELEGRAM_BOT_TOKEN" placeholder="leave blank to keep the saved one" autocomplete="off">
-        <label>TELEGRAM_CHAT_ID</label>
-        <input type="text" id="TELEGRAM_CHAT_ID" placeholder="same as in Vercel">
-        <p class="hint">Optional: a phone alert when a run longer than 3 minutes finishes. Use the same bot and chat as the website's preview alerts.</p>
-        <label>MAIL_ADDRESS / MAIL_APP_PASSWORD <span id="set-mail"></span></label>
-        <div class="grid2"><input type="text" id="MAIL_ADDRESS" placeholder="the Gmail you send from"><input type="password" id="MAIL_APP_PASSWORD" placeholder="app password (blank keeps the saved one)" autocomplete="off"></div>
-        <div class="grid2" style="margin-top:6px"><input type="text" id="MAIL_FROM_NAME" placeholder="Your name (who emails are from, and the sign-off)"><input type="text" id="MAIL_IMAP_HOST" placeholder="imap.gmail.com (leave blank for Gmail)"></div>
-        <details style="margin-top:6px"><summary>Extra sending inboxes (optional)</summary>
-          <p class="hint">Only once your email is proven to work. Up to three more inboxes, usually on look-alike domains (scalardigital.uk, getscalar.co.uk) so a busy day never risks your main domain. Send is spread evenly across them, follow-ups go from the inbox that sent the first email, and replies are read from all of them. Warm each new inbox up with 3-4 weeks of normal email first.</p>
-          <div class="grid2"><input type="text" id="MAIL_EXTRA_1_ADDRESS" placeholder="Extra inbox 1"><input type="password" id="MAIL_EXTRA_1_PASSWORD" placeholder="app password (blank keeps the saved one)" autocomplete="off"></div>
-          <div class="grid2" style="margin-top:6px"><input type="text" id="MAIL_EXTRA_2_ADDRESS" placeholder="Extra inbox 2"><input type="password" id="MAIL_EXTRA_2_PASSWORD" placeholder="app password" autocomplete="off"></div>
-          <div class="grid2" style="margin-top:6px"><input type="text" id="MAIL_EXTRA_3_ADDRESS" placeholder="Extra inbox 3"><input type="password" id="MAIL_EXTRA_3_PASSWORD" placeholder="app password" autocomplete="off"></div>
-        </details>
-        <p class="hint">For "Check replies". Not your normal password: Google Account &gt; Security &gt; 2-Step Verification &gt; App passwords. It only ever reads - nothing is marked read, moved or deleted.</p>
-        <label>Quotes: build £ / landing page £ / VAT % / deposit %</label>
-        <div class="grid2" style="grid-template-columns:1fr 1fr 1fr 1fr"><input type="text" id="QUOTE_PRICE_BUILD" placeholder="2500"><input type="text" id="QUOTE_PRICE_LANDING" placeholder="750"><input type="text" id="QUOTE_VAT_RATE" placeholder="0"><input type="text" id="QUOTE_DEPOSIT_PERCENT" placeholder="0"></div>
-        <p class="hint">For the Calls tab's Quote buttons. VAT: 0 if you're not VAT-registered, 20 if you are.</p>
-        <label>CLOUDFLARE_API_TOKEN - for Publish site (Cloudflare &gt; My Profile &gt; API Tokens, "Edit Cloudflare Workers" template, All accounts)</label>
-        <input type="password" id="CLOUDFLARE_API_TOKEN" placeholder="(leave blank to keep the saved one)">
-        <label>BOOKING_LINK - your free booking page (e.g. Cal.com), used as {{booking_link}} in emails and saved replies</label>
-        <input type="text" id="BOOKING_LINK" placeholder="https://cal.com/yourname/10min">
-        <label>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</label>
-        <div class="grid2" style="grid-template-columns:1fr 1fr 1fr"><input type="text" id="LETTER_SIGNOFF" placeholder="Scalar Digital"><input type="text" id="LETTER_EMAIL" placeholder="hello@scalardigital.co.uk"><input type="text" id="LETTER_PHONE" placeholder="07401 696272"></div>
-        <p class="hint">Who the letters are from: the name they're signed with, and the email and phone they give.</p>
-        <label>DASHBOARD_API_URL (optional)</label>
-        <input type="text" id="DASHBOARD_API_URL" placeholder="https://admin.scalardigital.co.uk">
-        <label>SITE_URL (optional)</label>
-        <input type="text" id="SITE_URL" placeholder="https://www.scalardigital.co.uk">
-        <div class="row"><button class="primary" id="save">Save</button><span class="saved" id="saved"></span></div>
-        <div class="msg" id="settings-msg"></div>
-        <p style="color:var(--dim); font-size:12px">Saved to __OUTREACH__\panel.env on this computer only.</p>
+      <h2>Saved replies</h2>
+      <p class="hint">Used by the Reply box on Calls. Each starts with a line like <code>=== How much? ===</code>. Fields: {{greeting_name}} {{business}} {{your_name}} {{preview_url}} {{booking_link}} {{price_build}} {{price_landing}}.</p>
+      <textarea id="sr-text" rows="16"></textarea>
+      <div class="row"><button class="primary" id="sr-save">Save replies</button><button id="sr-reset">Back to the originals</button><span class="saved" id="sr-saved"></span></div>
+    </div>
+
+    <div class="card">
+      <h2>Letters</h2>
+      <div class="row"><button class="primary" data-action="letters">Make letters</button><label class="check" style="margin:0"><input type="checkbox" id="letters-all"> Include firms already sent one</label></div>
+      <p class="hint" id="letters-links"></p>
+      <p class="hint">A print-ready A4 letter for every letter-channel firm, with their score, worst problem and a QR code to their preview.</p>
+      <details style="margin-top:6px"><summary>Edit letter text</summary>
+        <p class="hint">Fields: {greeting} {business} {website} {score_sentence} {issue_sentence} {trade_plural} {area} {sender_email} {sender_phone} {signoff}</p>
+        <label>Firms with a website</label><textarea id="tpl-site" rows="12"></textarea>
+        <label>Firms with no website</label><textarea id="tpl-nosite" rows="10"></textarea>
+        <div class="row"><button class="primary" id="tpl-save">Save text</button><button id="tpl-reset">Back to the original</button><span class="saved" id="tpl-saved"></span></div>
       </details>
     </div>
-  </div>
+  </section>
 
-  <div class="card" style="margin-bottom:0">
-    <div class="tabs">
-      <button class="tab on" data-tab="output">Output</button>
-      <button class="tab" data-tab="review">Review<span class="badge" id="review-count" hidden></span></button>
-      <button class="tab" data-tab="calls">Calls<span class="badge" id="calls-count" hidden style="background:var(--ok)"></span></button>
+  <!-- ============================== CLIENTS -->
+  <section data-section="clients" hidden>
+    <div class="card">
+      <h2>Build &amp; publish a client's site</h2>
+      <div class="grid3">
+        <input type="text" id="publish-folder" placeholder="Folder (e.g. kerr-roofing)">
+        <input type="text" id="publish-account" placeholder="Cloudflare account id (first time)">
+        <input type="text" id="publish-project" placeholder="Project name (optional)">
+      </div>
+      <div class="row"><button data-action="build_site">Build site</button><button class="primary" data-action="publish_site">Publish site</button>
+        <label class="check" style="margin:0"><input type="checkbox" id="build-draft"> Draft build (hidden from Google)</label></div>
+      <ol class="steps">
+        <li><b>Draft their site</b> on Calls writes <code>outreach/sites/&lt;folder&gt;/</code> with a brief, proposal and <code>site.json</code>.</li>
+        <li>Fill in <code>site.json</code>; anything marked [Confirm] blocks a real build (the log lists it).</li>
+        <li><b>Build site</b> makes every page in <code>site/</code>. <b>Publish site</b> puts only that folder live on their Cloudflare. Needs CLOUDFLARE_API_TOKEN and Node.js.</li>
+      </ol>
     </div>
-    <div id="pane-output">
-      <div class="status"><span class="dot" id="dot"></span><b id="job-label">Nothing running</b><span id="job-time" style="color:var(--dim)"></span><span style="margin-left:auto"></span><button class="danger" id="stop" disabled>Stop</button></div>
-      <pre id="log">Pick a button on the left. Output appears here.</pre>
+
+    <div class="card">
+      <h2>Launch report</h2>
+      <div class="grid2"><input type="text" id="launch-old" placeholder="Their old website"><input type="text" id="launch-new" placeholder="New site (if a different domain)"></div>
+      <div class="row"><button class="primary" data-action="launch_report">Make launch report</button></div>
+      <p class="hint">Old speed score and problems next to the new site measured now. Saved in their folder and added to case-studies.csv.</p>
     </div>
-    <div id="pane-calls" hidden>
-      <div class="row" style="margin:0 0 8px"><button data-action="replies">Check replies</button><span class="hint">Reads your inbox (read-only): no's are blocked, bounces move to letters, real replies land here.</span></div>
-      <div class="toast" id="calls-toast"></div>
-      <div id="calls" style="height:calc(100vh - 230px); min-height:320px; overflow:auto"></div>
+  </section>
+
+  <!-- ============================== RESULTS -->
+  <section data-section="results" hidden>
+    <div class="card">
+      <h2>How it's going</h2>
+      <div class="row wrap"><button class="primary" data-action="scorecard">Scorecard</button><button data-action="export">Export to Excel</button><button id="open-results">Open results in Excel</button><button id="open-folder">Open outreach folder</button></div>
+      <p class="hint">Scorecard: sent → opened → replied → quoted → won, the money, and letters. Excel: every firm from every list, with your Notes kept. Close the workbook before exporting.</p>
     </div>
-    <div id="pane-review" hidden>
-      <div class="chips" id="review-filters" style="margin-bottom:8px"></div>
-      <div class="toast" id="review-toast"></div>
-      <div id="review"></div>
+    <div class="card">
+      <h2>Files in outreach/</h2>
+      <ul class="files" id="files"></ul>
     </div>
-  </div>
+  </section>
+
+  <!-- ============================== SETTINGS -->
+  <section data-section="settings" hidden>
+    <div id="settings-box">
+    <div class="card">
+      <h2>Your details</h2>
+      <div class="grid2">
+        <div><label>Your name - who emails are from, and the sign-off <code>MAIL_FROM_NAME</code></label><input type="text" id="MAIL_FROM_NAME" placeholder="e.g. Sam Carter"></div>
+        <div><label>Booking link <code>BOOKING_LINK</code></label><input type="text" id="BOOKING_LINK" placeholder="e.g. https://cal.com/yourname/15min"></div>
+      </div>
+      <label>Letters and proposals: signed as / email / phone <code>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</code></label>
+      <div class="grid3"><input type="text" id="LETTER_SIGNOFF" placeholder="e.g. Scalar Digital"><input type="text" id="LETTER_EMAIL" placeholder="e.g. hello@scalardigital.co.uk"><input type="text" id="LETTER_PHONE" placeholder="e.g. 07401 696272"></div>
+    </div>
+
+    <div class="card">
+      <h2>Quotes</h2>
+      <div class="grid4">
+        <div><label>Scalar build £</label><input type="text" id="QUOTE_PRICE_BUILD" placeholder="2500 if blank"></div>
+        <div><label>Landing page £</label><input type="text" id="QUOTE_PRICE_LANDING" placeholder="750 if blank"></div>
+        <div><label>VAT % (0 or 20)</label><input type="text" id="QUOTE_VAT_RATE" placeholder="0 if blank"></div>
+        <div><label>Deposit %</label><input type="text" id="QUOTE_DEPOSIT_PERCENT" placeholder="0 if blank - set 50"></div>
+      </div>
+      <p class="hint">Used by the Quote buttons on Calls, the terms the client signs, and the proposal. VAT 0 unless you're VAT-registered.</p>
+    </div>
+
+    <div class="card">
+      <h2>Sending email <span id="set-mail" class="hint"></span></h2>
+      <div class="grid2">
+        <div><label>Gmail you send from <code>MAIL_ADDRESS</code></label><input type="text" id="MAIL_ADDRESS" placeholder="e.g. you@scalardigital.co.uk"></div>
+        <div><label>App password <code>MAIL_APP_PASSWORD</code></label><input type="password" id="MAIL_APP_PASSWORD" placeholder="blank keeps the saved one" autocomplete="off"></div>
+      </div>
+      <label>Mail server for reading replies <code>MAIL_IMAP_HOST</code></label><input type="text" id="MAIL_IMAP_HOST" placeholder="leave blank for Gmail">
+      <p class="hint">Not your normal password: Google Account → Security → 2-Step Verification → App passwords. Replies are only ever read - nothing is marked read, moved or deleted.</p>
+      <details style="margin-top:8px"><summary>Extra sending inboxes (optional)</summary>
+        <p class="hint">Up to three more inboxes on look-alike domains, warmed up for 3-4 weeks first. Sending is spread across them; follow-ups go from the inbox that sent the first email.</p>
+        <div class="grid2"><input type="text" id="MAIL_EXTRA_1_ADDRESS" placeholder="Extra inbox 1"><input type="password" id="MAIL_EXTRA_1_PASSWORD" placeholder="app password (blank keeps the saved one)" autocomplete="off"></div>
+        <div class="grid2" style="margin-top:6px"><input type="text" id="MAIL_EXTRA_2_ADDRESS" placeholder="Extra inbox 2"><input type="password" id="MAIL_EXTRA_2_PASSWORD" placeholder="app password" autocomplete="off"></div>
+        <div class="grid2" style="margin-top:6px"><input type="text" id="MAIL_EXTRA_3_ADDRESS" placeholder="Extra inbox 3"><input type="password" id="MAIL_EXTRA_3_PASSWORD" placeholder="app password" autocomplete="off"></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Keys <span class="hint">- blank keeps the saved one</span></h2>
+      <div class="grid2">
+        <div><label>Dashboard secret <code>PROSPECTS_API_SECRET</code> <span id="set-secret"></span></label><input type="password" id="PROSPECTS_API_SECRET" autocomplete="off"></div>
+        <div><label>Google speed test <code>PAGESPEED_API_KEY</code> <span id="set-psi"></span></label><input type="password" id="PAGESPEED_API_KEY" autocomplete="off"></div>
+        <div><label>Companies House <code>COMPANIES_HOUSE_API_KEY</code> <span id="set-ch"></span></label><input type="password" id="COMPANIES_HOUSE_API_KEY" autocomplete="off"></div>
+        <div><label>Cloudflare, for Publish site <code>CLOUDFLARE_API_TOKEN</code></label><input type="password" id="CLOUDFLARE_API_TOKEN" autocomplete="off"></div>
+        <div><label>Phone alerts bot <code>TELEGRAM_BOT_TOKEN</code> <span id="set-tg"></span></label><input type="password" id="TELEGRAM_BOT_TOKEN" autocomplete="off"></div>
+        <div><label>Phone alerts chat <code>TELEGRAM_CHAT_ID</code></label><input type="text" id="TELEGRAM_CHAT_ID" placeholder="same as in Vercel"></div>
+      </div>
+      <p class="hint">Cloudflare token: My Profile → API Tokens → "Edit Cloudflare Workers" template, All accounts. Telegram texts you when a long run finishes.</p>
+      <details style="margin-top:8px"><summary>Advanced</summary>
+        <div class="grid2">
+          <div><label><code>DASHBOARD_API_URL</code></label><input type="text" id="DASHBOARD_API_URL" placeholder="https://admin.scalardigital.co.uk"></div>
+          <div><label><code>SITE_URL</code></label><input type="text" id="SITE_URL" placeholder="https://www.scalardigital.co.uk"></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card savebar">
+      <div class="row" style="margin:0"><button class="primary" id="save">Save settings</button><span class="saved" id="saved"></span><span class="hint" style="margin:0 0 0 auto">Kept in outreach\panel.env on this computer only.</span></div>
+      <div class="msg" id="settings-msg"></div>
+    </div>
+    </div>
+  </section>
+</div>
+
+<aside class="output" id="pane-output">
+  <h2>Output</h2>
+  <pre id="log">Pick a button. What it's doing appears here.</pre>
+</aside>
 </main>
 <script>
 const TOKEN = "__TOKEN__";
@@ -1684,7 +1814,7 @@ function render() {
     loadReview();
     loadLetters();
     loadBatch();
-    if (!$("pane-calls").hidden) loadCalls();
+    if (callsWanted()) loadCalls();
   }
   $("files").innerHTML = s.files.map((f) => `<li>${f.name.replace(/</g, "&lt;")}<span>${ago(f.modified)}</span></li>`).join("") || "<li><span>None yet</span></li>";
   if (!settingsLoaded) {
@@ -1694,7 +1824,7 @@ function render() {
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
     for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "BOOKING_LINK"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
-    if (!s.settings.PROSPECTS_API_SECRET) $("settings-box").open = true;
+    if (!s.settings.PROSPECTS_API_SECRET) showTab("settings");  // nothing works until it's set
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
   $("set-psi").textContent = s.settings.PAGESPEED_API_KEY ? "(saved)" : "(not set - needed for speed checks)";
@@ -1721,7 +1851,7 @@ function render() {
     lastLines = j.seq;
   }
   if ((wasRunning && !j.running) || (j.running && ++polls % 15 === 0)) loadProgress();
-  if (wasRunning && !j.running) { loadReview(); loadLetters(); loadBatch(); loadAutopilot(); if (!$("pane-calls").hidden) loadCalls(); }
+  if (wasRunning && !j.running) { loadReview(); loadLetters(); loadBatch(); loadAutopilot(); if (callsWanted()) loadCalls(); }
   wasRunning = j.running;
 }
 
@@ -1780,8 +1910,7 @@ document.querySelectorAll("[data-find]").forEach((b) => b.addEventListener("clic
   lastLines = -1;
   setTimeout(poll, 150);
 }));
-try { if (localStorage.getItem("finderOpen") === "0") $("finder-box").open = false; } catch (e) {}
-$("finder-box").addEventListener("toggle", () => { try { localStorage.setItem("finderOpen", $("finder-box").open ? "1" : "0"); } catch (e) {} });
+
 $("f-areas").addEventListener("keydown", (e) => { if (e.key === "Enter") document.querySelector('[data-find="count"]').click(); });
 // ---- Mailmeteor template
 for (const [btn, box, note] of [["mm-copy-subject", "mm-subject", "mm-copied"], ["mm-copy-body", "mm-body", "mm-copied"], ["fu-copy-subject", "fu-subject", "fu-copied"], ["fu-copy-body", "fu-body", "fu-copied"]]) {
@@ -1826,7 +1955,7 @@ function callRow(i, section) {
 }
 function renderCalls() {
   const n = (callData.viewing || []).length + (callData.replied || []).length;
-  $("calls-count").hidden = !n; $("calls-count").textContent = n;
+  $("calls-count").hidden = !n; $("calls-count").textContent = n; $("todo-calls").textContent = n;
   const msg = callData.message
     ? `<div class="ritem"><b>${esc(callData.message)}</b><div class="why">The call list needs one small, read-only addition to your dashboard: a list of who opened their preview. Until it's live the call list stays empty - nothing else is affected.</div></div>` : "";
   const tps = '<p class="hint">Check each number against <a href="https://www.tpsonline.org.uk/" target="_blank" rel="noopener" style="color:var(--accent)">TPS / CTPS</a> before you call.</p>';
@@ -1939,7 +2068,7 @@ async function callOutcome(b) {
   $("calls-toast").textContent = r.error || r.message;
   if (!r.error) loadCalls();
 }
-setInterval(() => { if (!$("pane-calls").hidden) loadCalls(); }, 60000);
+setInterval(() => { if (callsWanted()) loadCalls(); }, 60000);
 
 // ---- Autopilot
 let apSearch = null;
@@ -2057,13 +2186,26 @@ $("tpl-reset").addEventListener("click", async () => {
 // ---- Review tab
 let reviewItems = [], reviewKinds = {}, reviewFilter = "all";
 function esc(t) { return String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+// One section on screen at a time; the output log sits beside the tool sections and the
+// job bar in the header shows what's running from anywhere.
+const SECTIONS = [...document.querySelectorAll("[data-section]")].map((el) => el.dataset.section);
+const WIDE = new Set(["calls", "review"]);
 function showTab(name) {
+  if (name === "output") name = WIDE.has(currentTab) ? "today" : currentTab;  // "show me the log"
+  if (!SECTIONS.includes(name)) name = "today";
+  currentTab = name;
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("on", t.dataset.tab === name));
-  $("pane-output").hidden = name !== "output"; $("pane-review").hidden = name !== "review"; $("pane-calls").hidden = name !== "calls";
+  document.querySelectorAll("[data-section]").forEach((el) => { el.hidden = el.dataset.section !== name; });
+  $("layout").classList.toggle("wide", WIDE.has(name));
+  try { localStorage.setItem("tab", name); } catch (e) {}
+  if (history.replaceState) history.replaceState(null, "", "#tab-" + name);
   if (name === "review") loadReview();
   if (name === "calls") loadCalls();
 }
+let currentTab = "today";
+function callsWanted() { return currentTab === "calls" || currentTab === "today"; }  // Today shows the count
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.goto)));
 async function loadReview() {
   const name = $("sheet").value;
   if (!name) return;
@@ -2074,7 +2216,7 @@ async function loadReview() {
 }
 function renderReview() {
   const n = reviewItems.length;
-  $("review-count").hidden = !n; $("review-count").textContent = n;
+  $("review-count").hidden = !n; $("review-count").textContent = n; $("todo-review").textContent = n;
   const counts = {};
   reviewItems.forEach((i) => (counts[i.kind] = (counts[i.kind] || 0) + 1));
   if (reviewFilter !== "all" && !counts[reviewFilter]) reviewFilter = "all";
@@ -2126,7 +2268,7 @@ async function reviewDecide(b) {
 $("stop").addEventListener("click", () => post("/api/stop"));
 $("open-folder").addEventListener("click", () => post("/api/open-folder"));
 $("open-results").addEventListener("click", async () => { const r = await post("/api/open-results"); if (r.error) { $("run-msg").style.color = "var(--bad)"; $("run-msg").textContent = r.error; } });
-$("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (!$("pane-calls").hidden) loadCalls(); });
+$("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (callsWanted()) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN"]) body[k] = $(k).value;
@@ -2135,8 +2277,11 @@ $("save").addEventListener("click", async () => {
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
   $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
 });
-if (location.hash === "#tab-review") showTab("review");
-if (location.hash === "#tab-calls") showTab("calls");
+{
+  let saved = "";
+  try { saved = localStorage.getItem("tab") || ""; } catch (e) {}
+  showTab(location.hash.startsWith("#tab-") ? location.hash.slice(5) : saved || "today");
+}
 poll();
 </script>
 </body>
