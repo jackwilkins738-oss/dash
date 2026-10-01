@@ -228,6 +228,11 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
         extra = found.get(domain) or {}
         phone = next((str(row[c]).strip() for c in PHONE_COLUMNS if str(row.get(c) or "").strip()), "") or extra.get("phone", "")
         act = (activity or {}).get(slug) or {}
+        if act.get("status") == "lost":  # "not for us" on their preview - never call them about it
+            from contact_rules import add_to_blocklist
+
+            add_to_blocklist(outreach, [("name", business), ("website", domain)], "not for us (preview page)")
+            continue
         item = {
             "key": key, "business": business, "website": domain,
             "contact": str(row.get("Contact name") or "").strip() or extra.get("contact", ""),

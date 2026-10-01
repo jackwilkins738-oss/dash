@@ -77,6 +77,24 @@ def do_not_email(outreach: Path) -> dict[str, str]:
     return out
 
 
+def block_optouts(outreach: Path, views: dict[str, dict] | None) -> int:
+    """Anyone who pressed "not for us" on their preview (the dashboard marks them lost) goes on
+    do-not-contact, so no batch, follow-up or call list picks them again. Returns how many were new."""
+    if not views:
+        return 0
+    from contact_rules import add_to_blocklist
+
+    lost = {slug for slug, v in views.items() if (v or {}).get("status") == "lost"}
+    if not lost:
+        return 0
+    entries: list[tuple[str, str]] = []
+    for path in [*sources(outreach, None), outreach / SENT]:
+        for r in _rows(path)[1]:
+            if _slug(r.get("preview_url", "")) in lost:
+                entries += [("email", r.get("email") or ""), ("name", r.get("business") or "")]
+    return add_to_blocklist(outreach, entries, "not for us (preview page)") if entries else 0
+
+
 def remaining(outreach: Path, sheet: str | None = None) -> int:
     done = {**sent_emails(outreach), **do_not_email(outreach)}
     seen: set[str] = set()
@@ -346,7 +364,10 @@ def main() -> None:
         if not 1 <= args.size <= 500 or not 1 <= args.after_days <= 60:
             sys.exit("Size must be 1-500 and days 1-60.")
         print(f"Picking up to {args.size} firms emailed {args.after_days}+ days ago with no reply and no preview visit ...", flush=True)
-        path, notes, skipped = make_followups(outreach, args.size, args.after_days, views=preview_views())
+        views = preview_views()
+        if block_optouts(outreach, views):
+            print("  Some firms said 'not for us' on their preview - they're on do-not-contact now.")
+        path, notes, skipped = make_followups(outreach, args.size, args.after_days, views=views)
         for n in notes[:10]:
             print(f"  {n}")
         left_out = ", ".join(f"{v} {k}" for k, v in skipped.items() if v)
@@ -370,6 +391,8 @@ def main() -> None:
         print(f"Note: the last batch ({pending[0].get('batch')}) was never marked as sent - it's being replaced.")
     print(f"Picking the next {args.size} firms not yet emailed{' from ' + args.sheet if args.sheet else ' from every list'}, "
           "and checking each link ...", flush=True)
+    if block_optouts(outreach, preview_views()):
+        print("  Some firms said 'not for us' on their preview - they're on do-not-contact now.")
     path, notes = make_batch(outreach, args.size, args.sheet)
     for n in notes[:10]:
         print(f"  {n}")

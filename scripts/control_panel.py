@@ -663,6 +663,10 @@ def calls_for(sheet: str) -> dict:
         activity = calls.fetch_activity(api, secret, tenant)
     except calls.DashboardMissing as e:
         activity, message = None, str(e)
+    if activity:
+        import email_batches
+
+        email_batches.block_optouts(OUTREACH, activity)
     try:
         out = calls.call_list(OUTREACH, sheet, secret, site, activity)
     except Exception as e:  # a sheet open in Excel, an odd file

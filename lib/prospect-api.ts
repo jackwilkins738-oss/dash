@@ -83,3 +83,21 @@ export async function recordProspectView(
     return null
   }
 }
+
+/** "Not for us" from their preview: the dashboard marks them lost. Returns the firm's name if it changed, else null. */
+export async function recordProspectOptOut(slug: string): Promise<string | null> {
+  const cfg = config()
+  if (!cfg || !isProspectSlug(slug)) return null
+  try {
+    const res = await fetch(`${cfg.base}/api/prospects/${slug}/optout`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${cfg.secret}` },
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as { business_name?: string; changed?: boolean }
+    return body.changed && body.business_name ? body.business_name : null
+  } catch {
+    return null
+  }
+}

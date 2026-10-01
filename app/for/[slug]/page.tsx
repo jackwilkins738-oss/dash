@@ -14,6 +14,8 @@ import { getProspect, type Prospect } from '@/lib/prospect-api'
 import { SHOWCASE_TRADES, showcaseIdForTradeText } from '@/lib/showcase'
 import { teardownFindings, teardownPasses } from '@/lib/teardown'
 import { PrintButton } from '@/components/print-button'
+import { PreviewOptOut } from '@/components/preview-optout'
+import { PRICES } from '@/lib/site'
 import { SITE } from '@/lib/site'
 
 // A private page for one business Scalar is reaching out to: their real
@@ -216,6 +218,61 @@ export default async function ProspectPreviewPage({ params }: Props) {
           </div>
         </section>
       )}
+
+      {/* Ready to go ahead: the package picked, so the reply is a quote, not a question. */}
+      <section className="border-t border-border py-16 sm:py-20">
+        <div className="mx-auto max-w-4xl px-5 sm:px-8">
+          <Reveal>
+            <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Next step</span>
+            <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+              Want this for {p.business_name}?
+            </h2>
+            <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
+              Pick one and I&apos;ll come back with a fixed price and a plan - usually the same day. Nothing is
+              charged until you&apos;ve seen the quote and said yes.
+            </p>
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <a
+                href={`/contact?firm=${encodeURIComponent(p.business_name)}&package=build`}
+                className="group rounded-2xl border border-blueprint/50 bg-card p-6 transition-colors hover:border-blueprint"
+              >
+                <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-blueprint">The Scalar build</span>
+                <span className="mt-2 block font-display text-3xl font-bold">£{PRICES.build.toLocaleString('en-GB')}</span>
+                <span className="mt-2 block text-sm text-muted-foreground">
+                  Five pages plus your own dashboard for enquiries, quotes and invoices.
+                </span>
+                <span className="mt-4 inline-block font-semibold text-blueprint">Go ahead with this &rarr;</span>
+              </a>
+              <a
+                href={`/contact?firm=${encodeURIComponent(p.business_name)}&package=landing`}
+                className="group rounded-2xl border border-border bg-card/50 p-6 transition-colors hover:border-blueprint"
+              >
+                <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Landing page</span>
+                <span className="mt-2 block font-display text-3xl font-bold">£{PRICES.landing.toLocaleString('en-GB')}</span>
+                <span className="mt-2 block text-sm text-muted-foreground">One fast page, built to turn visitors into enquiries.</span>
+                <span className="mt-4 inline-block font-semibold text-blueprint">Go ahead with this &rarr;</span>
+              </a>
+            </div>
+          </Reveal>
+          <dl className="mt-12 divide-y divide-border border-y border-border">
+            {[
+              ['Is the price fixed?', `Yes. £${PRICES.landing.toLocaleString('en-GB')} or £${PRICES.build.toLocaleString('en-GB')}, agreed before anything starts, and it doesn't move. No monthly fee on the website itself.`],
+              ['Do I own it?', 'Yes - the code and the domain are yours outright once it’s paid for. No being locked to me to make a change.'],
+              ['What do I have to do?', 'A short call, then one page of details and some photos of your work. You check the whole site on your phone before anything goes live.'],
+              ['Will my email keep working?', 'Yes. Your email settings are checked and carried over before your domain is pointed at the new site, and your current site stays up until then.'],
+              ['What about the dashboard?', `It comes with The Scalar build, free for the first 12 months, then £${PRICES.dashboardMonthly} a month only if you want to keep it. The website works without it.`],
+            ].map(([q, a]) => (
+              <div key={q} className="py-5">
+                <dt className="font-semibold">{q}</dt>
+                <dd className="mt-1.5 text-pretty leading-relaxed text-muted-foreground">{a}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="mt-8">
+            <PreviewOptOut slug={p.slug} firmName={p.business_name} />
+          </div>
+        </div>
+      </section>
 
       <BookCallBand contactHref={contactHref} firmName={p.business_name} />
       {p.website && <SpeedCheck initialUrl={p.website} />}

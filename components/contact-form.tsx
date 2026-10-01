@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { track } from '@vercel/analytics'
 import { Check, Loader2 } from 'lucide-react'
 import { PARTNER } from '@/lib/site'
+import { PRICES } from '@/lib/site'
 
 const PROJECT_TYPES = ['New website', 'Redesign my current site', 'Not sure yet']
 
@@ -30,7 +31,9 @@ export function ContactForm() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [error, setError] = useState('')
   const searchParams = useSearchParams()
-  const prefillBudget = searchParams.get('budget')
+  const prefillBudget =
+    searchParams.get('budget') ??
+    (searchParams.get('package') === 'landing' ? BUDGETS[0] : searchParams.get('package') === 'build' ? BUDGETS[1] : null)
   const prefillEstimate = searchParams.get('estimate')
   // Referral link: /contact?ref=Name. Letters, numbers, spaces and a few name marks only.
   const referredBy = (searchParams.get('ref') ?? '')
@@ -54,9 +57,16 @@ export function ContactForm() {
     .trim()
     .slice(0, 80)
   const wantsFounding = searchParams.get('founding') === '1'
+  // "Go ahead" from a preview page: which package, so the reply can be a quote, not a question.
+  const pkg = searchParams.get('package')
+  const wantsPackage =
+    pkg === 'build' ? `I'd like to go ahead with The Scalar build (£${PRICES.build.toLocaleString('en-GB')}).`
+    : pkg === 'landing' ? `I'd like to go ahead with the landing page (£${PRICES.landing.toLocaleString('en-GB')}).`
+    : ''
   const prefillMessage = [
     fromFirm ? `I've seen the preview you made for ${fromFirm}.` : '',
     wantsFounding ? "I'd like one of the three founding-client places on The Scalar build." : '',
+    wantsPackage,
   ]
     .filter(Boolean)
     .join(' ')
