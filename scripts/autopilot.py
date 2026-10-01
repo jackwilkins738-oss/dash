@@ -138,7 +138,7 @@ class Run:
         code = proc.wait()
         if code:
             self.failed.append(f"{script.name} {' '.join(a for a in args if a.startswith('--'))}")
-            self.note(f"  (that step had a problem - carrying on)")
+            self.note("  (that step had a problem - carrying on)")
         return code
 
 
@@ -209,7 +209,7 @@ def run() -> int:
         if scorecard_day():  # the weekly scorecard goes in Monday's text too
             start = len(r.lines)
             r.step(panel.HERE / "scorecard.py", [])
-            r.scorecard = [l.strip() for l in r.lines[start + 1:] if l.strip() and not l.startswith("> ") and "had a problem" not in l]
+            r.scorecard = [ln.strip() for ln in r.lines[start + 1:] if ln.strip() and not ln.startswith("> ") and "had a problem" not in ln]
         return summarise(r, settings, time.time() - started)
     finally:
         panel.keep_awake(False)
@@ -221,14 +221,14 @@ SUMMARY_LINE = re.compile(r"^\s*(READY|Found \d+ new|Wrote .*(firms|\.xlsx)|List
 
 
 def summarise(r: Run, settings: dict, seconds: float) -> int:
-    picked = [l.strip() for l in r.lines if SUMMARY_LINE.match(l)]
-    replies = next((l.strip() for l in r.lines if "Found " in l and " new:" in l), "")
+    picked = [ln.strip() for ln in r.lines if SUMMARY_LINE.match(ln)]
+    replies = next((ln.strip() for ln in r.lines if "Found " in ln and " new:" in ln), "")
     mins = int(seconds // 60)
     head = f"Autopilot done in {mins // 60}h {mins % 60}m" if mins >= 60 else f"Autopilot done in {mins}m"
     body = [head]
     if replies:
         body.append("Replies: " + replies.split(": ", 1)[-1])
-    body += [l for l in picked if l.startswith("READY")]
+    body += [ln for ln in picked if ln.startswith("READY")]
     if r.failed:
         body.append(f"{len(r.failed)} step(s) had problems - see autopilot-log.txt")
     body.append("Next: open the panel and press Send today's batch (and Send follow-ups).")

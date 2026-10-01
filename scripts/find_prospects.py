@@ -36,7 +36,7 @@ import socket
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 

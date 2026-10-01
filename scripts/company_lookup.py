@@ -199,7 +199,9 @@ def names_agree(company_name: str, business: str, text: str) -> bool:
     reg = normalise(company_name)
     if reg and reg in names_called_ltd(text):
         return True
-    words = lambda n: {w for w in normalise(n).split() if len(w) >= 3 and w not in GENERIC_WORDS}
+    def words(n: str) -> set[str]:
+        return {w for w in normalise(n).split() if len(w) >= 3 and w not in GENERIC_WORDS}
+
     return bool(words(company_name) & words(business))
 
 

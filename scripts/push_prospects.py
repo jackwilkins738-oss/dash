@@ -625,19 +625,19 @@ def main() -> None:
 
         if contacts_found:
             write_csv(contacts_path, CONTACT_FIELDS, contacts_found)
-        batch.sort(key=lambda l: l["business"].lower())
+        batch.sort(key=lambda item: item["business"].lower())
         page = outreach / f"letters-{args.sheet.stem}.html"
         batch_file = outreach / f"letters-batch-{args.sheet.stem}.csv"
         if not batch:
             print(f"No letters to make ({already} already posted, {len(no_address)} with no address).")
             return
-        for l in batch:
-            l["qr"] = letters.qr_svg(l["url"])
+        for item in batch:
+            item["qr"] = letters.qr_svg(item["url"])
         page.write_text(letters.render(batch, sender), encoding="utf-8")
         with batch_file.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=["key", "business", "sheet"])
             writer.writeheader()
-            writer.writerows({"key": l["key"], "business": l["business"], "sheet": args.sheet.name} for l in batch)
+            writer.writerows({"key": item["key"], "business": item["business"], "sheet": args.sheet.name} for item in batch)
         print(f"Wrote {page.name}: {len(batch)} letter{'s' if len(batch) != 1 else ''} ready to print.")
         if already:
             print(f"  {already} left out - already posted a letter (tick 'Include firms already sent one' to redo)")

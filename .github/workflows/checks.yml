@@ -44,5 +44,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install openpyxl segno
+      - run: pip install openpyxl segno ruff==0.15.8
+      - run: ruff check .
       - run: python -m unittest discover -p "test_*.py" -v

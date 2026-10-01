@@ -1,0 +1,43 @@
+# Checks scalardigital.co.uk and the dashboard every 30 minutes, and texts you (Telegram) once when
+# one goes down and once when it's back (scripts/uptime_check.py). Uses the same TELEGRAM_BOT_TOKEN
+# and TELEGRAM_CHAT_ID secrets as the reply watch.
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache/restore@v4
+        with:
+          path: .uptime
+          key: uptime-${{ github.run_id }}
+          restore-keys: uptime-
+      - name: Check the website and the dashboard
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/uptime_check.py
+      - uses: actions/cache/save@v4
+        if: always() && hashFiles('.uptime/state.json') != ''
+        with:
+          path: .uptime
+          key: uptime-${{ github.run_id }}
