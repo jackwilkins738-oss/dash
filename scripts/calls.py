@@ -6,6 +6,8 @@ never has their phone number. This joins the two on this machine:
     Viewing       opened their preview - hottest first (most recent, most visits)
     Letter follow-up
                   posted a letter 7+ days ago and they haven't looked yet
+    Call-backs    "Call back" with a date (or "not now" replies parked for a few
+                  months) - they come back here, top of the list, on the day
 
 Each firm shows its phone, contact, visits and a link to their preview
 (opened with ?src=dashboard, so your own visit isn't counted as theirs).
@@ -19,9 +21,10 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import urllib.error
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import overrides
@@ -73,6 +76,84 @@ def log_call(outreach: Path, sheet: str, key: str, business: str, outcome: str, 
             writer.writeheader()
         writer.writerow({"key": key, "sheet": sheet, "business": business, "outcome": outcome, "note": note[:300],
                          "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+
+
+# ---------------------------------------------------------------- call-backs
+
+CALLBACKS = "callbacks.csv"
+CALLBACK_FIELDS = ["key", "sheet", "business", "due", "note", "created", "done"]
+MAX_AHEAD_DAYS = 400
+
+
+def parse_due(text: str, today: date) -> date | None:
+    """'3d', '2w', '3m', 'tomorrow', or a date (2026-11-03 / 3/11/2026) -> the day to call back."""
+    t = str(text or "").strip().lower()
+    if t in ("tomorrow", "1d"):
+        return today + timedelta(days=1)
+    m = re.fullmatch(r"(\d{1,3})\s*(d|day|days|w|wk|week|weeks|m|mo|month|months)", t)
+    if m:
+        n, unit = int(m.group(1)), m.group(2)[0]
+        days = n * {"d": 1, "w": 7, "m": 30}[unit]
+        due = today + timedelta(days=days)
+    else:
+        due = None
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y", "%d-%m-%Y"):
+            try:
+                due = datetime.strptime(t, fmt).date()
+                break
+            except ValueError:
+                continue
+    if due is None or due <= today - timedelta(days=1) or (due - today).days > MAX_AHEAD_DAYS:
+        return None
+    return due
+
+
+def _callback_rows(outreach: Path) -> list[dict]:
+    path = outreach / CALLBACKS
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def _write_callbacks(outreach: Path, rows: list[dict]) -> None:
+    with (outreach / CALLBACKS).open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=CALLBACK_FIELDS, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+
+
+def add_callback(outreach: Path, sheet: str, key: str, business: str, due: date, note: str = "") -> None:
+    """One open call-back per firm: a new date replaces the old one."""
+    rows = [r for r in _callback_rows(outreach) if not (r.get("key") == key and not r.get("done"))]
+    rows.append({"key": key, "sheet": sheet, "business": business, "due": due.isoformat(), "note": note[:300],
+                 "created": datetime.now(timezone.utc).isoformat(timespec="seconds"), "done": ""})
+    _write_callbacks(outreach, rows)
+
+
+def complete_callbacks(outreach: Path, key: str) -> None:
+    """Any outcome logged for them closes their open call-back."""
+    rows = _callback_rows(outreach)
+    changed = False
+    for r in rows:
+        if r.get("key") == key and not r.get("done"):
+            r["done"] = date.today().isoformat()
+            changed = True
+    if changed:
+        _write_callbacks(outreach, rows)
+
+
+def due_callbacks(outreach: Path, today: date) -> list[dict]:
+    """Open call-backs due today or overdue, oldest first."""
+    out = []
+    for r in _callback_rows(outreach):
+        try:
+            due = date.fromisoformat(r.get("due") or "")
+        except ValueError:
+            continue
+        if not r.get("done") and due <= today:
+            out.append({**r, "overdue": (today - due).days})
+    return sorted(out, key=lambda r: r["due"])
 
 
 def _when(value: str | None) -> datetime | None:
@@ -177,6 +258,8 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
     letters.sort(key=lambda i: -i["waited"])
 
     # Replies waiting for you (from reply_scanner.py), from any list - newest first.
+    from reply_scanner import intent as reply_intent
+
     by_site = {domain_of(str(r.get("Website") or "")): r for r in rows}
     replied = []
     replies_path = outreach / "replies.csv"
@@ -187,17 +270,45 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
                     continue
                 row = by_site.get(r.get("website") or "") or {}
                 extra = found.get(r.get("website") or "") or {}
+                slug = make_slug(str(row.get("Business") or r.get("business") or ""), r.get("website") or "", secret) if r.get("website") else ""
+                act = (activity or {}).get(slug) or {}
                 replied.append({
                     "key": overrides.row_key(row) if row else overrides.row_key({"Business": r.get("business", "")}),
                     "business": r.get("business", ""), "website": r.get("website", ""), "email": r.get("from", ""),
                     "contact": str(row.get("Contact name") or "").strip() or extra.get("contact", ""),
                     "phone": next((str(row[c]).strip() for c in PHONE_COLUMNS if str(row.get(c) or "").strip()), "") or extra.get("phone", ""),
                     "kind": r.get("kind", ""), "snippet": r.get("snippet", ""), "subject": r.get("subject", ""),
+                    "intent": r.get("intent") or reply_intent(r.get("snippet", "")),
                     "replied_at": r.get("date", ""), "message_id": r.get("message_id", ""),
-                    "preview": "", "views": 0, "last_viewed": "", "last_call": "", "last_call_at": "", "calls": 0, "posted": "",
+                    "preview": f"{site}/for/{slug}?src=dashboard" if act else "",
+                    "views": int(act.get("view_count") or 0), "last_viewed": act.get("last_viewed_at") or "",
+                    "last_call": "", "last_call_at": "", "calls": 0, "posted": "",
                 })
     replied.sort(key=lambda i: i["replied_at"], reverse=True)
-    return {"viewing": viewing, "letters": letters, "replied": replied}
+
+    # Call-backs due today or overdue - from every list, so none is missed by looking at the wrong sheet.
+    by_key = {overrides.row_key(r): r for r in rows}
+    callbacks = []
+    for cb in due_callbacks(outreach, now.date()):
+        row = by_key.get(cb["key"]) or {}
+        domain = domain_of(str(row.get("Website") or "")) or ""
+        extra = found.get(domain) or {}
+        slug = make_slug(cb["business"], domain, secret) if domain else ""
+        act = (activity or {}).get(slug) or {}
+        callbacks.append({
+            "key": cb["key"], "sheet": cb.get("sheet") or sheet, "business": cb["business"], "website": domain,
+            "contact": str(row.get("Contact name") or "").strip() or extra.get("contact", ""),
+            "phone": next((str(row[c]).strip() for c in PHONE_COLUMNS if str(row.get(c) or "").strip()), "") or extra.get("phone", ""),
+            "email": str(row.get("Email") or "").strip() or extra.get("email", ""),
+            "preview": f"{site}/for/{slug}?src=dashboard" if slug else "",
+            "views": int(act.get("view_count") or 0), "last_viewed": act.get("last_viewed_at") or "",
+            "due": cb["due"], "overdue": cb["overdue"], "note": cb.get("note", ""),
+            "last_call": "", "last_call_at": "", "calls": 0, "posted": "",
+        })
+    # Someone due a call-back isn't also listed again below.
+    queued = {c["key"] for c in callbacks}
+    viewing = [v for v in viewing if v["key"] not in queued]
+    return {"callbacks": callbacks, "viewing": viewing, "letters": letters, "replied": replied}
 
 
 def mark_reply_handled(outreach: Path, business: str) -> None:
