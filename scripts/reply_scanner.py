@@ -322,6 +322,9 @@ def alert_text(replies: list[dict]) -> str:
 
 
 def alert(replies: list[dict]) -> None:
+    # With the cloud watch on (cloud_reply_watch.py), it does the texting - this would be a second text.
+    if os.environ.get("CLOUD_REPLY_ALERTS", "").strip().lower() in ("1", "yes", "on", "true"):
+        return
     token, chat = os.environ.get("TELEGRAM_BOT_TOKEN", ""), os.environ.get("TELEGRAM_CHAT_ID", "")
     text = alert_text(replies)
     if not (token and chat and text):
