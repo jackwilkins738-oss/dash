@@ -69,7 +69,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "39"
+PANEL_VERSION = "40"
 MAX_LOG_LINES = 5000
 
 
@@ -860,10 +860,13 @@ def reply_send_action(body: dict) -> tuple[dict, int]:
         return {"error": f"Not sent: {e}"}, 502
     calls.log_call(OUTREACH, sheet, key, business, "Replied to them", str(body.get("name") or "")[:60])
     calls.mark_reply_handled(OUTREACH, business)
+    calls.complete_callbacks(OUTREACH, key)
     return {"ok": True, "message": f"Replied to {to} from {inbox.address} - it's in that inbox's Sent folder."}, 200
 
 
 def call_action(body: dict) -> tuple[dict, int]:
+    from datetime import date
+
     import calls
     from contact_rules import add_to_blocklist
 
@@ -874,8 +877,17 @@ def call_action(body: dict) -> tuple[dict, int]:
     if not sheet_path(sheet) or not REVIEW_KEY.match(key) or outcome not in calls.OUTCOMES or not business:
         return {"error": "That doesn't look right."}, 400
     note = str(body.get("note") or "")[:300]
+    due = None
+    if outcome == "Call back":
+        due = calls.parse_due(str(body.get("due") or "3d"), date.today())
+        if due is None:
+            return {"error": "Call back when? Try 3d, 2w, 3m, tomorrow or a date like 2026-11-03 (within a year)."}, 400
     calls.log_call(OUTREACH, sheet, key, business, outcome, note)
     calls.mark_reply_handled(OUTREACH, business)
+    if due:
+        calls.add_callback(OUTREACH, sheet, key, business, due, note)
+        return {"ok": True, "message": f"{business}: call back on {due.strftime('%a %d %b')} - they'll be top of Calls that day"}, 200
+    calls.complete_callbacks(OUTREACH, key)
     if outcome == "Not interested":
         website, email = str(body.get("website") or "").lower(), str(body.get("email") or "").strip()
         entries = [("name", business)]
@@ -1394,6 +1406,7 @@ PAGE = r"""<!doctype html>
   .ritem .btns { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
   .ritem .btns button { padding:5px 9px; font-size:12px; }
   .ritem input { width:auto; flex:1; min-width:180px; padding:5px 8px; }
+  .ritem input[type=checkbox] { flex:0 0 auto; min-width:0; padding:0; }
   .kind { font-size:11px; color:var(--warn); text-transform:uppercase; letter-spacing:.05em; }
   .toast { color:var(--ok); font-size:12px; min-height:1em; margin-bottom:6px; }
   summary.card-title { font-size:12px; font-weight:700; color:var(--dim); list-style-position:inside; }
@@ -1946,7 +1959,15 @@ for (const [btn, box, note] of [["mm-copy-subject", "mm-subject", "mm-copied"], 
 
 // ---- Calls
 const LETTER_WAIT = 7;
-let callData = { viewing: [], letters: [], outcomes: [] };
+let callData = { callbacks: [], viewing: [], letters: [], outcomes: [] };
+const sheetOf = (item) => (item && item.sheet) || $("sheet").value;
+// What a reply asks for -> the saved reply that answers it (matched on its name, which you can edit).
+const INTENT_LABEL = { price: "asks the price", call: "wants a call", info: "wants more info", later: "not right now" };
+const INTENT_REPLY = { price: /much|price|cost/i, call: /call/i, info: /how does|work|more/i, later: /not right now|later|not now/i };
+function suggestedReply(intent) {
+  const re = INTENT_REPLY[intent];
+  return re ? savedReplies.find((n) => re.test(n)) || "" : "";
+}
 function agoIso(iso) { return iso ? ago(new Date(iso).getTime() / 1000) : ""; }
 async function loadCalls() {
   const name = $("sheet").value;
@@ -1956,8 +1977,11 @@ async function loadCalls() {
 }
 function callRow(i, section) {
   const phone = i.phone ? `<a href="tel:${esc(i.phone.replace(/\s/g, ""))}" style="font-size:14px">📞 ${esc(i.phone)}</a>` : '<span class="hint">no phone - check their site</span>';
+  const views = i.views ? ` · opened their preview ${i.views} time${i.views === 1 ? "" : "s"}, last ${esc(agoIso(i.last_viewed))}` : "";
   const seen = section === "replied"
-    ? `<b style="color:var(--ok)">${i.kind === "interested" ? "Sounds interested" : "Wrote back"}</b> ${esc(agoIso(i.replied_at))} · ${esc(i.email)}<br><i>"${esc(i.snippet)}"</i>`
+    ? `<b style="color:var(--ok)">${i.kind === "interested" ? "Sounds interested" : "Wrote back"}</b>${i.intent ? ` <span class="kind">${esc(INTENT_LABEL[i.intent] || i.intent)}</span>` : ""} ${esc(agoIso(i.replied_at))} · ${esc(i.email)}${views}<br><i>"${esc(i.snippet)}"</i>`
+    : section === "callbacks"
+    ? `<b style="color:var(--warn)">Call back ${i.overdue ? `- ${i.overdue} day${i.overdue === 1 ? "" : "s"} overdue` : "today"}</b>${i.note ? ` · "${esc(i.note)}"` : ""}${views}`
     : section === "viewing"
     ? `<b style="color:var(--ok)">${i.views} visit${i.views === 1 ? "" : "s"}</b> · last ${esc(agoIso(i.last_viewed))}`
     : `letter posted ${i.waited} days ago · not opened yet`;
@@ -1972,27 +1996,37 @@ function callRow(i, section) {
     <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><label class="hint" title="One of the first three Scalar builds: 24 months' free dashboard, the speed guarantee, first in the queue - for a case study, video and review"><input type="checkbox" data-founding> founding client</label><button data-draft>Draft their site</button></div>
     <div class="why" data-quote-result></div>
     ${section === "replied" && i.email ? `<div class="btns" style="margin-top:6px">
+      ${suggestedReply(i.intent) ? `<button class="primary" data-reply-suggest="${esc(suggestedReply(i.intent))}">Suggested reply: ${esc(suggestedReply(i.intent))}</button>` : ""}
+      ${i.intent === "later" ? `<button data-callback-in="3m">Call back in 3 months</button>` : ""}
       <select data-reply-pick><option value="">Reply with a saved answer...</option>${savedReplies.map((n) => `<option>${esc(n)}</option>`).join("")}</select></div>
       <div data-reply-box hidden style="margin-top:6px"><textarea data-reply-text rows="9" style="width:100%"></textarea>
       <div class="btns"><button class="primary" data-reply-send>Send reply to ${esc(i.email)}</button><span class="hint" data-reply-msg></span></div></div>` : ""}
   </div>`;
 }
 function renderCalls() {
-  const n = (callData.viewing || []).length + (callData.replied || []).length;
+  const n = (callData.viewing || []).length + (callData.replied || []).length + (callData.callbacks || []).length;
   $("calls-count").hidden = !n; $("calls-count").textContent = n; $("todo-calls").textContent = n;
   const msg = callData.message
     ? `<div class="ritem"><b>${esc(callData.message)}</b><div class="why">The call list needs one small, read-only addition to your dashboard: a list of who opened their preview. Until it's live the call list stays empty - nothing else is affected.</div></div>` : "";
   const tps = '<p class="hint">Check each number against <a href="https://www.tpsonline.org.uk/" target="_blank" rel="noopener" style="color:var(--accent)">TPS / CTPS</a> before you call.</p>';
   const rp = (callData.replied || []).map((i) => callRow(i, "replied")).join("");
+  const cb = (callData.callbacks || []).map((i) => callRow(i, "callbacks")).join("");
   const v = (callData.viewing || []).map((i) => callRow(i, "viewing")).join("") || '<p class="hint">Nobody new has opened their preview since your last calls.</p>';
   const l = (callData.letters || []).map((i) => callRow(i, "letters")).join("") || '<p class="hint">No letters waiting on a follow-up.</p>';
-  $("calls").innerHTML = msg + tps + (rp ? `<h2 style="font-size:12px;color:var(--ok);text-transform:uppercase;letter-spacing:.06em">Replied to your email - answer these first</h2>` + rp : "") + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em">Looking at their preview - hottest first</h2>` + v
+  $("calls").innerHTML = msg + tps
+    + (cb ? `<h2 style="font-size:12px;color:var(--warn);text-transform:uppercase;letter-spacing:.06em">Call-backs due</h2>` + cb : "")
+    + (rp ? `<h2 style="font-size:12px;color:var(--ok);text-transform:uppercase;letter-spacing:.06em">Replied to your email - answer these first</h2>` + rp : "") + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em">Looking at their preview - hottest first</h2>` + v
     + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:18px">Letter follow-ups (${LETTER_WAIT} days+, not opened)</h2>` + l;
   document.querySelectorAll("#calls [data-outcome]").forEach((b) => b.addEventListener("click", () => callOutcome(b)));
   document.querySelectorAll("#calls [data-quote]").forEach((b) => b.addEventListener("click", () => makeQuote(b)));
   document.querySelectorAll("#calls [data-draft]").forEach((b) => b.addEventListener("click", () => draftSite(b)));
   document.querySelectorAll("#calls [data-reply-pick]").forEach((sel) => sel.addEventListener("change", () => pickReply(sel)));
   document.querySelectorAll("#calls [data-reply-send]").forEach((b) => b.addEventListener("click", () => sendReply(b)));
+  document.querySelectorAll("#calls [data-reply-suggest]").forEach((b) => b.addEventListener("click", () => {
+    const sel = b.closest(".ritem").querySelector("[data-reply-pick]");
+    sel.value = b.dataset.replySuggest; pickReply(sel);
+  }));
+  document.querySelectorAll("#calls [data-callback-in]").forEach((b) => b.addEventListener("click", () => callOutcome(b, b.dataset.callbackIn)));
 }
 let savedReplies = [];
 async function loadSavedReplies() {
@@ -2019,7 +2053,7 @@ async function sendReply(b) {
   const text = card.querySelector("[data-reply-text]").value;
   if (!text.trim() || !confirm(`Send this reply to ${item.email}?`)) return;
   b.disabled = true; b.textContent = "Sending...";
-  const r = await post("/api/reply-send", { sheet: $("sheet").value, key: item.key, business: item.business, to: item.email,
+  const r = await post("/api/reply-send", { sheet: sheetOf(item), key: item.key, business: item.business, to: item.email,
     message_id: item.message_id, subject: item.subject, text, name: card.querySelector("[data-reply-pick]").value });
   b.disabled = false; b.textContent = "Send reply";
   const msg = card.querySelector("[data-reply-msg]");
@@ -2032,7 +2066,7 @@ async function draftSite(b) {
   const card = b.closest(".ritem");
   const item = (callData[card.dataset.sec] || []).find((x) => x.key === card.dataset.key);
   b.disabled = true; b.textContent = "Reading their site...";
-  const r = await post("/api/draft-site", { sheet: $("sheet").value, key: item.key, business: item.business, website: item.website,
+  const r = await post("/api/draft-site", { sheet: sheetOf(item), key: item.key, business: item.business, website: item.website,
     email: item.email, phone: item.phone, contact: item.contact });
   b.disabled = false; b.textContent = "Draft their site";
   const box = card.querySelector("[data-quote-result]");
@@ -2047,7 +2081,7 @@ async function makeQuote(b) {
   const label = b.dataset.quote === "build" ? (founding ? "founding-client Scalar build" : "Scalar build") : "landing page";
   if (!confirm(`Make a ${label} quote for ${item.business}? It's added to your dashboard as a sent quote - you send the link.`)) return;
   b.disabled = true;
-  const r = await post("/api/quote", { sheet: $("sheet").value, key: item.key, business: item.business, email: item.email,
+  const r = await post("/api/quote", { sheet: sheetOf(item), key: item.key, business: item.business, email: item.email,
     phone: item.phone, website: item.website, contact: item.contact, package: b.dataset.quote,
     founding });
   b.disabled = false;
@@ -2070,7 +2104,7 @@ async function makeQuote(b) {
     if (!to) to = (prompt(`Email address to send ${item.business}'s quote to:`) || "").trim();
     if (!to) return;
     btn.disabled = true; btn.textContent = "Sending...";
-    const s = await post("/api/quote-email", { sheet: $("sheet").value, key: item.key, to, contact: item.contact, quote_number: r.quote_number });
+    const s = await post("/api/quote-email", { sheet: sheetOf(item), key: item.key, to, contact: item.contact, quote_number: r.quote_number });
     btn.disabled = false; btn.textContent = s.ok ? "Sent" : "Email it to them";
     const note = box.querySelector("[data-sent]");
     note.style.color = s.ok ? "var(--ok)" : "var(--bad)";
@@ -2080,13 +2114,18 @@ async function makeQuote(b) {
     try { await navigator.clipboard.writeText(e.target.dataset.copy); e.target.textContent = "Copied"; } catch (err) {}
   });
 }
-async function callOutcome(b) {
+async function callOutcome(b, dueIn) {
   const card = b.closest(".ritem");
   const list = callData[card.dataset.sec] || [];
   const item = list.find((x) => x.key === card.dataset.key);
-  const outcome = b.dataset.outcome;
+  const outcome = dueIn ? "Call back" : b.dataset.outcome;
   if (outcome === "Not interested" && !confirm(`${item.business}: not interested? They won't be contacted again, from any list.`)) return;
-  const r = await post("/api/calls", { sheet: $("sheet").value, key: item.key, business: item.business, outcome,
+  let due = dueIn || "";
+  if (outcome === "Call back" && !due) {
+    due = prompt(`Call ${item.business} back when?\n3d = 3 days, 2w = 2 weeks, 3m = 3 months, tomorrow, or a date (2026-11-03)`, "3d");
+    if (!due) return;
+  }
+  const r = await post("/api/calls", { sheet: sheetOf(item), key: item.key, business: item.business, outcome, due,
     note: card.querySelector("[data-note]").value, website: item.website, email: item.email });
   $("calls-toast").style.color = r.error ? "var(--bad)" : "var(--ok)";
   $("calls-toast").textContent = r.error || r.message;

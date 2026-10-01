@@ -44,7 +44,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 REPLIES = "replies.csv"
-FIELDS = ["message_id", "date", "from", "business", "website", "kind", "subject", "snippet", "handled"]
+FIELDS = ["message_id", "date", "from", "business", "website", "kind", "subject", "snippet", "handled", "intent"]
 FREE_MAIL = {"gmail.com", "googlemail.com", "hotmail.com", "hotmail.co.uk", "outlook.com", "live.co.uk", "live.com",
              "yahoo.co.uk", "yahoo.com", "btinternet.com", "icloud.com", "aol.com", "sky.com", "msn.com", "me.com"}
 
@@ -59,6 +59,28 @@ POSITIVE = re.compile(
     r"\bquote\b|sounds (good|great)|tell me more|more info|when (can|could) (you|we)|let'?s (talk|chat)|\bbook\b",
     re.I,
 )
+# What a reply is asking for, so the Calls tab can suggest the right saved reply. "later" wins: a
+# "maybe in the spring - how much would it be?" is a call-back, not a price to chase today.
+INTENTS = [
+    ("later", re.compile(r"not (right )?now|not at the moment|maybe (later|next year|in the (new )?year)|(in|next|after) "
+                         r"(the )?(spring|summer|autumn|winter|new year|january|february|march|april|may|june|july|august|"
+                         r"september|october|november|december)|too busy|busy at the moment|get back to you|"
+                         r"(few|couple of|6|six|3|three) months|later (in|this) (the )?year", re.I)),
+    ("price", re.compile(r"how much|what (would|does|will) (it|that|this) cost|\bprice|\bcost\b|\bquote\b|ballpark|budget", re.I)),
+    ("call", re.compile(r"call me|give (me|us) a (call|ring|bell)|ring me|phone me|\bcall\b.*\b(on|at)\b|my number|"
+                        r"\b0\d{3,4}[\s-]?\d{3}[\s-]?\d{3,4}\b|\b07\d{3}[\s-]?\d{6}\b|let'?s (talk|chat)", re.I)),
+    ("info", re.compile(r"tell me more|more info|more details|how (does|would) (it|this) work|what('?s| is) included|"
+                        r"what do (i|we) get|examples?|portfolio", re.I)),
+]
+
+
+def intent(text: str) -> str:
+    for name, pattern in INTENTS:
+        if pattern.search(text or ""):
+            return name
+    return ""
+
+
 OOO = re.compile(r"out of (the )?office|automatic reply|auto-?reply|on (annual )?leave|on holiday|away from (the )?office|"
                  r"currently away|limited access to (my )?email", re.I)
 BOUNCE_FROM = re.compile(r"mailer-daemon|postmaster|mail delivery", re.I)
@@ -242,7 +264,7 @@ def scan(outreach: Path, imap, since: date, my_address: str = "") -> list[dict]:
         if not firm:
             continue  # not someone you contacted: ignored, never stored
         text = body_text(msg)
-        new.append({"message_id": mid, "date": when, "from": sender, **firm, "kind": classify(msg, text),
+        new.append({"message_id": mid, "date": when, "from": sender, **firm, "kind": classify(msg, text), "intent": intent(text),
                     "subject": subject[:150], "snippet": text[:300], "handled": ""})
     return new
 
