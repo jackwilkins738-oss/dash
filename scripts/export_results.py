@@ -263,7 +263,10 @@ def main() -> None:
         write(path, rows, counts, notes)
     except PermissionError:
         path.with_suffix(".tmp.xlsx").unlink(missing_ok=True)
-        sys.exit(f"{RESULTS_NAME} is open in Excel - close it and export again (nothing was lost).")
+        # Not a failure of the run - the lists, links and Mailmeteor files are all written already.
+        print(f"Skipped: {RESULTS_NAME} is open in Excel, so it wasn't updated. Close it and press Export results "
+              "(nothing was lost).")
+        return
     added_today = sum(1 for r in rows if r["_added"] == date.today().isoformat())
     kept = sum(1 for r in rows if notes.get(r["_key"]))
     print(f"Wrote {RESULTS_NAME}: {len(rows)} firms across {len(counts)} lists, {added_today} added today"

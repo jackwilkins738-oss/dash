@@ -408,6 +408,17 @@ class PushRun(unittest.TestCase):
         self.assertEqual(peak[0], 4, out)  # four at a time, never more
         self.assertIn("55/100, 1 issue - worst: there's no enquiry form on your homepage", out)
         self.assertIn("broken.co.uk: check failed (RuntimeError)", out)
+    def test_speed_check_with_nothing_left_is_not_a_failed_step(self):
+        make_sheet(self.dir / "done.xlsx", [{"Business": "Fresh Roofing", "Website": "fresh.co.uk", "Status": "New", "Company type": "Ltd"}])
+        buf = io.StringIO()
+        env = {"PROSPECTS_API_SECRET": "x" * 40, "PAGESPEED_API_KEY": "k"}
+        with mock.patch.dict(os.environ, env), redirect_stdout(buf), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "done.xlsx"), "--teardown", "--limit", "5", "--dry-run"]):
+            import push_prospects
+
+            push_prospects.main()  # returns - no SystemExit, so the panel doesn't flag the step
+        self.assertIn("Nothing left to speed check on this list.", buf.getvalue())
+
     def test_find_contacts_fills_blanks_and_never_overrides_the_sheet(self):
         make_sheet(self.dir / "c.xlsx", [
             {"Business": "Blank Roofing", "Website": "blank.co.uk", "Status": "New", "Company type": "Ltd"},
