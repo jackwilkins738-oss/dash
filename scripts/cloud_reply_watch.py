@@ -17,6 +17,11 @@ Secrets (repository Settings -> Secrets and variables -> Actions):
     REPLY_WATCH_INBOXES   one inbox per line: address app-password
     TELEGRAM_BOT_TOKEN    TELEGRAM_CHAT_ID    (the same as the panel's)
     MAIL_IMAP_HOST        optional - imap.gmail.com if not set
+
+Optional - a suggested reply written by Claude in each text, to read, change and send from the
+Gmail app (never sent for you; the draft is never printed to the log):
+    ANTHROPIC_API_KEY     MAIL_FROM_NAME (the name you sign off with)    BOOKING_LINK
+    QUOTE_PRICE_BUILD / QUOTE_PRICE_LANDING (2500 / 750 if not set)    AI_MODEL (blank = newest Sonnet)
 """
 
 from __future__ import annotations
@@ -87,8 +92,8 @@ def alert_line(msg, text: str, kind: str, want: str, inbox: str) -> str:
     return f"{who} replied to {inbox} - {label}" + (f':\n"{said}"' if said else "")
 
 
-def check_inbox(host: str, address: str, password: str, seen: set[str], since: datetime) -> tuple[list[str], list[str], int]:
-    """(alert lines, new fingerprints, replies looked at) for one inbox."""
+def check_inbox(host: str, address: str, password: str, seen: set[str], since: datetime) -> tuple[list[tuple[str, dict]], list[str], int]:
+    """([(alert line, what an AI draft needs)], new fingerprints, replies looked at) for one inbox."""
     imap = imaplib.IMAP4_SSL(host, 993, timeout=60)
     alerts, new, looked = [], [], 0
     try:
@@ -121,13 +126,39 @@ def check_inbox(host: str, address: str, password: str, seen: set[str], since: d
             looked += 1
             new.append(fingerprint(mid))
             if worth_texting(kind, want):
-                alerts.append(alert_line(msg, text, kind, want, address))
+                name, sender = (getaddresses([msg.get("From") or ""]) or [("", "")])[0]
+                # The firm's name is in your subject line ("...for Kerr Roofing"), which Claude is given.
+                firm = {"business": "", "website": sender.split("@", 1)[-1],
+                        "subject": rs._header(msg, "Subject")[:150], "message": text[:4000], "contact": name}
+                alerts.append((alert_line(msg, text, kind, want, address), firm))
     finally:
         try:
             imap.logout()
         except Exception:  # noqa: BLE001
             pass
     return alerts, new, looked
+
+
+def texts(alerts: list[tuple[str, dict]], env: dict) -> tuple[list[str], int]:
+    """The Telegram messages: with ANTHROPIC_API_KEY set, the first few replies get their own text with a
+    suggested answer; the rest (or all, without a key) go together as before. -> (messages, drafted)."""
+    import ai_reply
+
+    if not alerts:
+        return [], 0
+    footer = "\n\nOpen the panel and press Check replies to answer."
+    out, drafted = [], 0
+    rest = alerts
+    if (env.get("ANTHROPIC_API_KEY") or "").strip():
+        for line, firm in alerts[: ai_reply.ALERT_DRAFTS]:
+            draft = ai_reply.try_draft(firm, env, firm.get("contact", ""))
+            drafted += bool(draft)
+            out.append(ai_reply.with_draft(line, draft))
+        rest = alerts[ai_reply.ALERT_DRAFTS:]
+    if rest:
+        lines = [line for line, _ in rest]
+        out.append("\n\n".join(lines[:6]) + ("\n\n...and more." if len(lines) > 6 else "") + footer)
+    return out, drafted
 
 
 def send(token: str, chat: str, text: str) -> None:
@@ -160,16 +191,16 @@ def main() -> int:
         looked += k
         seen_list += new
         seen.update(new)
-    if alerts:
-        text = "\n\n".join(alerts[:6]) + ("\n\n...and more." if len(alerts) > 6 else "") + \
-            "\n\nOpen the panel and press Check replies to answer."
+    messages, drafted = texts(alerts, dict(os.environ))
+    for text in messages:
         try:
             send(token, chat, text)
         except OSError as e:
             print(f"Telegram didn't take the message ({type(e).__name__}) - will try again next run.")
             return 1  # not saved as seen, so the next run texts them
     save_seen(seen_list)
-    print(f"Checked {len(accounts) - failed} of {len(accounts)} inboxes: {looked} new replies, {len(alerts)} texted.")
+    print(f"Checked {len(accounts) - failed} of {len(accounts)} inboxes: {looked} new replies, {len(alerts)} texted, "
+          f"{drafted} with a suggested reply.")
     return 1 if failed == len(accounts) else 0
 
 

@@ -39,6 +39,13 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           MAIL_IMAP_HOST: ${{ secrets.MAIL_IMAP_HOST }}
+          # Optional: a suggested reply in each text (scripts/ai_reply.py). Never printed.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+          MAIL_FROM_NAME: ${{ secrets.MAIL_FROM_NAME }}
+          BOOKING_LINK: ${{ secrets.BOOKING_LINK }}
+          QUOTE_PRICE_BUILD: ${{ secrets.QUOTE_PRICE_BUILD }}
+          QUOTE_PRICE_LANDING: ${{ secrets.QUOTE_PRICE_LANDING }}
         run: python scripts/cloud_reply_watch.py
       - uses: actions/cache/save@v4
         if: always() && hashFiles('.reply-watch/seen.txt') != ''
