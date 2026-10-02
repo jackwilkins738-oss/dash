@@ -44,7 +44,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 REPLIES = "replies.csv"
-FIELDS = ["message_id", "date", "from", "business", "website", "kind", "subject", "snippet", "handled", "intent"]
+FIELDS = ["message_id", "date", "from", "business", "website", "kind", "subject", "snippet", "handled", "intent", "message"]
 FREE_MAIL = {"gmail.com", "googlemail.com", "hotmail.com", "hotmail.co.uk", "outlook.com", "live.co.uk", "live.com",
              "yahoo.co.uk", "yahoo.com", "btinternet.com", "icloud.com", "aol.com", "sky.com", "msn.com", "me.com"}
 
@@ -265,7 +265,8 @@ def scan(outreach: Path, imap, since: date, my_address: str = "") -> list[dict]:
             continue  # not someone you contacted: ignored, never stored
         text = body_text(msg)
         new.append({"message_id": mid, "date": when, "from": sender, **firm, "kind": classify(msg, text), "intent": intent(text),
-                    "subject": subject[:150], "snippet": text[:300], "handled": ""})
+                    "subject": subject[:150], "snippet": text[:300], "handled": "",
+                    "message": text[:4000]})  # the whole reply, for "Draft with AI" - stays on this PC
     return new
 
 
