@@ -161,6 +161,46 @@ class PushRun(unittest.TestCase):
             self.assertEqual([r["business"] for r in csv.DictReader(f)], ["Fresh Roofing"])
         self.assertIn("1 email firms left out of mailmeteor-two.csv", buf.getvalue())
 
+    def test_the_mailmeteor_file_never_waits_on_first_lines(self):
+        from push_prospects import make_slug
+
+        slug = make_slug("Fresh Roofing", "fresh.co.uk", "x" * 40)
+        make_sheet(self.dir / "fl.xlsx", [
+            {"Business": "Fresh Roofing", "Website": "fresh.co.uk", "Status": "New", "Email": "info@fresh.co.uk", "Company type": "Ltd"},
+        ])
+
+        def broken(*a, **k):
+            raise RuntimeError("homepage parser fell over")
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40, "ANTHROPIC_API_KEY": "k"}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, secret, tenant: {slug: {}}), \
+                mock.patch("first_line.fill", broken), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "fl.xlsx"), "--dry-run"]):
+            import push_prospects
+
+            push_prospects.main()
+        with (self.dir / "mailmeteor-fl.csv").open(encoding="utf-8") as f:
+            self.assertEqual([r["business"] for r in csv.DictReader(f)], ["Fresh Roofing"])
+        self.assertIn("First lines skipped this time", buf.getvalue())
+
+    def test_new_first_lines_land_in_the_mailmeteor_file(self):
+        from push_prospects import make_slug
+
+        slug = make_slug("Fresh Roofing", "fresh.co.uk", "x" * 40)
+        make_sheet(self.dir / "fl2.xlsx", [
+            {"Business": "Fresh Roofing", "Website": "fresh.co.uk", "Status": "New", "Email": "info@fresh.co.uk", "Company type": "Ltd"},
+        ])
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40}), redirect_stdout(io.StringIO()), \
+                mock.patch("calls.fetch_activity", lambda api, secret, tenant: {slug: {}}), \
+                mock.patch("first_line.fill", lambda *a, **k: {"fresh.co.uk": "Saw you fit flat roofs in Woking."}), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "fl2.xlsx"), "--dry-run"]):
+            import push_prospects
+
+            push_prospects.main()
+        with (self.dir / "mailmeteor-fl2.csv").open(encoding="utf-8") as f:
+            self.assertEqual([r["first_line"] for r in csv.DictReader(f)], ["Saw you fit flat roofs in Woking."])
+
     def test_a_push_adds_its_firms_to_mailmeteor(self):
         import json as _json
 

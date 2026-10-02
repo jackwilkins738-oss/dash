@@ -507,12 +507,30 @@ def main() -> None:
                 )
         mm = out.parent / f"mailmeteor{suffix}.csv"
         not_live = {p["slug"] for p in prospects if p["channel"] == "email" and live_known and p["slug"] not in live}
-        # {{first_line}} from their homepage (first_line.py) - each firm is only ever asked about once.
+        # {{first_line}} from their homepage (first_line.py): the file is written straight away with the
+        # lines already made, THEN new ones are made (time-limited) and the file rewritten - so a slow
+        # homepage, an AI hiccup or pressing Stop never costs you the Mailmeteor file.
         import first_line
 
+        before = first_line.saved(out.parent)
+        write_mm(mm, not_live, before)
         emailed = [{"business": p["business_name"], "website": p["website"], "trade": p.get("trade") or "", "area": p.get("area") or ""}
                    for p in prospects if p["channel"] == "email" and p["slug"] not in not_live and p.get("website")]
-        first_lines = first_line.fill(out.parent, emailed, os.environ)
+        try:
+            made = first_line.fill(out.parent, emailed, os.environ)
+        except Exception as e:  # noqa: BLE001 - first lines are a bonus; the batch file never depends on them
+            print(f"First lines skipped this time ({type(e).__name__}: {e}) - the emails go without them.")
+            made = None
+        if made is not None and made != before:
+            write_mm(mm, not_live, made)
+        print(f"Wrote {out.name} and {mm.name}")
+        if not_live:
+            print(
+                f"  {len(not_live)} email firms left out of {mm.name}: their preview page isn't on your dashboard yet, "
+                f"so the link would 404. Push (Dry run off), and they're added."
+            )
+
+    def write_mm(mm: Path, not_live: set, first_lines: dict) -> None:
         with mm.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
                 f,
@@ -546,12 +564,6 @@ def main() -> None:
                         "first_line": first_lines.get(p.get("website") or "", ""),
                     }
                 )
-        print(f"Wrote {out.name} and {mm.name}")
-        if not_live:
-            print(
-                f"  {len(not_live)} email firms left out of {mm.name}: their preview page isn't on your dashboard yet, "
-                f"so the link would 404. Push (Dry run off), and they're added."
-            )
 
     def make_letters() -> None:
         try:
