@@ -13,6 +13,16 @@ export const metadata: Metadata = {
 
 const GUIDES = [
   {
+    href: '/guides/website-not-getting-enquiries',
+    title: "Why isn't my website getting enquiries?",
+    body: 'Nine things that stop a trade website turning visits into calls, how to check each one yourself in a minute, and what fixes it.',
+  },
+  {
+    href: '/guides/is-a-website-worth-it-for-tradesmen',
+    title: 'Is a website worth it for a tradesman?',
+    body: 'One sum decides it: the profit on a typical job against what the site costs. Put your own numbers into the calculator.',
+  },
+  {
     href: '/guides/how-much-does-a-tradesman-website-cost',
     title: 'How much does a website cost for a tradesman?',
     body: 'DIY builders, freelancers, agencies and fixed-price builds compared, plus the costs people forget and the questions to ask first.',
