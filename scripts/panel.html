@@ -76,6 +76,10 @@
   ol.steps li { margin:4px 0; }
   button.link { background:none; border:0; padding:0; color:var(--accent); text-decoration:underline; font-size:inherit; }
   .badge.good { background:var(--ok); }
+  .health { display:flex; flex-wrap:wrap; gap:6px 16px; margin:0 0 12px; font-size:12px; color:var(--dim); }
+  .health span { display:inline-flex; align-items:center; gap:6px; }
+  .health i { width:8px; height:8px; border-radius:50%; background:var(--line); display:inline-block; }
+  .health i.ok { background:var(--ok); } .health i.bad { background:var(--bad); }
   .card.warn { border-color:var(--bad); background:rgba(255,107,107,.08); }
   .dot { width:9px; height:9px; border-radius:50%; background:var(--dim); }
   .dot.run { background:var(--warn); animation:pulse 1s infinite; } .dot.ok { background:var(--ok); } .dot.bad { background:var(--bad); }
@@ -148,6 +152,7 @@
 
   <!-- ============================== TODAY -->
   <section data-section="today">
+    <div class="health" id="health"></div>
     <div class="card warn" id="domain-warnings" hidden></div>
     <div class="glance">
       <button class="tile" data-goto="calls"><b id="todo-calls">–</b><span>on Calls - replies and people who opened their preview</span></button>
@@ -199,12 +204,14 @@
     <div class="card">
       <details id="autopilot-box">
       <summary>Autopilot <span id="ap-state" class="hint"></span></summary>
-      <p class="hint">Every day at your time: check replies, find new firms with the saved search, run the list, make the batches, update Excel, text you. It never sends - the PC must be on.</p>
+      <p class="hint">Every day at your time: check replies, find new firms with the saved search, run the list, make the batches, update Excel, text you. It doesn't send unless you tick the box below. The PC must be on.</p>
       <div class="grid2">
         <div><label for="ap-time">Time</label><input type="text" id="ap-time" value="07:30"></div>
         <div><label for="ap-batch">Emails a day</label><input type="number" id="ap-batch" value="20" min="1" max="500"></div>
       </div>
       <label class="check"><input type="checkbox" id="ap-followups" checked> Also follow-ups after <input type="number" id="ap-fdays" value="5" min="1" max="60" style="width:52px"> days, up to <input type="number" id="ap-fsize" value="20" min="1" max="500" style="width:60px"></label>
+      <label class="check"><input type="checkbox" id="ap-send"> <b>Send them automatically</b> - right after checking replies, <input type="number" id="ap-gap" value="5" min="0" max="60" style="width:52px"> min apart, from <select id="ap-from" style="width:auto"><option value="">All inboxes (spread)</option></select></label>
+      <p class="hint">Off = you press Send. On = today's batch (and follow-ups) go out at the time above, with the same checks as pressing Send: no's and replies left out, the bounce pause, the daily cap. Set the time for 06:45 and 20 emails 5 min apart land between 7 and 9am.</p>
       <p class="hint" id="ap-search">Search: none saved yet.</p>
       <div class="row wrap">
         <button id="ap-use-search">Use the search in Find firms</button>
@@ -517,6 +524,12 @@ Scalar Digital · 07401 696272</textarea>
         </div>
         <p class="hint">With the cloud reply watch set up (it texts you even with this PC off), put <b>yes</b> here so this PC's reply checks don't text you a second time.</p>
       </details>
+      <details open>
+        <summary>Backup</summary>
+        <div><label>Backup folder <code>BACKUP_DIR</code></label><input type="text" id="BACKUP_DIR" placeholder="Blank = OneDrive\Scalar backups (if OneDrive is set up)"></div>
+        <div class="row"><button data-action="backup_now">Back up now</button></div>
+        <p class="hint">Everything in outreach/ - prospects, sends, replies, call-backs, client folders - zipped once a day (at the end of every autopilot run, or this button) into a folder OneDrive, Google Drive or Dropbox syncs, so it's off this PC. The newest 14 are kept. Keep it in your own private account. To get one back: <code>python scripts/backup.py --restore &lt;zip&gt;</code> unpacks it beside outreach/, never over it.</p>
+      </details>
     </div>
 
     <div class="card savebar">
@@ -575,6 +588,8 @@ function render() {
     loadBatch();
     if (callsWanted()) loadCalls();
   }
+  $("health").innerHTML = (s.health || []).map((h) =>
+    `<span title="${h.text.replace(/"/g, "&quot;")}"><i class="${h.ok === true ? "ok" : h.ok === false ? "bad" : ""}"></i><b>${h.name}</b> ${h.text.replace(/</g, "&lt;")}</span>`).join("");
   const rw = s.reply_watch;
   $("rw-last").textContent = rw ? `Auto-check: last ran ${rw.at.slice(11)} on ${rw.at.slice(8, 10)}/${rw.at.slice(5, 7)} - ${rw.line}`
     : "Auto-check is off. Turn it on and an interested reply texts you within 15 minutes, 8am-8pm.";
@@ -584,7 +599,7 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "CLOUD_REPLY_ALERTS"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "CLOUD_REPLY_ALERTS", "BACKUP_DIR"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     fillSendFrom(s.settings);
     if (!s.settings.PROSPECTS_API_SECRET) showTab("settings");  // nothing works until it's set
@@ -871,14 +886,19 @@ async function loadAutopilot() {
   const c = r.config || {};
   $("ap-time").value = c.time || "07:30"; $("ap-batch").value = c.batch_size || 20;
   $("ap-followups").checked = c.followups !== false; $("ap-fdays").value = c.followup_after_days || 5; $("ap-fsize").value = c.followup_size || 20;
+  $("ap-send").checked = !!c.auto_send; $("ap-gap").value = c.send_gap ?? 5;
+  $("ap-from").dataset.want = c.send_from || "";
+  if ($("send-from").options.length > 1) { $("ap-from").innerHTML = $("send-from").innerHTML; $("ap-from").value = c.send_from || ""; }
   apSearch = c.find || null;
   $("ap-search").textContent = describeSearch(apSearch);
-  $("ap-state").textContent = r.running ? "· running now" : c.enabled ? `· on, daily at ${c.time}` : "· off";
+  $("ap-state").textContent = r.running ? "· running now" : c.enabled ? `· on, daily at ${c.time}${c.auto_send ? ", sends itself" : ""}` : "· off";
   $("ap-last").textContent = r.last || "";
   if (!r.windows) $("ap-on").title = "Scheduling needs Windows";
 }
 async function saveAutopilot(action) {
+  if (action === "on" && $("ap-send").checked && !confirm("Turn on automatic sending? Each day at " + $("ap-time").value + " the autopilot will email today's batch without you pressing Send.")) return;
   const config = { time: $("ap-time").value.trim(), batch_size: $("ap-batch").value, followups: $("ap-followups").checked,
+    auto_send: $("ap-send").checked, send_gap: $("ap-gap").value, send_from: $("ap-from").value,
     followup_after_days: $("ap-fdays").value, followup_size: $("ap-fsize").value, ...(apSearch ? { find: apSearch } : {}) };
   const r = await post("/api/autopilot", { action, config });
   $("ap-msg").style.color = r.error ? "var(--bad)" : "var(--ok)";
@@ -1064,7 +1084,7 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (callsWanted()) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"]) $(k).value = "";
   fillSendFrom(body);
@@ -1082,6 +1102,9 @@ function fillSendFrom(settings) {
   const addrs = ["MAIL_ADDRESS", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS"].map((k) => (settings[k] || "").trim().toLowerCase()).filter(Boolean);
   sel.innerHTML = '<option value="">All inboxes (spread)</option>' + addrs.map((a) => `<option value="${a.replace(/"/g, "")}">${a.replace(/</g, "&lt;")}</option>`).join("");
   sel.value = addrs.includes(keep) ? keep : "";
+  const ap = $("ap-from"), want = ap.dataset.want ?? ap.value;
+  ap.innerHTML = sel.innerHTML;
+  ap.value = addrs.includes(want) ? want : "";
 }
 $("send-from").addEventListener("change", () => { try { localStorage.setItem("send-from", $("send-from").value); } catch (e) {} });
 // "Min apart" for sending is remembered on this PC between visits.

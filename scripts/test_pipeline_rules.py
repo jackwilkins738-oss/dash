@@ -748,7 +748,7 @@ class Autopilot(unittest.TestCase):
             self.assertEqual(order[1], "find_prospects.py")
             self.assertIn("push_prospects.py", order)  # the whole list ran on the new sheet
             tail = order[:-1] if monday else order
-            self.assertEqual(tail[-3:], ["email_batches.py", "email_batches.py", "export_results.py"])
+            self.assertEqual(tail[-4:], ["email_batches.py", "email_batches.py", "export_results.py", "backup.py"])
             self.assertIn(["--followups", "--size", "--after-days"], [a for n, a in ran if n == "email_batches.py"])
             self.assertEqual(code, 1)  # one step had a problem, and it says so
             self.assertFalse((d / autopilot.LOCK).exists())
