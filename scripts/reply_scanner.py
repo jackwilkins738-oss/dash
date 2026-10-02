@@ -44,7 +44,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 REPLIES = "replies.csv"
-FIELDS = ["message_id", "date", "from", "business", "website", "kind", "subject", "snippet", "handled", "intent", "message"]
+FIELDS = ["message_id", "date", "from", "business", "website", "kind", "subject", "snippet", "handled", "intent", "message", "objection"]
 FREE_MAIL = {"gmail.com", "googlemail.com", "hotmail.com", "hotmail.co.uk", "outlook.com", "live.co.uk", "live.com",
              "yahoo.co.uk", "yahoo.com", "btinternet.com", "icloud.com", "aol.com", "sky.com", "msn.com", "me.com"}
 
@@ -72,6 +72,36 @@ INTENTS = [
     ("info", re.compile(r"tell me more|more info|more details|how (does|would) (it|this) work|what('?s| is) included|"
                         r"what do (i|we) get|examples?|portfolio", re.I)),
 ]
+
+
+# What's stopping them, when a reply pushes back - counted in the scorecard so you can see which
+# objection your email should answer up front. First match wins; most replies have none.
+OBJECTIONS = [
+    ("suspicious", re.compile(r"\bscam\b|spam|who (are|is) (you|this)|how did you get (my|our|this)|where did you get|"
+                              r"is this (legit|real|genuine)|phishing|gdpr", re.I)),
+    ("price", re.compile(r"too (expensive|dear|much)|can'?t afford|out of (my|our) (price range|budget)|cheaper|"
+                         r"(no|not got the|haven'?t got the|don'?t have the) (money|budget)|bit steep|pricey", re.I)),
+    ("has someone", re.compile(r"already (got|have|use|using) (a|an|someone|somebody|our|my)\b|"
+                               r"(have|got) (someone|somebody|a guy|a lad|a mate|a friend|a web designer|a company) (who|that|for)|"
+                               r"(my|our) (son|daughter|nephew|niece|brother|sister|wife|husband|mate|friend|cousin) "
+                               r"(does|did|built|made|looks after|sorts|is doing)|in-?house|"
+                               r"(being|getting) (re)?(done|built|redone|designed)", re.I)),
+    ("enough work", re.compile(r"(enough|plenty of|loads of|lots of|more than enough) work|word of mouth|fully booked|"
+                               r"booked (up|solid)|busy enough|(all|most) (of )?(our|my) work (comes )?(from|through)", re.I)),
+    ("happy with site", re.compile(r"(happy|fine|ok|okay|pleased|sorted|content) with (our|my|the) (current |existing )?"
+                                   r"(site|website)|(site|website) (is|works) (fine|ok|okay|good)|(just|recently) (had|got) (a new|it)", re.I)),
+    ("not now", re.compile(r"not (right )?now|not at the moment|maybe (later|next year|in the (new )?year)|too busy|"
+                           r"(few|couple of|6|six|3|three) months|get back to you|another time|next year", re.I)),
+]
+OBJECTION_LABELS = {"suspicious": "wary of a cold email", "price": "price", "has someone": "already has someone",
+                    "enough work": "gets enough work already", "happy with site": "happy with their site", "not now": "not right now"}
+
+
+def objection(text: str) -> str:
+    for name, pattern in OBJECTIONS:
+        if pattern.search(text or ""):
+            return name
+    return ""
 
 
 def intent(text: str) -> str:
@@ -267,7 +297,8 @@ def scan(outreach: Path, imap, since: date, my_address: str = "") -> list[dict]:
         text = body_text(msg)
         new.append({"message_id": mid, "date": when, "from": sender, **firm, "kind": classify(msg, text), "intent": intent(text),
                     "subject": subject[:150], "snippet": text[:300], "handled": "",
-                    "message": text[:4000], "contact": display[:80]})  # the whole reply, for "Draft with AI" - stays on this PC
+                    "message": text[:4000], "contact": display[:80],
+                    "objection": objection(text) if classify(msg, text) in ("not interested", "read it", "interested") else ""})  # the whole reply, for "Draft with AI" - stays on this PC
     return new
 
 

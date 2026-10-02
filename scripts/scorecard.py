@@ -195,6 +195,30 @@ def letters(views: dict[str, dict] | None) -> str:
     return f"Letters: {len(sent)} sent · {_pct(scanned, len(sent))} scanned the code ({scanned})" + (f" · {won} won" if won else "")
 
 
+def objections(outreach: Path, today: date | None = None, days: int = 90) -> str:
+    """'What's holding people back' across recent replies - tagged at reply check (or now, for older replies)."""
+    from reply_scanner import OBJECTION_LABELS, objection
+
+    since = ((today or date.today()) - timedelta(days=days)).isoformat()
+    counts: dict[str, int] = {}
+    replies = 0
+    for r in eb._rows(outreach / "replies.csv")[1]:
+        if r.get("kind") not in REPLY_KINDS or (r.get("date") or "")[:10] < since:
+            continue
+        replies += 1
+        tag = r.get("objection") or objection(r.get("message") or r.get("snippet") or "")
+        if tag:
+            counts[tag] = counts.get(tag, 0) + 1
+    if not counts:
+        return ""
+    top = sorted(counts.items(), key=lambda kv: -kv[1])
+    text = " · ".join(f"{OBJECTION_LABELS.get(k, k)} {n}" for k, n in top)
+    out = f"What's holding people back ({replies} replies, last {days} days): {text}"
+    if replies >= 15 and top[0][1] >= 3:
+        out += f" - most common: {OBJECTION_LABELS.get(top[0][0], top[0][0])}. Answer it in the email before they raise it."
+    return out
+
+
 def scorecard(outreach: Path, views: dict[str, dict] | None, today: date | None = None) -> list[str]:
     today = today or date.today()
     rows = gather(outreach, views, today)
@@ -216,6 +240,9 @@ def scorecard(outreach: Path, views: dict[str, dict] | None, today: date | None 
             out.append(line(trade, rs))
     out += domains(rows)
     out += money(outreach, rows)
+    held = objections(outreach, today)
+    if held:
+        out.append(held)
     if letters(views):
         out.append(letters(views))
     calls = [r for r in eb._rows(outreach / "calls.csv")[1] if (r.get("at") or "")[:10] > (today - timedelta(days=7)).isoformat()]

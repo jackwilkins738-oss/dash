@@ -95,3 +95,23 @@ class Domains(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Objections(unittest.TestCase):
+    def test_counts_recent_push_backs_including_untagged_older_replies(self):
+        out = Path(tempfile.mkdtemp())
+        rows = [{"date": "2026-09-20T10:00", "kind": "not interested", "objection": "price", "snippet": ""},
+                {"date": "2026-09-21T10:00", "kind": "read it", "objection": "", "snippet": "Not right now, maybe next year"},
+                {"date": "2026-09-22T10:00", "kind": "not interested", "objection": "", "snippet": "Too expensive for us"},
+                {"date": "2026-09-23T10:00", "kind": "interested", "objection": "", "snippet": "How much?"},
+                {"date": "2026-09-23T10:00", "kind": "bounce", "objection": "", "snippet": "too expensive"},
+                {"date": "2026-01-01T10:00", "kind": "not interested", "objection": "price", "snippet": ""}]
+        write(out / "replies.csv", rows)
+        text = sc.objections(out, date(2026, 10, 2))
+        self.assertIn("4 replies", text)
+        self.assertIn("price 2", text)
+        self.assertIn("not right now 1", text)
+        self.assertNotIn("most common", text)  # too few replies to call it
+
+    def test_nothing_to_say_without_replies(self):
+        self.assertEqual(sc.objections(Path(tempfile.mkdtemp()), date(2026, 10, 2)), "")

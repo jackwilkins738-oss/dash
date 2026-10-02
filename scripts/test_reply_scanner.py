@@ -140,3 +140,28 @@ class Scanner(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Objections(unittest.TestCase):
+    def test_tags_the_common_push_backs(self):
+        from reply_scanner import objection
+
+        cases = {
+            "Is this a scam? How did you get my email": "suspicious",
+            "Sorry, that's too expensive for us at the moment": "price",
+            "We already have someone who does our website": "has someone",
+            "My son built our site, thanks": "has someone",
+            "We get all our work from word of mouth": "enough work",
+            "We're fully booked till spring": "enough work",
+            "Happy with our current website thanks": "happy with site",
+            "Not right now, maybe next year": "not now",
+        }
+        for text, tag in cases.items():
+            self.assertEqual(objection(text), tag, text)
+
+    def test_ordinary_replies_have_none(self):
+        from reply_scanner import objection
+
+        for text in ["How much would it be?", "I have a question about the preview", "I fully understand, call me Tuesday",
+                     "Sounds good, what's included?", ""]:
+            self.assertEqual(objection(text), "", text)
