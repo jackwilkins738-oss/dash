@@ -77,7 +77,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "55"
+PANEL_VERSION = "56"
 MAX_LOG_LINES = 5000
 
 
@@ -356,6 +356,7 @@ ACTIONS = {
     "build_site": "Build site",
     "site_qa": "Check site (pre-launch QA)",
     "publish_site": "Publish site",
+    "publish_preview": "Publish a preview for the client",
     "scorecard": "Scorecard",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
@@ -568,7 +569,8 @@ def build_steps(body: dict, settings: dict[str, str]):
             return None, f"There's no outreach/sites/{folder} - use Draft their site on the Calls tab first."
         cmd = "init" if not (OUTREACH / "sites" / folder / "site.json").exists() else "build"
         return (lambda job: [(SITE_KIT, [cmd, folder] + (["--draft"] if body.get("build_draft") and cmd == "build" else []))]), ""
-    if action == "publish_site":
+    if action in ("publish_site", "publish_preview"):
+        preview = action == "publish_preview"
         folder = str(body.get("publish_folder") or "").strip().lower()
         account = str(body.get("publish_account") or "").strip().lower()
         project = str(body.get("publish_project") or "").strip().lower()
@@ -577,9 +579,11 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not settings.get("CLOUDFLARE_API_TOKEN"):
             return None, "Add CLOUDFLARE_API_TOKEN in Settings first."
         home = OUTREACH / "sites" / folder / "site" / "index.html"
-        if home.exists() and 'class="draft-banner"' in home.read_text(encoding="utf-8", errors="ignore"):
-            return None, "That's a draft build (details still to confirm) - finish site.json and press Build site without the draft box first."
-        args = ["--folder", folder] + (["--account", account] if account else []) + (["--project", project] if project else [])
+        if not preview and home.exists() and 'class="draft-banner"' in home.read_text(encoding="utf-8", errors="ignore"):
+            return None, ("That's a draft build (details still to confirm) - finish site.json and press Build site without the draft box "
+                          "first, or use Publish preview to show the client the draft.")
+        args = (["--folder", folder] + (["--account", account] if account else []) + (["--project", project] if project else [])
+                + (["--preview"] if preview else []))
         return (lambda job: [(PUBLISH_SITE, args)]), ""
     if action == "batch_sent":
         return (lambda job: [(BATCHES, ["--mark-sent"]), (EXPORT, [])]), ""

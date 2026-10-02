@@ -57,3 +57,28 @@ class SiteQA(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Preview(unittest.TestCase):
+    def setUp(self):
+        self.folder = Path(tempfile.mkdtemp())
+        (self.folder / "site.json").write_text(json.dumps(test_site_kit.config(hours="[Confirm: hours]")))
+        site_kit.build(self.folder, draft=True)
+        self.site = self.folder / "site"
+
+    def test_a_draft_ships_the_feedback_button_wired_to_the_dashboard(self):
+        home = (self.site / "index.html").read_text(encoding="utf-8")
+        self.assertIn('src="/feedback.js"', home)
+        self.assertIn(f'data-tenant="{test_site_kit.TENANT}"', home)
+        self.assertIn(f'data-api="{site_kit.DASH_ORIGIN}"', home)
+        self.assertIn("/api/site-feedback", (self.site / "feedback.js").read_text(encoding="utf-8"))
+        self.assertNotIn("innerHTML", site_kit.FEEDBACK_JS)
+
+    def test_a_preview_accepts_draft_notes_but_not_broken_pages(self):
+        self.assertEqual(site_qa.check(self.site, preview=True)[0], [])
+        (self.site / "index.html").write_text("<html><a href='/gone.html'>x</a></html>", encoding="utf-8")
+        self.assertTrue(any("broken link" in p for p in site_qa.check(self.site, preview=True)[0]))
+
+    def test_the_feedback_button_never_goes_live(self):
+        problems, _ = site_qa.check(self.site)
+        self.assertTrue(any("feedback.js is in the build" in p for p in problems))

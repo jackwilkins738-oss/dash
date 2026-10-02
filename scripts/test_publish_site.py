@@ -43,6 +43,9 @@ class PublishSite(unittest.TestCase):
         cmd = ps.deploy_command("npx", Path("/o/sites/kerr/site"), "kerr")
         self.assertEqual(cmd[:5], ["npx", "--yes", ps.WRANGLER, "pages", "deploy"])
         self.assertIn("--project-name", cmd)
+        self.assertEqual(cmd[cmd.index("--branch") + 1], "main")
+        preview = ps.deploy_command("npx", Path("/o/sites/kerr/site"), "kerr", "preview")
+        self.assertEqual(preview[preview.index("--branch") + 1], "preview")  # never the live branch
         self.assertTrue(ps.missing_project("✘ [ERROR] Project not found. The specified project name does not match"))
         self.assertFalse(ps.missing_project("Authentication error [code: 10000]"))
 

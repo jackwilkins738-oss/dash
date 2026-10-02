@@ -77,8 +77,8 @@ def npx() -> str | None:
     return shutil.which("npx.cmd" if sys.platform == "win32" else "npx") or shutil.which("npx")
 
 
-def deploy_command(npx_path: str, site: Path, project: str) -> list[str]:
-    return [npx_path, "--yes", WRANGLER, "pages", "deploy", str(site), "--project-name", project, "--branch", "main", "--commit-dirty=true"]
+def deploy_command(npx_path: str, site: Path, project: str, branch: str = "main") -> list[str]:
+    return [npx_path, "--yes", WRANGLER, "pages", "deploy", str(site), "--project-name", project, "--branch", branch, "--commit-dirty=true"]
 
 
 def create_command(npx_path: str, project: str) -> list[str]:
@@ -101,6 +101,7 @@ def main() -> None:
     ap.add_argument("--folder", required=True)
     ap.add_argument("--account", default="")
     ap.add_argument("--project", default="")
+    ap.add_argument("--preview", action="store_true", help="a draft for the client to review, at preview.<project>.pages.dev - never the live site")
     args = ap.parse_args()
     token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
     if not token:
@@ -113,7 +114,7 @@ def main() -> None:
         sys.exit(str(e))
     import site_qa
 
-    problems, warnings = site_qa.check(site)
+    problems, warnings = site_qa.check(site, preview=args.preview)
     if problems:
         for line in problems:
             print(f"PROBLEM  {line}")
@@ -123,15 +124,21 @@ def main() -> None:
     if not tool:
         sys.exit("Publishing uses Cloudflare's wrangler tool, which needs Node.js - install the LTS version from nodejs.org, then restart the panel.")
     env = {**os.environ, "CLOUDFLARE_API_TOKEN": token, "CLOUDFLARE_ACCOUNT_ID": account, "WRANGLER_SEND_METRICS": "false", "CI": "1"}
-    print(f"Publishing outreach/sites/{args.folder}/site to Cloudflare Pages project '{project}' ...", flush=True)
-    code, out = run(deploy_command(tool, site, project), env)
+    branch = "preview" if args.preview else "main"
+    print(f"Publishing outreach/sites/{args.folder}/site to Cloudflare Pages project '{project}'"
+          + (" as a PREVIEW for the client" if args.preview else "") + " ...", flush=True)
+    code, out = run(deploy_command(tool, site, project, branch), env)
     if code != 0 and missing_project(out):
         print(f"First publish - creating the '{project}' project ...", flush=True)
         code, out = run(create_command(tool, project), env)
         if code == 0:
-            code, out = run(deploy_command(tool, site, project), env)
+            code, out = run(deploy_command(tool, site, project, branch), env)
     if code != 0:
         sys.exit("Not published - see Cloudflare's message above. Usual causes: the token doesn't cover this account, or you're not yet a member of it.")
+    if args.preview:
+        print(f"\nREADY: preview at https://preview.{project}.pages.dev - send them that link. Hidden from Google; the live site is untouched.")
+        print("With Draft build ticked, it has a Leave feedback button: each pin they drop lands in /admin and your inbox.")
+        return
     print(f"\nREADY: live at https://{project}.pages.dev")
     print("First time? Add their domain: Cloudflare > Workers & Pages > the project > Custom domains (www and without). Then run the launch checks.")
 
