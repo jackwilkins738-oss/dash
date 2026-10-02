@@ -419,12 +419,13 @@ Scalar Digital · 07401 696272</textarea>
         <input type="text" id="publish-account" placeholder="Cloudflare account id (first time)">
         <input type="text" id="publish-project" placeholder="Project name (optional)">
       </div>
-      <div class="row"><button data-action="build_site">Build site</button><button class="primary" data-action="publish_site">Publish site</button>
+      <div class="row"><button data-action="write_copy" title="Claude writes every page's words from their onboarding answers and old site - only facts you were given; anything else comes back as [Confirm: ...]">Write copy (AI)</button><button data-action="build_site">Build site</button><button data-action="site_qa" title="Broken links, missing titles and alt text, invalid structured data, leftover [Confirm, the sitemap and redirects - Publish runs it too">Check site</button><button class="primary" data-action="publish_site">Publish site</button>
         <label class="check" style="margin:0"><input type="checkbox" id="build-draft"> Draft build (hidden from Google)</label></div>
       <ol class="steps">
         <li><b>Draft their site</b> on Calls writes <code>outreach/sites/&lt;folder&gt;/</code> with a brief, proposal and <code>site.json</code>.</li>
-        <li>Fill in <code>site.json</code>; anything marked [Confirm] blocks a real build (the log lists it).</li>
-        <li><b>Build site</b> makes every page in <code>site/</code>. <b>Publish site</b> puts only that folder live on their Cloudflare. Needs CLOUDFLARE_API_TOKEN and Node.js.</li>
+        <li><b>Write copy (AI)</b> (optional) rewrites the words in <code>site.json</code> - headline, services, town pages, FAQs - from their answers and old site. The old file is kept as <code>site.before-copy.json</code>.</li>
+        <li>Fill in and check <code>site.json</code>; anything marked [Confirm] blocks a real build (the log lists it).</li>
+        <li><b>Build site</b> makes every page in <code>site/</code>; <b>Check site</b> runs the pre-launch QA (Publish runs it too, and won't publish with problems). <b>Publish site</b> puts only that folder live on their Cloudflare. Needs CLOUDFLARE_API_TOKEN and Node.js.</li>
       </ol>
     </div>
 

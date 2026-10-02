@@ -111,6 +111,14 @@ def main() -> None:
         account, project = settings_for(outreach, args.folder, args.account, args.project)
     except ValueError as e:
         sys.exit(str(e))
+    import site_qa
+
+    problems, warnings = site_qa.check(site)
+    if problems:
+        for line in problems:
+            print(f"PROBLEM  {line}")
+        sys.exit(f"Not published - pre-launch QA found {len(problems)} problem(s) above. Fix them, Build site, then publish.")
+    print("Pre-launch QA passed" + (f" ({len(warnings)} warning(s) - press Check site to see them)." if warnings else "."), flush=True)
     tool = npx()
     if not tool:
         sys.exit("Publishing uses Cloudflare's wrangler tool, which needs Node.js - install the LTS version from nodejs.org, then restart the panel.")
