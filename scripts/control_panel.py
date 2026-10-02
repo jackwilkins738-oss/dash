@@ -77,7 +77,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "61"
+PANEL_VERSION = "62"
 MAX_LOG_LINES = 5000
 
 
@@ -1348,7 +1348,9 @@ class Handler(BaseHTTPRequestHandler):
             # this function - never a prospect's address.
             inboxes = [a.address for a in mail_accounts.accounts({**os.environ, **load_settings()})]
             today = send_email.today_summary(OUTREACH, date.today(), inboxes) if OUTREACH.is_dir() else None
+            listed = email_batches.list_status(OUTREACH, name) if name and sheet_path(name) else None
             return self._json({"remaining": email_batches.remaining(OUTREACH, scope) if OUTREACH.is_dir() else 0, "pending": batch,
+                               "list": listed,
                                "today": today, "domain_warnings": _domain_warnings()})
         if route == "/api/email-template":
             import send_email
