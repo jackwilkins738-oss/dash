@@ -15,8 +15,12 @@ make follow-ups. Each run:
   5. updates the Excel export
   6. texts you a summary (Telegram), and writes outreach/autopilot-log.txt
 
-It never sends an email: the batches wait for you to press Send today's batch
-on the panel (or import them into Mailmeteor). A step that fails is noted and the rest still run. Windows runs it
+By default it never sends an email: the batches wait for you to press Send today's batch
+on the panel (or import them into Mailmeteor). Only if you tick "Send them automatically"
+on the Autopilot card does it send - straight after checking replies, before the slow steps,
+so the emails land early in the morning: today's batch (and follow-ups), from the inbox and
+minutes apart you chose, with every check a manual send has (no's and replies left out, the
+bounce pause, the daily cap per inbox). A step that fails is noted and the rest still run. Windows runs it
 at the time you choose while you're logged in; the PC must be on (it's kept
 awake while it runs).
 """
@@ -44,6 +48,7 @@ LOCK = ".autopilot.lock"
 DEFAULTS = {
     "enabled": False, "time": "07:30", "find": None, "batch_size": 20,
     "followups": True, "followup_size": 20, "followup_after_days": 5,
+    "auto_send": False, "send_from": "", "send_gap": 5,
 }
 
 
@@ -157,6 +162,39 @@ def lists_to_run(new_sheet: str | None) -> list[str]:
     return names[:5]
 
 
+def make_batches(r: "Run", cfg: dict) -> None:
+    r.step(panel.BATCHES, ["--size", str(int(cfg.get("batch_size") or 20))])
+    if cfg.get("followups"):
+        r.step(panel.BATCHES, ["--followups", "--size", str(int(cfg.get("followup_size") or 20)),
+                               "--after-days", str(int(cfg.get("followup_after_days") or 5))])
+
+
+def send_args(cfg: dict) -> list[str]:
+    """--gap-minutes and --from for the send step, from the Autopilot card."""
+    try:
+        gap = min(60.0, max(0.0, float(cfg.get("send_gap") or 0)))
+    except (TypeError, ValueError):
+        gap = 0.0
+    frm = str(cfg.get("send_from") or "").strip().lower()
+    return ([f"--gap-minutes={gap:g}"] if gap else []) + (["--from", frm] if frm else [])
+
+
+def morning_send(r: "Run", cfg: dict, settings: dict) -> bool:
+    """Opt-in only: make today's batches and send them now. True if it ran."""
+    if not cfg.get("auto_send"):
+        return False
+    if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD") and settings.get("MAIL_FROM_NAME")):
+        r.note("Send automatically is on, but MAIL_ADDRESS, MAIL_APP_PASSWORD or MAIL_FROM_NAME isn't in Settings - "
+               "making the batches without sending them.")
+        return False
+    r.note("--- Morning send")
+    make_batches(r, cfg)
+    r.step(panel.SEND, send_args(cfg))
+    if cfg.get("followups"):
+        r.step(panel.SEND, ["--followups", *send_args(cfg)])
+    return True
+
+
 def run() -> int:
     panel.OUTREACH.mkdir(exist_ok=True)
     if is_running():
@@ -177,6 +215,8 @@ def run() -> int:
 
         if settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD"):
             r.step(panel.REPLIES, [])
+
+        sent_early = morning_send(r, cfg, settings)
 
         new_sheet = None
         find = cfg.get("find") or {}
@@ -201,11 +241,11 @@ def run() -> int:
                     continue  # once per run, not per list
                 r.step(script, args)
 
-        r.step(panel.BATCHES, ["--size", str(int(cfg.get("batch_size") or 20))])
-        if cfg.get("followups"):
-            r.step(panel.BATCHES, ["--followups", "--size", str(int(cfg.get("followup_size") or 20)),
-                                   "--after-days", str(int(cfg.get("followup_after_days") or 5))])
+        if not sent_early:
+            make_batches(r, cfg)
+        r.sent_early = sent_early
         r.step(panel.EXPORT, [])
+        r.step(panel.BACKUP, [])  # last, so the copy includes everything today changed
         if scorecard_day():  # the weekly scorecard goes in Monday's text too
             start = len(r.lines)
             r.step(panel.HERE / "scorecard.py", [])
@@ -231,7 +271,11 @@ def summarise(r: Run, settings: dict, seconds: float) -> int:
     body += [ln for ln in picked if ln.startswith("READY")]
     if r.failed:
         body.append(f"{len(r.failed)} step(s) had problems - see autopilot-log.txt")
-    body.append("Next: open the panel and press Send today's batch (and Send follow-ups).")
+    sent = [ln.strip() for ln in r.lines if ln.strip().startswith("Done: ") and " sent" in ln]
+    if getattr(r, "sent_early", False):
+        body += sent or ["Send automatically was on, but nothing was sent - see autopilot-log.txt."]
+    else:
+        body.append("Next: open the panel and press Send today's batch (and Send follow-ups).")
     if getattr(r, "scorecard", None):
         body += ["", "Weekly scorecard:", *r.scorecard]
     r.note("")

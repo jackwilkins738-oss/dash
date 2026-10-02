@@ -32,6 +32,7 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -51,6 +52,7 @@ SITE_KIT = HERE / "site_kit.py"
 SCORECARD = HERE / "scorecard.py"
 GO_LIVE = HERE / "go_live.py"
 CLIENT_SPEED = HERE / "client_speed.py"
+BACKUP = HERE / "backup.py"
 
 
 def replies_first(settings: dict[str, str]) -> list:
@@ -63,7 +65,7 @@ SETTING_KEYS = [
     "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD",
     "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD",
     "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS",
-    "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS",
+    "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR",
 ]
 SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
                "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"}
@@ -71,7 +73,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "46"
+PANEL_VERSION = "48"
 MAX_LOG_LINES = 5000
 
 
@@ -114,6 +116,54 @@ def _reply_watch_last() -> dict | None:
         return reply_watch.last_check(OUTREACH)
     except OSError:
         return None
+
+
+def _age_hours(stamp: str | None, now: datetime | None = None) -> float | None:
+    """Hours since a 'YYYY-MM-DD HH:MM' stamp, or None if there isn't one."""
+    if not stamp:
+        return None
+    try:
+        return ((now or datetime.now()) - datetime.strptime(stamp[:16], "%Y-%m-%d %H:%M")).total_seconds() / 3600
+    except ValueError:
+        return None
+
+
+def health(outreach: Path, settings: dict, now: datetime | None = None) -> list[dict]:
+    """The things that can stop quietly, for the strip on Today: [{name, ok, text}]. ok is True, False,
+    or None for 'not set up' - so a red dot means something that was working has stopped."""
+    import backup
+
+    out = []
+    b = backup.last_backup(outreach)
+    h = _age_hours(b, now)
+    if h is None:
+        out.append({"name": "Backup", "ok": False, "text": "never - set BACKUP_DIR in Settings and press Back up now"})
+    else:
+        out.append({"name": "Backup", "ok": h <= 48, "text": f"last {b[5:16].replace('-', '/', 1)}" + ("" if h <= 48 else " - over 2 days ago")})
+    rw = _reply_watch_last()
+    h = _age_hours(rw["at"] if rw else None, now)
+    if h is None:
+        out.append({"name": "Reply check", "ok": None, "text": "15-minute check is off"})
+    else:
+        out.append({"name": "Reply check", "ok": h <= 24 and not rw["line"].startswith(("The inbox refused", "Couldn't")),
+                    "text": f"{rw['at'][11:16]} {rw['at'][8:10]}/{rw['at'][5:7]} - {rw['line'][:60]}"})
+    try:
+        import autopilot
+
+        cfg = autopilot.load_config()
+    except Exception:  # noqa: BLE001
+        cfg = {}
+    log = outreach / "autopilot-log.txt"
+    if cfg.get("enabled"):
+        ran = datetime.fromtimestamp(log.stat().st_mtime) if log.exists() else None
+        hrs = ((now or datetime.now()) - ran).total_seconds() / 3600 if ran else None
+        out.append({"name": "Autopilot", "ok": hrs is not None and hrs <= 30,
+                    "text": (f"ran {ran:%H:%M %d/%m}" if ran else "hasn't run yet") + (", sends itself" if cfg.get("auto_send") else "")})
+    else:
+        out.append({"name": "Autopilot", "ok": None, "text": "off"})
+    if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
+        out.append({"name": "Inbox", "ok": False, "text": "no login in Settings - replies can't be checked"})
+    return out
 
 
 def _sync_mailmeteor_soon() -> None:
@@ -284,6 +334,7 @@ ACTIONS = {
     "dns_snapshot": "Save their DNS (before the switch)",
     "launch_check": "Check the launch",
     "client_speed": "Speed check client sites",
+    "backup_now": "Back up now",
     "build_site": "Build site",
     "publish_site": "Publish site",
     "scorecard": "Scorecard",
@@ -455,6 +506,8 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not settings.get("PAGESPEED_API_KEY"):
             return None, "Add PAGESPEED_API_KEY in Settings first."
         return (lambda job: [(LAUNCH, ["--old", old, "--new", new])]), ""
+    if action == "backup_now":
+        return (lambda job: [(BACKUP, [])]), ""
     if action == "client_speed":
         if not settings.get("PAGESPEED_API_KEY"):
             return None, "Add PAGESPEED_API_KEY in Settings first."
@@ -971,8 +1024,16 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
             if args is None:
                 return {"error": f"Search: {error}"}, 400
             find = {k: find.get(k) for k in ("trades", "areas", "age", "max", "include", "exclude", "email_only", "website_only", "no_directors", "no_websites")}
+        try:
+            gap = float(new.get("send_gap") or 0)
+        except (TypeError, ValueError):
+            return {"error": "Minutes apart must be a number."}, 400
+        send_from = str(new.get("send_from") or "").strip().lower()
+        if not 0 <= gap <= 60 or (send_from and not EMAIL.match(send_from)):
+            return {"error": "Minutes apart 0-60, and pick an inbox (or All inboxes)."}, 400
         cfg.update({"time": at, "batch_size": batch, "followups": bool(new.get("followups")), "followup_size": fsize,
-                    "followup_after_days": fdays, **({"find": find} if find is not None else {})})
+                    "followup_after_days": fdays, "auto_send": bool(new.get("auto_send")), "send_gap": gap,
+                    "send_from": send_from, **({"find": find} if find is not None else {})})
         if action == "on":
             err = autopilot.install(at)
             if err:
@@ -980,7 +1041,9 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
                 return {"error": err}, 400
             cfg["enabled"] = True
         autopilot.save_config(cfg)
-        return {"ok": True, "message": f"Autopilot on: every day at {at}." if cfg.get("enabled") else "Saved."}, 200
+        sends = (f" It sends the batch itself, {gap:g} min apart{' from ' + send_from if send_from else ''}." if cfg["auto_send"]
+                 else " It makes the batches; you press Send.")
+        return {"ok": True, "message": (f"Autopilot on: every day at {at}." + sends) if cfg.get("enabled") else "Saved."}, 200
     if action == "off":
         err = autopilot.remove()
         cfg["enabled"] = False
@@ -1142,6 +1205,7 @@ class Handler(BaseHTTPRequestHandler):
                     "latest_sheet": latest_sheet(),
                     "files": output_files(),
                     "reply_watch": _reply_watch_last(),
+                    "health": health(OUTREACH, settings),
                     "settings": {
                         k: (bool(settings[k]) if k in SECRET_KEYS else settings[k]) for k in SETTING_KEYS
                     },
