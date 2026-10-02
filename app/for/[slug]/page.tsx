@@ -15,6 +15,7 @@ import { SHOWCASE_TRADES, showcaseIdForTradeText } from '@/lib/showcase'
 import { teardownFindings, teardownPasses } from '@/lib/teardown'
 import { PrintButton } from '@/components/print-button'
 import { PreviewOptOut } from '@/components/preview-optout'
+import { RebuiltPreview } from '@/components/rebuilt-preview'
 import { PRICES } from '@/lib/site'
 import { SITE } from '@/lib/site'
 
@@ -165,6 +166,45 @@ export default async function ProspectPreviewPage({ params }: Props) {
           </div>
         </div>
       </section>
+
+      {(p.teardown?.logo || p.teardown?.photos?.length) && (
+        <section id="rebuilt" className="scroll-mt-20 border-t border-border py-20 sm:py-24">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <Reveal>
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Your homepage, rebuilt</span>
+              <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+                {p.business_name}, the way a phone should see it.
+              </h2>
+              <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
+                This uses your own {p.teardown?.logo ? 'logo and ' : ''}photos{p.website ? ` from ${p.website}` : ''}
+                {p.teardown?.services?.length ? ' and the services you list' : ''}, laid out the way a Scalar build puts
+                them: who you are and where you work in the first second, a call button always in reach, and your work
+                doing the selling.
+              </p>
+              <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
+                It&apos;s a quick first pass, not the finished design &mdash; the real build is drawn up properly around
+                your business, and you see every page before anything goes live.
+              </p>
+              <p className="mt-6 font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-muted-foreground/70">
+                A concept made for you from your current site &middot; nothing has been published
+              </p>
+            </Reveal>
+            <Reveal>
+              <RebuiltPreview
+                slug={p.slug}
+                name={p.business_name}
+                tradeLabel={p.trade ? p.trade.charAt(0).toUpperCase() + p.trade.slice(1).toLowerCase() : null}
+                area={p.area}
+                domain={p.website}
+                accent={p.teardown?.brandColour}
+                services={p.teardown?.services}
+                hasLogo={!!p.teardown?.logo}
+                photoCount={p.teardown?.photos?.length ?? 0}
+              />
+            </Reveal>
+          </div>
+        </section>
+      )}
 
       {showRace && (
         <PreviewRace

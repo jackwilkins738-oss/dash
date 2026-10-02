@@ -997,6 +997,15 @@ class SiteDraft(unittest.TestCase):
         sure = {"services": ["Flat Roofs", "Roof Repairs", "A very long service name that won't fit", "Chimneys"],
                 "colour": "#b3261e", "colour_sure": True}
         self.assertEqual(site_draft.for_preview(sure), {"services": ["Flat Roofs", "Roof Repairs", "Chimneys"], "brandColour": "#b3261e"})
+        with_images = {"logo": "https://kerr.co.uk/img/kerr-logo.png",
+                       "photos": ["https://kerr.co.uk/img/job1.jpg", "http://kerr.co.uk/img/job2.jpg", "https://kerr.co.uk/checkatrade-member.png",
+                                  "https://kerr.co.uk/img/job3.webp", "https://kerr.co.uk/img/plan.svg", "https://kerr.co.uk/a.jpg",
+                                  "https://kerr.co.uk/b.jpg", "https://kerr.co.uk/c.jpg"]}
+        out = site_draft.for_preview(with_images)
+        self.assertEqual(out["logo"], "https://kerr.co.uk/img/kerr-logo.png")
+        self.assertEqual(out["photos"], ["https://kerr.co.uk/img/job1.jpg", "https://kerr.co.uk/img/job3.webp",
+                                         "https://kerr.co.uk/a.jpg", "https://kerr.co.uk/b.jpg"])
+        self.assertNotIn("logo", site_draft.for_preview({"logo": "https://kerr.co.uk/logo.svg"}))
         self.assertEqual(site_draft.for_preview({"services": ["Flat Roofs"], "colour": "#b3261e", "colour_sure": False}), {})
         # A colour used once in their CSS isn't a brand colour; one too pale for white text is darkened, same hue.
         once = site_draft.read_site('<style>.a{color:#2a7ab0}</style><a href="/r">Roof repairs</a>', "https://x.co.uk/")

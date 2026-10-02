@@ -33,6 +33,10 @@ export type Teardown = {
   services?: string[]
   /** Their brand colour, #rrggbb, already dark enough for white text. */
   brandColour?: string
+  /** Their logo and up to 4 photos from their own homepage - https jpg/png/webp, checked by the dashboard.
+   *  Only ever loaded through /for/[slug]/img/[which], never straight from their site. */
+  logo?: string
+  photos?: string[]
   imageSavingsKb?: number
   pageWeightKb?: number
   copyrightYear?: number
