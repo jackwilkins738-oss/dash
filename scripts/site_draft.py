@@ -214,6 +214,11 @@ def readable(hexcode: str) -> str:
     return colour
 
 
+PREVIEW_IMAGE = re.compile(r"^https://[^\s\"'<>]+\.(?:jpe?g|png|webp)(?:\?[^\s\"'<>]*)?$", re.I)
+NOT_THEIR_WORK = re.compile(r"checkatrade|trustmark|fmb|nfrc|gas-?safe|niceic|which|trusted|google|facebook|review|"
+                            r"map|visa|mastercard|paypal|payment|award|accredit|member|logo|icon|badge|sprite|banner-ad", re.I)
+
+
 def for_preview(site: dict) -> dict:
     """The part of read_site() that may appear on their preview page: 2-3 of their own service
     names and a colour we're fairly sure of. Stricter than the draft, since they'll see it
@@ -224,6 +229,14 @@ def for_preview(site: dict) -> dict:
         out["services"] = names[:3]
     if site.get("colour") and site.get("colour_sure"):
         out["brandColour"] = site["colour"]
+    # Their logo and photos, for "your homepage, rebuilt": https raster images only (never SVG), and
+    # nothing that looks like a trade-body badge, payment card or map rather than their own work.
+    logo = site.get("logo") or ""
+    if PREVIEW_IMAGE.match(logo):
+        out["logo"] = logo
+    photos = [u for u in site.get("photos", []) if PREVIEW_IMAGE.match(u) and not NOT_THEIR_WORK.search(u)]
+    if photos:
+        out["photos"] = photos[:4]
     return out
 
 

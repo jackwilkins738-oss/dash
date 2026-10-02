@@ -114,3 +114,64 @@ class VisibleText(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _png(width: int, height: int) -> str:
+    import base64
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (width, height), (200, 40, 40)).save(buf, "PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+try:
+    import PIL  # noqa: F401
+
+    HAVE_PIL = True
+except ImportError:
+    HAVE_PIL = False
+
+
+@unittest.skipUnless(HAVE_PIL, "Pillow not installed")
+class Filmstrip(unittest.TestCase):
+    def audits(self, n: int) -> dict:
+        thumbs = [{"timing": 375 * (k + 1), "data": _png(412, 732)} for k in range(n)]
+        return {
+            "screenshot-thumbnails": {"details": {"items": thumbs}},
+            "final-screenshot": {"details": {"data": _png(412, 823)}},
+        }
+
+    def test_three_spread_frames_and_a_small_screenshot(self):
+        from site_teardown import filmstrip
+
+        out = filmstrip(self.audits(8))
+        self.assertEqual([f["t"] for f in out["frames"]], [1125, 1875, 3000])  # items 3, 5, 8
+        for f in out["frames"]:
+            self.assertTrue(f["img"].startswith("data:image/jpeg;base64,"))
+            self.assertLess(len(f["img"]), 12_000)
+        self.assertTrue(out["screenshot"].startswith("data:image/jpeg;base64,"))
+        self.assertLess(len(out["screenshot"]), 40_000)
+
+    def test_shrinks_to_width_keeping_shape(self):
+        import base64
+        import io
+
+        from PIL import Image
+
+        from site_teardown import SHOT_WIDTH, shrink
+
+        uri = shrink(_png(412, 824), SHOT_WIDTH, 60)
+        with Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))) as im:
+            self.assertEqual(im.size, (SHOT_WIDTH, 480))
+
+    def test_too_few_frames_or_junk_gives_nothing_broken(self):
+        from site_teardown import filmstrip, shrink
+
+        out = filmstrip(self.audits(2))
+        self.assertNotIn("frames", out)
+        self.assertIn("screenshot", out)
+        self.assertEqual(filmstrip({}), {})
+        self.assertIsNone(shrink("data:image/png;base64,bm90IGFuIGltYWdl", 120, 55))

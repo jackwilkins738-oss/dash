@@ -126,6 +126,60 @@ def run_pagespeed(url: str, api_key: str, timeout: int = 180) -> dict:
     weight = (audits.get("total-byte-weight") or {}).get("numericValue")
     if isinstance(weight, (int, float)):
         out["pageWeightKb"] = round(weight / 1000)
+
+    # The real thing, not an animation: frames of their site loading on Google's test phone, and
+    # how it looks once it has - for the preview page. Only for slow sites (that's the story they
+    # tell), and only when Pillow is here to shrink them to a few KB each.
+    if isinstance(out.get("_mobile_score"), int) and out["_mobile_score"] < 90:
+        out.update(filmstrip(audits))
+    return out
+
+
+FRAMES = 3
+FRAME_WIDTH, SHOT_WIDTH = 120, 240
+
+
+def shrink(data_uri: str, width: int, quality: int) -> str | None:
+    """A Lighthouse screenshot made small enough to store per prospect - or None without Pillow."""
+    try:
+        import base64
+        import io
+
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        raw = base64.b64decode(data_uri.split(",", 1)[1])
+        with Image.open(io.BytesIO(raw)) as im:
+            im = im.convert("RGB")
+            if im.width > width:
+                im = im.resize((width, round(im.height * width / im.width)))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=quality, optimize=True)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:  # noqa: BLE001 - a screenshot Google sent oddly just isn't shown
+        return None
+
+
+def filmstrip(audits: dict) -> dict:
+    """{"frames": [{"t": ms, "img": data URI}, ...], "screenshot": data URI} - whatever could be made."""
+    out: dict = {}
+    items = ((audits.get("screenshot-thumbnails") or {}).get("details") or {}).get("items") or []
+    items = [i for i in items if isinstance(i, dict) and str(i.get("data", "")).startswith("data:image/")]
+    if len(items) >= FRAMES:
+        picks = [items[round(len(items) * k / FRAMES) - 1] for k in range(1, FRAMES + 1)]
+        frames = []
+        for i in picks:
+            img = shrink(i["data"], FRAME_WIDTH, 55)
+            if img and isinstance(i.get("timing"), (int, float)):
+                frames.append({"t": int(i["timing"]), "img": img})
+        if len(frames) == FRAMES:
+            out["frames"] = frames
+    final = ((audits.get("final-screenshot") or {}).get("details") or {}).get("data")
+    if isinstance(final, str) and final.startswith("data:image/"):
+        shot = shrink(final, SHOT_WIDTH, 60)
+        if shot:
+            out["screenshot"] = shot
     return out
 
 
