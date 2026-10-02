@@ -106,6 +106,24 @@ def remaining(outreach: Path, sheet: str | None = None) -> int:
     return len(seen)
 
 
+def list_status(outreach: Path, sheet: str) -> dict:
+    """For one list, why its Mailmeteor file has the firms it has - so "I can't see it" has an answer.
+    Counts only: no prospect's details leave this function."""
+    stem = Path(sheet).stem
+    suffix = "" if stem == "outreach-master" else f"-{stem}"
+    mm, links = outreach / f"mailmeteor{suffix}.csv", outreach / f"preview-links{suffix}.csv"
+    out = {"file": mm.name, "exists": mm.exists(), "in_file": 0, "waiting": 0, "done": 0, "letters": 0, "not_live": 0}
+    emails = {(r.get("email") or "").lower() for r in _rows(mm)[1] if r.get("email")}
+    done = {**sent_emails(outreach), **do_not_email(outreach)}
+    out["in_file"] = len(emails)
+    out["done"] = sum(1 for e in emails if e in done)
+    out["waiting"] = out["in_file"] - out["done"]
+    by_channel = [((r.get("Channel") or "").lower(), (r.get("Email") or "").lower()) for r in _rows(links)[1]]
+    out["letters"] = sum(1 for c, _ in by_channel if c != "email")
+    out["not_live"] = sum(1 for c, e in by_channel if c == "email" and e and e not in emails)
+    return out
+
+
 RECHECK_AFTER_DAYS = 30
 
 
