@@ -21,6 +21,7 @@ FILE = "first-lines.csv"
 COLUMNS = ["website", "business", "first_line", "made_on"]
 MAX_LEN = 200
 MAX_PER_RUN = 40  # a batch's worth; the rest are made next run
+TIME_BUDGET_S = 150  # and never more than this per run - a list run doesn't wait on slow homepages
 NOTHING = "NONE"
 
 SYSTEM = """You write the opening sentence of a short cold email from a UK web designer to a trades \
@@ -125,8 +126,14 @@ def fill(outreach: Path, firms: list[dict], env: dict, writer=write, say=print) 
     key = (env.get("ANTHROPIC_API_KEY") or "").strip()
     todo = [f for f in firms if f.get("website") and f["website"] not in rows]
     if key and todo:
+        import time
+
         made = 0
+        started = time.monotonic()
         for f in todo[:MAX_PER_RUN]:
+            if time.monotonic() - started > TIME_BUDGET_S:
+                say(f"First lines: stopped after {TIME_BUDGET_S // 60} minutes - the rest are made next run.")
+                break
             try:
                 line = writer(f.get("business", ""), f.get("trade", ""), f.get("area", ""), f["website"], key, env.get("AI_MODEL", ""))
             except ai_reply.AIError as e:
@@ -154,4 +161,9 @@ def latest(outreach: Path) -> dict[str, str]:
 def apply(row: dict, lines: dict[str, str]) -> dict:
     key = (row.get("business") or "").strip().lower()
     return {**row, "first_line": lines[key]} if key in lines else row
+
+
+def saved(outreach: Path) -> dict[str, str]:
+    """website -> line, as first-lines.csv has them now - no homepage reading, no AI."""
+    return {w: (r.get("first_line") or "").strip() for w, r in load(outreach).items()}
 

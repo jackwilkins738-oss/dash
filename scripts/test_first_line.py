@@ -101,3 +101,19 @@ class Homepage(unittest.TestCase):
         self.assertNotIn("do not read", text)
         with mock.patch("site_teardown.fetch_html", return_value=(None, None)):
             self.assertIsNone(fl.homepage("down.co.uk"))
+
+
+class TimeBudget(unittest.TestCase):
+    def test_a_slow_run_stops_and_leaves_the_rest_for_next_time(self):
+        from unittest import mock
+
+        d = Path(tempfile.mkdtemp())
+        firms = [{"business": f"F{n}", "website": f"f{n}.co.uk"} for n in range(5)]
+        clock = iter([0, 0, 100, 200, 300, 400, 500])
+        said = []
+        with mock.patch("time.monotonic", lambda: next(clock)):
+            out = fl.fill(d, firms, {"ANTHROPIC_API_KEY": "k"}, lambda *a: "Saw it.", say=said.append)
+        self.assertEqual(len(out), 2)
+        self.assertTrue(any("next run" in s for s in said))
+        self.assertEqual(fl.saved(d), out)
+
