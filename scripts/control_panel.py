@@ -77,7 +77,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "62"
+PANEL_VERSION = "63"
 MAX_LOG_LINES = 5000
 
 
@@ -250,6 +250,11 @@ def save_settings(new: dict[str, str]) -> None:
 def sheets() -> list[str]:
     if not OUTREACH.is_dir():
         return []
+    import csv_lists
+
+    # A list saved as CSV gets a matching .xlsx made (and topped up) so it can be picked and run.
+    for note in csv_lists.import_all(OUTREACH):
+        print(note, flush=True)
     names = sorted(p.name for p in OUTREACH.glob("*.xlsx") if not p.name.startswith("~$") and p.name != RESULTS_NAME and not p.name.endswith(".tmp.xlsx"))
     # The master list first, as it's the default.
     return sorted(names, key=lambda n: n != "outreach-master.xlsx")
