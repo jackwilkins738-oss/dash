@@ -145,7 +145,7 @@ class Filmstrip(unittest.TestCase):
         }
 
     def test_three_spread_frames_and_a_small_screenshot(self):
-        from site_teardown import filmstrip
+        from site_teardown import SHOT_MAX, filmstrip
 
         out = filmstrip(self.audits(8))
         self.assertEqual([f["t"] for f in out["frames"]], [1125, 1875, 3000])  # items 3, 5, 8
@@ -153,7 +153,7 @@ class Filmstrip(unittest.TestCase):
             self.assertTrue(f["img"].startswith("data:image/jpeg;base64,"))
             self.assertLess(len(f["img"]), 12_000)
         self.assertTrue(out["screenshot"].startswith("data:image/jpeg;base64,"))
-        self.assertLess(len(out["screenshot"]), 40_000)
+        self.assertLessEqual(len(out["screenshot"]), SHOT_MAX)
 
     def test_shrinks_to_width_keeping_shape(self):
         import base64
@@ -165,7 +165,7 @@ class Filmstrip(unittest.TestCase):
 
         uri = shrink(_png(412, 824), SHOT_WIDTH, 60)
         with Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))) as im:
-            self.assertEqual(im.size, (SHOT_WIDTH, 480))
+            self.assertEqual(im.size, (SHOT_WIDTH, 640))
 
     def test_too_few_frames_or_junk_gives_nothing_broken(self):
         from site_teardown import filmstrip, shrink

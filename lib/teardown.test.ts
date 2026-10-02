@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { MAX_FINDINGS, teardownFindings, teardownPasses, type Teardown } from './teardown.ts'
+import { MAX_FINDINGS, isDataJpeg, teardownFindings, teardownPasses, usableFrames, type Teardown } from './teardown.ts'
 
 const YEAR = 2026
 const t = (over: Partial<Teardown> = {}): Teardown => ({ v: 1, checks: {}, ...over })
@@ -79,5 +79,28 @@ describe('teardownPasses', () => {
   it('counts only checks that came back fine', () => {
     assert.equal(teardownPasses(t({ checks: { tapToCall: true, https: true, whatsapp: false } })), 2)
     assert.equal(teardownPasses(null), 0)
+  })
+})
+
+describe('usableFrames', () => {
+  const img = 'data:image/jpeg;base64,AAAA'
+  const strip = [
+    { t: 1125, img },
+    { t: 1875, img },
+    { t: 3000, img },
+  ]
+  it('keeps three ordered inline JPEG frames', () => {
+    assert.deepEqual(usableFrames(strip), strip)
+  })
+  it('drops a strip that is short, out of order or carries anything but a JPEG', () => {
+    assert.deepEqual(usableFrames(strip.slice(0, 2)), [])
+    assert.deepEqual(usableFrames([strip[1], strip[0], strip[2]]), [])
+    assert.deepEqual(usableFrames([...strip.slice(0, 2), { t: 3000, img: 'https://x.co.uk/a.jpg' }]), [])
+    assert.deepEqual(usableFrames(undefined), [])
+  })
+  it('accepts only base64 JPEG data URIs', () => {
+    assert.equal(isDataJpeg(img), true)
+    assert.equal(isDataJpeg('data:image/svg+xml;base64,AAAA'), false)
+    assert.equal(isDataJpeg('data:image/jpeg;base64,AA"><script>'), false)
   })
 })

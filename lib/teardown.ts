@@ -37,11 +37,34 @@ export type Teardown = {
    *  Only ever loaded through /for/[slug]/img/[which], never straight from their site. */
   logo?: string
   photos?: string[]
+  /** Slow sites only: 3 frames of their homepage loading in Google's mobile test (ms from the start,
+   *  small JPEG data URIs checked by the dashboard), and how it looks once loaded. Gone after 45 days. */
+  frames?: Frame[]
+  screenshot?: string
   imageSavingsKb?: number
   pageWeightKb?: number
   copyrightYear?: number
   platform?: 'wordpress' | 'wix' | 'squarespace' | 'godaddy' | 'webflow' | 'weebly' | 'duda' | 'shopify'
   wpPluginCount?: number
+}
+
+export type Frame = { t: number; img: string }
+
+const DATA_JPEG = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/
+
+/** Only an inline base64 JPEG ever reaches an <img> on the page - checked again here, not just by the dashboard. */
+export function isDataJpeg(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 40_000 && DATA_JPEG.test(value)
+}
+
+/** The three filmstrip frames, or none: a partial or out-of-order strip would tell the wrong story. */
+export function usableFrames(frames: unknown): Frame[] {
+  if (!Array.isArray(frames) || frames.length !== 3) return []
+  const ok = frames.every(
+    (f, i) =>
+      f && typeof f === 'object' && Number.isFinite(f.t) && f.t >= 0 && isDataJpeg(f.img) && (i === 0 || f.t >= frames[i - 1].t),
+  )
+  return ok ? (frames as Frame[]) : []
 }
 
 export type Finding = { id: string; title: string; detail: string; fix: string }

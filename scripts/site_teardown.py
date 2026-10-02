@@ -136,7 +136,8 @@ def run_pagespeed(url: str, api_key: str, timeout: int = 180) -> dict:
 
 
 FRAMES = 3
-FRAME_WIDTH, SHOT_WIDTH = 120, 240
+FRAME_WIDTH, SHOT_WIDTH = 120, 320
+SHOT_MAX = 38_000  # the dashboard keeps screenshots up to 40,000 characters
 
 
 def shrink(data_uri: str, width: int, quality: int) -> str | None:
@@ -177,9 +178,12 @@ def filmstrip(audits: dict) -> dict:
             out["frames"] = frames
     final = ((audits.get("final-screenshot") or {}).get("details") or {}).get("data")
     if isinstance(final, str) and final.startswith("data:image/"):
-        shot = shrink(final, SHOT_WIDTH, 60)
-        if shot:
-            out["screenshot"] = shot
+        # Sharp enough for a phone frame on the page; a busy, photo-heavy homepage steps down to fit.
+        for width, quality in ((SHOT_WIDTH, 60), (SHOT_WIDTH, 45), (240, 50)):
+            shot = shrink(final, width, quality)
+            if shot and len(shot) <= SHOT_MAX:
+                out["screenshot"] = shot
+                break
     return out
 
 
