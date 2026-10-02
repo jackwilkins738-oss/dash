@@ -71,7 +71,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "45"
+PANEL_VERSION = "46"
 MAX_LOG_LINES = 5000
 
 
@@ -425,10 +425,14 @@ def build_steps(body: dict, settings: dict[str, str]):
             return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first (the Gmail app password)."
         if not settings.get("MAIL_FROM_NAME"):
             return None, "Add MAIL_FROM_NAME in Settings first - the name people see, and your sign-off."
+        send_from = str(body.get("send_from") or "").strip().lower()
+        if send_from and not EMAIL.match(send_from):
+            return None, "Pick an inbox to send from, or All inboxes."
+        frm = ["--from", send_from] if send_from else []
         if action == "send_test":
             follow = body.get("test_kind") == "followups"
-            return (lambda job: [(SEND, ["--test", *(["--followups"] if follow else [])])]), ""
-        extra = ["--followups"] if action == "send_followups" else []
+            return (lambda job: [(SEND, ["--test", *(["--followups"] if follow else []), *frm])]), ""
+        extra = (["--followups"] if action == "send_followups" else []) + frm
         try:
             gap = float(body.get("send_gap") or 0)
         except (TypeError, ValueError):
