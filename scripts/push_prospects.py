@@ -749,6 +749,11 @@ def main() -> None:
     if args.only or args.limit is not None:
         print(f"Selected {len(selected)}: " + ", ".join(p["business_name"] for p in selected[:10]) + (" ..." if len(selected) > 10 else ""))
     if not selected:
+        if args.teardown and not args.only:
+            # Everyone left on the list is already checked or left out (Review, do-not-contact, another
+            # list) - nothing went wrong, so it isn't reported as a failed step.
+            print("Nothing left to speed check on this list.")
+            return
         sys.exit("Nothing selected.")
 
     homepages: dict[str, tuple[str | None, str | None]] = {}

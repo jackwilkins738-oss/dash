@@ -77,7 +77,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "60"
+PANEL_VERSION = "61"
 MAX_LOG_LINES = 5000
 
 
@@ -407,7 +407,8 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
             )
             return
         if remaining == last:
-            job.note(f"{remaining} still to check but the last batch made no progress - finishing up.")
+            job.note(f"{remaining} on this list still not speed checked after the last batch - finishing up. They're left out (Review, another list, "
+                     "do-not-contact) unless a step above says it had a problem.")
             yield ["--sheet", sheet, "--verify-links"]
             yield (EXPORT, [])
             return
