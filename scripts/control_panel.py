@@ -66,14 +66,15 @@ SETTING_KEYS = [
     "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD",
     "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS",
     "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR",
+    "ANTHROPIC_API_KEY", "AI_MODEL",
 ]
-SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
+SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
                "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"}
 # A run this long gets a phone alert when it ends (if Telegram is set up).
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "48"
+PANEL_VERSION = "49"
 MAX_LOG_LINES = 5000
 
 
@@ -918,6 +919,24 @@ def reply_draft_action(body: dict) -> tuple[dict, int]:
     return {"ok": True, "text": saved_replies.render(replies[name], reply_values(load_settings(), body))}, 200
 
 
+def reply_ai_action(body: dict) -> tuple[dict, int]:
+    """Calls tab "Draft with AI": Claude's first go at answering their reply - shown in the box, never sent."""
+    import ai_reply
+    import saved_replies
+
+    settings = load_settings()
+    firm = {k: str(body.get(k) or "")[:200] for k in ("business", "trade", "area", "website", "mobile_score", "subject")}
+    firm["message"] = str(body.get("message") or "")[: ai_reply.MAX_REPLY_CHARS]
+    if not firm["business"]:
+        return {"error": "That doesn't look right."}, 400
+    try:
+        text = ai_reply.draft(firm, reply_values(settings, body), saved_replies.load(OUTREACH),
+                              settings.get("ANTHROPIC_API_KEY", ""), settings.get("AI_MODEL", ""))
+    except ai_reply.AIError as e:
+        return {"error": str(e)}, 502
+    return {"ok": True, "text": text}, 200
+
+
 def reply_send_action(body: dict) -> tuple[dict, int]:
     """Calls tab "Send reply": answers their email in the same thread, from the inbox that wrote to them."""
     import calls
@@ -1381,6 +1400,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": why}, 400) if why else self._json({"ok": True})
         if route == "/api/reply-draft":
             return self._json(*reply_draft_action(body))
+        if route == "/api/reply-ai":
+            return self._json(*reply_ai_action(body))
         if route == "/api/reply-send":
             return self._json(*reply_send_action(body))
         if route == "/api/draft-site":

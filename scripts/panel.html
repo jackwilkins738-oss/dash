@@ -510,6 +510,8 @@ Scalar Digital · 07401 696272</textarea>
       <div class="grid2">
         <div><label>Dashboard secret <code>PROSPECTS_API_SECRET</code> <span id="set-secret"></span></label><input type="password" id="PROSPECTS_API_SECRET" autocomplete="off"></div>
         <div><label>Google speed test <code>PAGESPEED_API_KEY</code> <span id="set-psi"></span></label><input type="password" id="PAGESPEED_API_KEY" autocomplete="off"></div>
+        <div><label>AI reply drafts <code>ANTHROPIC_API_KEY</code> <span id="set-ai"></span></label><input type="password" id="ANTHROPIC_API_KEY" autocomplete="off"></div>
+        <div><label>AI model <code>AI_MODEL</code> (optional)</label><input type="text" id="AI_MODEL" placeholder="Blank = the newest Sonnet your key can use"></div>
         <div><label>Companies House <code>COMPANIES_HOUSE_API_KEY</code> <span id="set-ch"></span></label><input type="password" id="COMPANIES_HOUSE_API_KEY" autocomplete="off"></div>
         <div><label>Cloudflare, for Publish site <code>CLOUDFLARE_API_TOKEN</code></label><input type="password" id="CLOUDFLARE_API_TOKEN" autocomplete="off"></div>
         <div><label>Phone alerts bot <code>TELEGRAM_BOT_TOKEN</code> <span id="set-tg"></span></label><input type="password" id="TELEGRAM_BOT_TOKEN" autocomplete="off"></div>
@@ -599,13 +601,15 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "CLOUD_REPLY_ALERTS", "BACKUP_DIR"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "AI_MODEL"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     fillSendFrom(s.settings);
     if (!s.settings.PROSPECTS_API_SECRET) showTab("settings");  // nothing works until it's set
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
   $("set-psi").textContent = s.settings.PAGESPEED_API_KEY ? "(saved)" : "(not set - needed for speed checks)";
+  $("set-ai").textContent = s.settings.ANTHROPIC_API_KEY ? "(saved)" : "(optional - console.anthropic.com, a few pence a draft)";
+  aiReady = !!s.settings.ANTHROPIC_API_KEY;
   $("set-mail").textContent = s.settings.MAIL_APP_PASSWORD ? "(saved)" : "(lets the panel send your emails and read replies)";
   $("set-tg").textContent = s.settings.TELEGRAM_BOT_TOKEN ? "(saved)" : "(optional)";
   $("set-ch").textContent = s.settings.COMPANIES_HOUSE_API_KEY ? "(saved)" : "(not set - free at developer.company-information.service.gov.uk)";
@@ -738,7 +742,8 @@ function callRow(i, section) {
     <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><label class="hint" title="One of the first three Scalar builds: 24 months' free dashboard, the speed guarantee, first in the queue - for a case study, video and review"><input type="checkbox" data-founding> founding client</label><button data-draft>Draft their site</button></div>
     <div class="why" data-quote-result></div>
     ${section === "replied" && i.email ? `<div class="btns" style="margin-top:6px">
-      ${suggestedReply(i.intent) ? `<button class="primary" data-reply-suggest="${esc(suggestedReply(i.intent))}">Suggested reply: ${esc(suggestedReply(i.intent))}</button>` : ""}
+      <button class="primary" data-reply-ai title="Claude writes a first draft from their reply, your prices and your saved replies - you read and edit it before anything is sent">✨ Draft with AI</button>
+      ${suggestedReply(i.intent) ? `<button data-reply-suggest="${esc(suggestedReply(i.intent))}">Suggested reply: ${esc(suggestedReply(i.intent))}</button>` : ""}
       ${i.intent === "later" ? `<button data-callback-in="3m">Call back in 3 months</button>` : ""}
       <select data-reply-pick><option value="">Reply with a saved answer...</option>${savedReplies.map((n) => `<option>${esc(n)}</option>`).join("")}</select></div>
       <div data-reply-box hidden style="margin-top:6px"><textarea data-reply-text rows="9" style="width:100%"></textarea>
@@ -764,6 +769,7 @@ function renderCalls() {
   document.querySelectorAll("#calls [data-draft]").forEach((b) => b.addEventListener("click", () => draftSite(b)));
   document.querySelectorAll("#calls [data-reply-pick]").forEach((sel) => sel.addEventListener("change", () => pickReply(sel)));
   document.querySelectorAll("#calls [data-reply-send]").forEach((b) => b.addEventListener("click", () => sendReply(b)));
+  document.querySelectorAll("#calls [data-reply-ai]").forEach((b) => b.addEventListener("click", () => aiReply(b)));
   document.querySelectorAll("#calls [data-reply-suggest]").forEach((b) => b.addEventListener("click", () => {
     const sel = b.closest(".ritem").querySelector("[data-reply-pick]");
     sel.value = b.dataset.replySuggest; pickReply(sel);
@@ -790,13 +796,27 @@ async function pickReply(sel) {
   if (r.error) { card.querySelector("[data-reply-msg]").textContent = r.error; return; }
   card.querySelector("[data-reply-text]").value = r.text;
 }
+let aiReady = false;
+async function aiReply(b) {
+  const [card, item] = replyItem(b);
+  const box = card.querySelector("[data-reply-box]"), msg = card.querySelector("[data-reply-msg]");
+  box.hidden = false;
+  if (!aiReady) { msg.style.color = "var(--bad)"; msg.textContent = "Add ANTHROPIC_API_KEY in Settings first."; return; }
+  b.disabled = true; b.textContent = "Drafting...";
+  const r = await post("/api/reply-ai", { business: item.business, trade: item.trade, area: item.area, website: item.website,
+    mobile_score: item.mobile_score, subject: item.subject, message: item.message || item.snippet, contact: item.contact, preview: item.preview });
+  b.disabled = false; b.textContent = "✨ Draft again";
+  msg.style.color = r.error ? "var(--bad)" : "var(--dim)";
+  msg.textContent = r.error || "AI draft - read it and change anything that isn't how you'd say it before sending.";
+  if (!r.error) { card.querySelector("[data-reply-text]").value = r.text; card.querySelector("[data-reply-pick]").value = ""; card.dataset.ai = "1"; }
+}
 async function sendReply(b) {
   const [card, item] = replyItem(b);
   const text = card.querySelector("[data-reply-text]").value;
   if (!text.trim() || !confirm(`Send this reply to ${item.email}?`)) return;
   b.disabled = true; b.textContent = "Sending...";
   const r = await post("/api/reply-send", { sheet: sheetOf(item), key: item.key, business: item.business, to: item.email,
-    message_id: item.message_id, subject: item.subject, text, name: card.querySelector("[data-reply-pick]").value });
+    message_id: item.message_id, subject: item.subject, text, name: card.querySelector("[data-reply-pick]").value || (card.dataset.ai ? "AI draft" : "") });
   b.disabled = false; b.textContent = "Send reply";
   const msg = card.querySelector("[data-reply-msg]");
   msg.style.color = r.error ? "var(--bad)" : "var(--ok)";
@@ -1084,9 +1104,9 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); if (callsWanted()) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "ANTHROPIC_API_KEY", "AI_MODEL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"]) $(k).value = "";
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD", "ANTHROPIC_API_KEY"]) $(k).value = "";
   fillSendFrom(body);
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
   $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
