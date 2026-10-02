@@ -40,6 +40,24 @@ class NowAndStop(unittest.TestCase):
     def test_stop_with_nothing_running(self):
         self.assertIn("isn't running", autopilot.stop(self.out))
 
+    def test_a_reused_process_number_is_not_the_run(self):
+        from unittest import mock
+
+        import control_panel as panel
+
+        started = autopilot._started(os.getpid())
+        if started is None:
+            self.skipTest("can't read process start times here")
+        lock = self.out / autopilot.LOCK
+        with mock.patch.object(panel, "OUTREACH", self.out):
+            # Written after this process started: it's the run.
+            lock.write_text(str(os.getpid()))
+            self.assertTrue(autopilot.is_running())
+            # Written well before this process existed: the number was handed out again - stale, cleared.
+            os.utime(lock, (started - 600, started - 600))
+            self.assertFalse(autopilot.is_running())
+            self.assertFalse(lock.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -102,6 +102,36 @@ def _alive(pid: int) -> bool:
     return True
 
 
+def _started(pid: int) -> float | None:
+    """When that process started (Unix time), or None where it can't be told."""
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+        k32.OpenProcess.restype = wintypes.HANDLE
+        k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        k32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        handle = k32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return None
+        try:
+            t = [wintypes.FILETIME() for _ in range(4)]
+            if not k32.GetProcessTimes(handle, *(ctypes.byref(x) for x in t)):
+                return None
+            ticks = (t[0].dwHighDateTime << 32) | t[0].dwLowDateTime  # 100 ns since 1601
+            return (ticks - 116444736000000000) / 1e7
+        finally:
+            k32.CloseHandle(handle)
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        boot = next(float(ln.split()[1]) for ln in Path("/proc/stat").read_text().splitlines() if ln.startswith("btime"))
+        return boot + int(fields[19]) / os.sysconf("SC_CLK_TCK")
+    except (OSError, ValueError, IndexError, StopIteration):
+        return None
+
+
 def is_running() -> bool:
     """True while a run is actually going. A lock left behind by a run that was stopped, crashed or
     lost to a shutdown is cleared here, so the panel never shows a run that isn't happening."""
@@ -112,7 +142,11 @@ def is_running() -> bool:
         pid = int(lock.read_text().strip() or 0)
     except (OSError, ValueError):
         pid = 0
-    if time.time() - lock.stat().st_mtime < 6 * 3600 and _alive(pid):
+    written = lock.stat().st_mtime
+    # The run writes the lock just after it starts. A process that started later only has a reused
+    # number (Windows hands them out again after a crash or restart) - it isn't the run.
+    started = _started(pid) if pid > 0 else None
+    if time.time() - written < 6 * 3600 and _alive(pid) and (started is None or started <= written + 60):
         return True
     lock.unlink(missing_ok=True)
     return False

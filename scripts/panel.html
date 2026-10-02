@@ -649,6 +649,19 @@ async function poll() {
   setTimeout(poll, state && state.job.running ? 700 : 2500);
 }
 
+// A button pressed while the autopilot runs would otherwise just be refused - say what it's doing
+// and offer to stop it, then run what was asked.
+async function runOrStopAutopilot(payload) {
+  const r = await post("/api/run", payload);
+  if (!r.autopilot) return r;
+  const now = r.autopilot;
+  if (!confirm(`The autopilot is running (${now.minutes ?? 0} min so far, now: ${now.last || "starting"}).\n\nStop it and run this instead? Anything it already sent stays sent; it picks up from there next time.`)) return r;
+  const s = await post("/api/autopilot", { action: "stop" });
+  loadAutopilot();
+  if (s.error) return s;
+  return post("/api/run", payload);
+}
+
 document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("click", async () => {
   const action = b.dataset.action;
   const dry = $("dry").checked;
@@ -660,7 +673,7 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "send_batch" && !confirm(`Send today's batch now, from your own email, ${$("send-gap").value ? $("send-gap").value + " min" : "about a minute"} apart? You can stop it any time.`)) return;
   if (action === "send_followups" && !confirm("Send the follow-ups now, from your own email?")) return;
   if (action === "publish_site" && !confirm(`Publish outreach/sites/${$("publish-folder").value}/site live on their Cloudflare?`)) return;
-  const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
+  const r = await runOrStopAutopilot({ action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
     batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "", send_gap: $("send-gap").value, send_from: $("send-from").value,
     launch_old: $("launch-old").value, launch_new: $("launch-new").value,
     golive_domain: $("golive-domain").value,
@@ -695,7 +708,7 @@ function saveFinder() {
 document.querySelectorAll("[data-find]").forEach((b) => b.addEventListener("click", async () => {
   saveFinder();
   $("find-msg").textContent = "";
-  const r = await post("/api/run", { action: b.dataset.find, ...finderForm() });
+  const r = await runOrStopAutopilot({ action: b.dataset.find, ...finderForm() });
   if (r.error) $("find-msg").textContent = r.error;
   lastLines = -1;
   setTimeout(poll, 150);
