@@ -331,21 +331,20 @@
   <section data-section="emails" hidden>
     <div class="card">
       <h2>First email</h2>
-      <p class="hint">Fields: {{business}} {{greeting_name}} {{score_line}} {{issue_line}} {{preview_url}} {{trade}} {{area}} {{your_name}}. The score and issue lines are left out when a site wasn't checked.</p>
+      <p class="hint">Fields: {{business}} {{greeting_name}} {{score_line}} {{issue_line}} {{why_line}} {{preview_url}} {{trade}} {{area}} {{your_name}}. The score and issue lines are left out when a site wasn't checked.</p>
       <label>Subject</label>
-<textarea id="mm-subject" rows="1">A quick look at {{business}}'s website</textarea>
+<textarea id="mm-subject" rows="1">{{business}} - quick look at your website</textarea>
       <label>Body</label>
 <textarea id="mm-body" rows="15">Hi {{greeting_name}},
 
-I had a look at {{business}}'s website on my phone and ran it through Google's own speed test. {{score_line}} {{issue_line}}
-
-I build fast, hand-coded websites for trade firms, and I've put together a short preview of what a new site for {{business}} could look like - next to how your current one measures up:
+I put together a preview of what a new website for {{business}} could look like, next to how your current one measures up:
 
 {{preview_url}}
 
-There's nothing to sign up for. If it's of interest, just reply and I'll happily talk it through.
+I checked your current site on my phone too. {{score_line}} {{issue_line}} {{why_line}}
 
-Kind regards,
+Worth a 10-minute chat?
+
 [your name]
 Scalar Digital · 07401 696272 · scalardigital.co.uk
 
