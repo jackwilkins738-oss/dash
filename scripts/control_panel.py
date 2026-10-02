@@ -53,6 +53,7 @@ SCORECARD = HERE / "scorecard.py"
 GO_LIVE = HERE / "go_live.py"
 CLIENT_SPEED = HERE / "client_speed.py"
 BACKUP = HERE / "backup.py"
+SENDING_HEALTH = HERE / "sending_health.py"
 
 
 def replies_first(settings: dict[str, str]) -> list:
@@ -74,7 +75,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "53"
+PANEL_VERSION = "54"
 MAX_LOG_LINES = 5000
 
 
@@ -164,6 +165,18 @@ def health(outreach: Path, settings: dict, now: datetime | None = None) -> list[
         out.append({"name": "Autopilot", "ok": None, "text": "off"})
     if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
         out.append({"name": "Inbox", "ok": False, "text": "no login in Settings - replies can't be checked"})
+    import sending_health
+
+    sh = sending_health.load(outreach)
+    h = _age_hours(sh.get("checked_at", "").replace("T", " "), now)
+    if h is None:
+        out.append({"name": "Sending", "ok": None, "text": "not checked yet - press Check sending health"})
+    elif sh.get("problems"):
+        out.append({"name": "Sending", "ok": False, "text": sh["problems"][0][:90]})
+    else:
+        warn = len(sh.get("warnings") or [])
+        out.append({"name": "Sending", "ok": h <= 72,
+                    "text": ("clear" if not warn else f"working, {warn} to fix") + ("" if h <= 72 else " - not checked for 3 days")})
     return out
 
 
@@ -336,6 +349,7 @@ ACTIONS = {
     "launch_check": "Check the launch",
     "client_speed": "Speed check client sites",
     "backup_now": "Back up now",
+    "sending_health": "Check sending health",
     "build_site": "Build site",
     "publish_site": "Publish site",
     "scorecard": "Scorecard",
@@ -509,6 +523,10 @@ def build_steps(body: dict, settings: dict[str, str]):
         return (lambda job: [(LAUNCH, ["--old", old, "--new", new])]), ""
     if action == "backup_now":
         return (lambda job: [(BACKUP, [])]), ""
+    if action == "sending_health":
+        if not settings.get("MAIL_ADDRESS"):
+            return None, "Add MAIL_ADDRESS in Settings first - it's your sending domain that gets checked."
+        return (lambda job: [(SENDING_HEALTH, [])]), ""
     if action == "client_speed":
         if not settings.get("PAGESPEED_API_KEY"):
             return None, "Add PAGESPEED_API_KEY in Settings first."
