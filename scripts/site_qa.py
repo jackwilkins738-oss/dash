@@ -100,8 +100,21 @@ def _target(site: Path, page: Path, link: str) -> Path | None:
     return path
 
 
-def check(site: Path) -> tuple[list[str], list[str]]:
-    """(problems, warnings) for a built site folder."""
+PREVIEW_OK = ("robots.txt blocks Google", "placeholder text left in")
+
+
+def check(site: Path, preview: bool = False) -> tuple[list[str], list[str]]:
+    """(problems, warnings) for a built site folder. preview: a draft for the client to review - its
+    noindex robots.txt and [Confirm notes are expected there, everything else still has to work."""
+    problems, warnings = _check(site)
+    if preview:
+        problems = [p for p in problems if not any(ok in p for ok in PREVIEW_OK)]
+    elif (site / "feedback.js").exists():
+        problems.append("feedback.js is in the build - that's the draft's Leave feedback button; build without Draft")
+    return problems, warnings
+
+
+def _check(site: Path) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     warnings: list[str] = []
     if not site.is_dir():

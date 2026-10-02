@@ -236,6 +236,87 @@ def css(colour: str) -> str:
     return (HERE / "site_kit.css").read_text(encoding="utf-8").replace("--brand-in: #1f5f8b", f"--brand-in: {brand}")
 
 
+# Draft builds only: "Leave feedback" - the client taps a spot on the page and says what they'd change,
+# and it lands in the dashboard as a change request (NEW's /api/site-feedback). Text only, built with
+# textContent, so nothing they type can become markup. Never in a real build (site_qa checks).
+FEEDBACK_JS = r"""(function () {
+  var me = document.currentScript, d = me.dataset, picking = false, n = 0;
+  var css = "position:fixed;left:12px;bottom:84px;z-index:2147483000;font:600 14px/1.2 system-ui,sans-serif;";
+  var btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = "Leave feedback";
+  btn.style.cssText = css + "padding:10px 14px;border:0;border-radius:999px;background:#111;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.3);cursor:pointer";
+  var box = document.createElement("div");
+  box.style.cssText = css + "bottom:136px;width:min(320px,calc(100vw - 24px));padding:12px;border-radius:12px;background:#fff;color:#111;box-shadow:0 8px 30px rgba(0,0,0,.35);display:none";
+  var label = document.createElement("p");
+  label.style.margin = "0 0 6px";
+  var text = document.createElement("textarea");
+  text.rows = 4;
+  text.placeholder = "What would you change here?";
+  text.style.cssText = "width:100%;box-sizing:border-box;font:14px system-ui,sans-serif;padding:6px";
+  var who = document.createElement("input");
+  who.placeholder = "Your name (optional)";
+  who.style.cssText = "width:100%;box-sizing:border-box;margin-top:6px;font:14px system-ui,sans-serif;padding:6px";
+  try { who.value = localStorage.getItem("fb-name") || ""; } catch (e) {}
+  var send = document.createElement("button"), cancel = document.createElement("button"), msg = document.createElement("p");
+  send.type = cancel.type = "button";
+  send.textContent = "Send";
+  cancel.textContent = "Cancel";
+  send.style.cssText = "margin:8px 8px 0 0;padding:8px 14px;border:0;border-radius:8px;background:#111;color:#fff;cursor:pointer";
+  cancel.style.cssText = "margin-top:8px;padding:8px 14px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer";
+  msg.style.cssText = "margin:6px 0 0;font-size:13px";
+  box.append(label, text, who, send, cancel, msg);
+  document.body.append(btn, box);
+  var pin = null;
+  function reset() { picking = false; btn.textContent = "Leave feedback"; document.documentElement.style.cursor = ""; }
+  btn.addEventListener("click", function () {
+    picking = !picking;
+    btn.textContent = picking ? "Now tap the spot you'd change" : "Leave feedback";
+    document.documentElement.style.cursor = picking ? "crosshair" : "";
+  });
+  document.addEventListener("click", function (e) {
+    if (!picking || e.target === btn || box.contains(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    reset();
+    var doc = document.documentElement, t = e.target;
+    pin = {
+      page: location.pathname,
+      near: ((t.innerText || t.alt || t.getAttribute("aria-label") || t.tagName || "") + "").replace(/\s+/g, " ").trim().slice(0, 80),
+      x: Math.round(e.pageX / Math.max(doc.scrollWidth, 1) * 100),
+      y: Math.round(e.pageY / Math.max(doc.scrollHeight, 1) * 100)
+    };
+    var dot = document.createElement("span");
+    dot.textContent = String(++n);
+    dot.style.cssText = "position:absolute;z-index:2147482999;left:" + (e.pageX - 12) + "px;top:" + (e.pageY - 12) + "px;width:24px;height:24px;border-radius:50%;background:#e11d48;color:#fff;font:700 12px/24px system-ui;text-align:center;pointer-events:none";
+    document.body.append(dot);
+    label.textContent = "Pin " + n + (pin.near ? " - near \u201c" + pin.near.slice(0, 40) + "\u201d" : "");
+    msg.textContent = "";
+    text.value = "";
+    box.style.display = "block";
+    text.focus();
+  }, true);
+  cancel.addEventListener("click", function () { box.style.display = "none"; });
+  send.addEventListener("click", function () {
+    if (!pin || text.value.trim().length < 2) { msg.textContent = "Say what you'd change first."; return; }
+    try { localStorage.setItem("fb-name", who.value); } catch (e) {}
+    send.disabled = true;
+    msg.textContent = "Sending...";
+    fetch(d.api + "/api/site-feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenant_id: d.tenant, site_key: d.siteKey, page: pin.page, near: pin.near, x: pin.x, y: pin.y, comment: text.value, name: who.value })
+    }).then(function (r) {
+      send.disabled = false;
+      if (!r.ok) throw new Error();
+      msg.textContent = "Sent - thank you. Tap Leave feedback again for the next one.";
+      setTimeout(function () { box.style.display = "none"; }, 1800);
+    }).catch(function () { send.disabled = false; msg.textContent = "Couldn't send - check your connection and try again."; });
+  });
+})();
+"""
+
+
 def page(cfg: dict, *, path: str, title: str, description: str, body: str, crumbs: list[tuple[str, str]] | None = None,
          schema: list[dict] | None = None, draft: bool = False, extra_script: str = "") -> str:
     base = f"https://{cfg['domain']}"
@@ -264,6 +345,9 @@ def page(cfg: dict, *, path: str, title: str, description: str, body: str, crumb
         track += f'\n<script src="{DASH_ORIGIN}/testimonials.js" data-tenant="{esc(dash["tenant_id"])}" defer></script>'
     if extra_script:
         track += f"\n<script>{extra_script}</script>"
+    if draft and live:
+        track += (f'\n<script src="/feedback.js" data-tenant="{esc(dash["tenant_id"])}" data-site-key="{esc(dash["site_key"])}" '
+                  f'data-api="{DASH_ORIGIN}" defer></script>')
     wa = cfg.get("whatsapp")
     bar = (f'<nav class="mobile-bar" aria-label="Contact"><a href="tel:{tel(cfg["phone"])}">Call</a>'
            + (f'<a href="https://wa.me/{esc(re.sub(r"[^0-9]", "", wa))}">WhatsApp</a>' if wa else "")
@@ -657,6 +741,8 @@ def build(folder: Path, draft: bool = False) -> dict:
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         (out / rel).write_text(text, encoding="utf-8")
     (out / "site.css").write_text(css(cfg["colour"]), encoding="utf-8")
+    if draft and connected(cfg):
+        (out / "feedback.js").write_text(FEEDBACK_JS, encoding="utf-8")
     (out / "favicon.svg").write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="{readable(cfg["colour"])}"/>'
         f'<text x="32" y="43" font-family="Arial,sans-serif" font-size="34" font-weight="700" fill="#fff" text-anchor="middle">{esc(cfg["business"][:1].upper())}</text></svg>',
