@@ -73,7 +73,7 @@ DEFAULT_TEMPLATES = {
     "first_subject": "{{business}} - quick look at your website",
     "first_body": """Hi {{greeting_name}},
 
-I put together a preview of what a new website for {{business}} could look like, next to how your current one measures up:
+{{first_line}} I put together a preview of what a new website for {{business}} could look like, next to how your current one measures up:
 
 {{preview_url}}
 
@@ -107,7 +107,7 @@ VARIANT_B = {"first_subject_b": "", "first_body_b": ""}
 
 # What a template may use: the batch file's columns, plus your name.
 FIELDS = {"business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status", "trade", "area",
-          "top_issue", "score_line", "issue_line", "why_line", "your_name", "booking_link"}
+          "top_issue", "score_line", "issue_line", "why_line", "first_line", "your_name", "booking_link"}
 PLACEHOLDER = re.compile(r"\{\{\s*([a-z_]+)\s*\}\}")
 
 
@@ -178,8 +178,8 @@ def render(text: str, row: dict, your_name: str) -> str:
     if not values.get("booking_link"):
         text = "\n".join(line for line in text.split("\n") if not re.search(r"\{\{\s*booking_link\s*\}\}", line))
     out = PLACEHOLDER.sub(lambda m: values.get(m.group(1), ""), text)
-    # An empty {{score_line}} {{issue_line}} leaves double spaces; tidy them, keep line breaks.
-    return "\n".join(re.sub(r"[ \t]{2,}", " ", line).rstrip() for line in out.split("\n")).strip() + "\n"
+    # An empty {{score_line}} {{issue_line}} or {{first_line}} leaves stray spaces; tidy them, keep line breaks.
+    return "\n".join(re.sub(r"[ \t]{2,}", " ", line).strip() for line in out.split("\n")).strip() + "\n"
 
 
 # ---------------------------------------------------------------- sending

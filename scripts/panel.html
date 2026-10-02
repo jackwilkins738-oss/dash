@@ -341,13 +341,13 @@
   <section data-section="emails" hidden>
     <div class="card">
       <h2>First email</h2>
-      <p class="hint">Fields: {{business}} {{greeting_name}} {{score_line}} {{issue_line}} {{why_line}} {{preview_url}} {{trade}} {{area}} {{your_name}}. The score and issue lines are left out when a site wasn't checked.</p>
+      <p class="hint">Fields: {{business}} {{greeting_name}} {{score_line}} {{issue_line}} {{why_line}} {{first_line}} {{preview_url}} {{trade}} {{area}} {{your_name}}. The score and issue lines are left out when a site wasn't checked. {{first_line}} is one sentence about something on their own homepage, written by AI when the batch is made (needs ANTHROPIC_API_KEY) - check them in outreach/first-lines.csv; it's left out when there's nothing specific to say.</p>
       <label>Subject</label>
 <textarea id="mm-subject" rows="1">{{business}} - quick look at your website</textarea>
       <label>Body</label>
 <textarea id="mm-body" rows="15">Hi {{greeting_name}},
 
-I put together a preview of what a new website for {{business}} could look like, next to how your current one measures up:
+{{first_line}} I put together a preview of what a new website for {{business}} could look like, next to how your current one measures up:
 
 {{preview_url}}
 
