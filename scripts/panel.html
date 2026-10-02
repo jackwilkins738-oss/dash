@@ -176,6 +176,7 @@
         <button data-action="send_test" data-test-kind="batch">Send test to me</button>
         <button class="primary" data-action="send_batch">Send today's batch</button>
         <input type="number" id="send-gap" min="0" max="60" step="1" placeholder="1" title="Minutes between emails - blank for about a minute" style="width:70px"><span class="dim">min apart</span>
+        <span class="dim">from</span><select id="send-from" style="width:auto" title="Which inbox sends"><option value="">All inboxes (spread)</option></select>
       </div>
       <p class="hint">Sends from your own email, spread out like Mailmeteor's autopilot: <b>min apart</b> is the gap between emails, varied a little each time (blank = 40-90 s). Wider gaps look more natural and are kinder to a new domain - 20 emails at 5 min apart takes about 1h35. Stop any time, press Send again to carry on. Using Mailmeteor? Import <b>mailmeteor-batch-&lt;date&gt;.csv</b> - sends are spotted in your Sent folder automatically (or <button class="link" data-action="batch_sent">mark batch as sent</button>).</p>
     </div>
@@ -190,7 +191,7 @@
       <div class="row">
         <button data-action="send_test" data-test-kind="followups">Send test to me</button>
         <button class="primary" data-action="send_followups">Send follow-ups</button>
-        <span class="dim">uses the same min apart as above</span>
+        <span class="dim">uses the same min apart and inbox as above - a follow-up always goes from the inbox that sent the first email</span>
       </div>
       <p class="hint">One short second email to anyone who hasn't replied or opened their preview - never a third. Mailmeteor: import <b>mailmeteor-followup-&lt;date&gt;.csv</b>, send, then <button class="link" data-action="followups_sent">mark follow-ups as sent</button>.</p>
     </div>
@@ -585,6 +586,7 @@ function render() {
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
     for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "CLOUD_REPLY_ALERTS"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
+    fillSendFrom(s.settings);
     if (!s.settings.PROSPECTS_API_SECRET) showTab("settings");  // nothing works until it's set
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
@@ -633,7 +635,7 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "send_followups" && !confirm("Send the follow-ups now, from your own email?")) return;
   if (action === "publish_site" && !confirm(`Publish outreach/sites/${$("publish-folder").value}/site live on their Cloudflare?`)) return;
   const r = await post("/api/run", { action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
-    batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "", send_gap: $("send-gap").value,
+    batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "", send_gap: $("send-gap").value, send_from: $("send-from").value,
     launch_old: $("launch-old").value, launch_new: $("launch-new").value,
     golive_domain: $("golive-domain").value,
     publish_folder: $("publish-folder").value, publish_account: $("publish-account").value, publish_project: $("publish-project").value,
@@ -1065,6 +1067,7 @@ $("save").addEventListener("click", async () => {
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"]) $(k).value = "";
+  fillSendFrom(body);
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
   $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
 });
@@ -1073,6 +1076,14 @@ $("save").addEventListener("click", async () => {
   try { saved = localStorage.getItem("tab") || ""; } catch (e) {}
   showTab(location.hash.startsWith("#tab-") ? location.hash.slice(5) : saved || "today");
 }
+// "Send from": the inboxes saved in Settings, remembered on this PC like "min apart".
+function fillSendFrom(settings) {
+  const sel = $("send-from"), keep = sel.value || (() => { try { return localStorage.getItem("send-from") || ""; } catch (e) { return ""; } })();
+  const addrs = ["MAIL_ADDRESS", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS"].map((k) => (settings[k] || "").trim().toLowerCase()).filter(Boolean);
+  sel.innerHTML = '<option value="">All inboxes (spread)</option>' + addrs.map((a) => `<option value="${a.replace(/"/g, "")}">${a.replace(/</g, "&lt;")}</option>`).join("");
+  sel.value = addrs.includes(keep) ? keep : "";
+}
+$("send-from").addEventListener("change", () => { try { localStorage.setItem("send-from", $("send-from").value); } catch (e) {} });
 // "Min apart" for sending is remembered on this PC between visits.
 try { $("send-gap").value = localStorage.getItem("send-gap") || ""; } catch (e) {}
 $("send-gap").addEventListener("change", () => { try { localStorage.setItem("send-gap", $("send-gap").value); } catch (e) {} });

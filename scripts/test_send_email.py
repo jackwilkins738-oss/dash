@@ -183,6 +183,17 @@ class MultipleInboxes(SendEmail):
         self.extra.stop()
         super().tearDown()
 
+    def test_send_from_one_inbox_only(self):
+        n = se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None, only_from="Jack@GetScalar.co.uk")
+        self.assertEqual(n, 3)
+        self.assertEqual(list(self.by_inbox), ["jack@getscalar.co.uk"])
+        self.assertTrue(all(r["sent_from"] == "jack@getscalar.co.uk" for r in read(self.out / eb.SENT)))
+
+    def test_send_from_an_unknown_inbox_stops_before_sending(self):
+        with self.assertRaises(se.SendStopped):
+            se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None, only_from="nobody@example.com")
+        self.assertEqual(self.by_inbox, {})
+
     def test_spread_evenly_recorded_and_followed_up_from_the_same_inbox(self):
         self.assertEqual(se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None), 3)
         froms = {a: [m["To"] for m in smtp.sent] for a, smtp in self.by_inbox.items()}
@@ -199,6 +210,19 @@ class MultipleInboxes(SendEmail):
         follow = self.by_inbox["jack@getscalar.co.uk"].sent[before]
         self.assertEqual(follow["To"], "info@acme.co.uk")
         self.assertEqual(follow["In-Reply-To"], rows["info@acme.co.uk"]["message_id"])
+
+    def test_follow_ups_for_one_inbox_leave_the_others_waiting(self):
+        se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None)  # Acme from the extra inbox
+        write(self.out / "mailmeteor-followup-2026-10-05.csv", list(FIRMS[0]), FIRMS)
+        write(self.out / eb.FOLLOWUP_PENDING, ["email", "batch"],
+              [{"email": f["email"], "batch": "mailmeteor-followup-2026-10-05.csv"} for f in FIRMS])
+        before = {a: len(c.sent) for a, c in self.by_inbox.items()}
+        n = se.send_batch(self.out, followups=True, sleep=self.sleeps.append, today=date(2026, 10, 5), out=lambda s: None,
+                          only_from="jack@getscalar.co.uk")
+        self.assertEqual(n, 1)
+        self.assertEqual(self.by_inbox["jack@getscalar.co.uk"].sent[-1]["To"], "info@acme.co.uk")
+        self.assertEqual(len(self.by_inbox["jack@scalar.co.uk"].sent), before["jack@scalar.co.uk"])  # Kerr and Oak wait
+        self.assertTrue((self.out / eb.FOLLOWUP_PENDING).exists())
 
     def test_daily_cap(self):
         # The cap is per inbox: the main inbox has one slot left, the extra one is empty.
@@ -290,6 +314,8 @@ class SendGap(unittest.TestCase):
         self.assertIn((cp.SEND, ["--followups"]), steps("")[0](None))
         self.assertIsNone(steps("61")[0])
         self.assertIsNone(steps("soon")[0])
+        self.assertIn("--from", cp.build_steps({"action": "send_batch", "send_from": "jack@getscalar.co.uk"}, ok)[0](None)[-2][1])
+        self.assertIsNone(cp.build_steps({"action": "send_batch", "send_from": "not an inbox"}, ok)[0])
 
     def test_says_how_long_the_run_takes(self):
         self.assertEqual(se.describe_gap(5, 20), "about 5 minutes apart - roughly 1h35 for 20")

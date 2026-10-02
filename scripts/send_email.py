@@ -308,7 +308,7 @@ def bounce_problem(outreach: Path, today: date) -> str:
 
 
 def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp=None, sleep=time.sleep,
-               today: date | None = None, out=print, gap_minutes: float | None = None) -> int:
+               today: date | None = None, out=print, gap_minutes: float | None = None, only_from: str = "") -> int:
     """Sends the waiting batch; returns how many were sent. Raises SendStopped on a run-ending problem."""
     today = today or date.today()
     your_name = os.environ.get("MAIL_FROM_NAME", "").strip()
@@ -350,16 +350,33 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
     main_inbox = inboxes[0]
     used = sent_today(outreach, today, by_inbox=True, main=main_inbox.address)
     used = {a.address: used.get(a.address, 0) for a in inboxes}
+    # "Send from" one inbox: first emails go only from it, and only the follow-ups whose first email it sent
+    # (a follow-up from another address would break the thread) - the rest stay waiting for their own inbox.
+    only_from = (only_from or "").strip().lower()
+    chosen = None
+    if only_from:
+        chosen = next((a for a in inboxes if a.address == only_from), None)
+        if chosen is None:
+            raise SendStopped(f"{only_from} isn't one of your inboxes - add it (with its app password) in Settings, or pick another.")
+        if followups:
+            todo = [r for r in todo
+                    if (sent_rows.get(r["email"].lower(), {}).get("sent_from") or main_inbox.address).lower() == only_from]
+            if not todo:
+                out(f"No follow-ups waiting for {only_from} - the others go from the inbox that sent their first email.")
+                return 0
     if test:
         todo = todo[:1]
     else:
-        room = sum(max(0, DAILY_CAP - n) for n in used.values())
+        room = (max(0, DAILY_CAP - used[chosen.address]) if chosen
+                else sum(max(0, DAILY_CAP - n) for n in used.values()))
         if room <= 0:
             raise SendStopped(f"{DAILY_CAP} emails a day per inbox have already gone - the rest wait for tomorrow (keeps the accounts safe).")
         if len(todo) > room:
             out(f"Only {room} more today (the cap is {DAILY_CAP} a day per inbox) - the rest go next time you press Send.")
             todo = todo[:room]
-    if len(inboxes) > 1 and not test:
+    if chosen and not test:
+        out(f"Sending from {chosen.address} only.")
+    elif len(inboxes) > 1 and not test:
         out(f"Sending from {len(inboxes)} inboxes, spread evenly.")
 
     # One login per inbox, opened when first needed. A test smtp passed in stands in for all of them.
@@ -379,7 +396,9 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
             inbox = next((a for a in inboxes if a.address == first_from), main_inbox)
             return inbox if test or used[inbox.address] < DAILY_CAP else None
         if test:
-            return main_inbox
+            return chosen or main_inbox
+        if chosen:
+            return chosen if used[chosen.address] < DAILY_CAP else None
         free = [a for a in inboxes if used[a.address] < DAILY_CAP]
         return min(free, key=lambda a: used[a.address]) if free else None
 
@@ -455,6 +474,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--followups", action="store_true")
     ap.add_argument("--test", action="store_true", help="send the first email to yourself only")
+    ap.add_argument("--from", dest="only_from", default="", help="send from this one inbox only (default: spread across all)")
     ap.add_argument("--gap-minutes", type=float, default=0,
                     help=f"spread the emails this many minutes apart (varied a little each time; up to {MAX_GAP_MINUTES}). "
                          "Leave out for 40-90 seconds")
@@ -467,7 +487,7 @@ def main() -> None:
               "Stop any time - pressing Send again carries on.", flush=True)
     try:
         n = send_batch(outreach, followups=args.followups, test=args.test, out=lambda s: print(s, flush=True),
-                       gap_minutes=args.gap_minutes)
+                       gap_minutes=args.gap_minutes, only_from=args.only_from)
     except SendStopped as e:
         sys.exit(str(e))
     if not args.test:
