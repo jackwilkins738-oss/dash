@@ -72,6 +72,11 @@ class SendEmail(unittest.TestCase):
     def send(self, smtp, **kw):
         return se.send_batch(self.out, smtp=smtp, sleep=self.sleeps.append, today=TODAY, out=lambda s: None, **kw)
 
+    def test_minutes_apart_spreads_the_run(self):
+        self.assertEqual(self.send(FakeSMTP(), gap_minutes=5), 3)
+        self.assertEqual(len(self.sleeps), 2)
+        self.assertTrue(all(240 <= s <= 360 for s in self.sleeps), self.sleeps)
+
     def test_sends_each_once_records_each_and_clears_the_batch(self):
         smtp = FakeSMTP()
         self.assertEqual(self.send(smtp), 3)
@@ -266,6 +271,29 @@ class WhyLine(unittest.TestCase):
         self.assertIn("press back before it loads", why_line(89))
         self.assertEqual(why_line(90), "")
         self.assertEqual(why_line(None), "")
+
+
+class SendGap(unittest.TestCase):
+    def test_minutes_apart_varies_around_the_choice(self):
+        self.assertEqual(se.gap_range(0), se.GAP_SECONDS)
+        self.assertEqual(se.gap_range(None), se.GAP_SECONDS)
+        self.assertEqual(se.gap_range(5), (240.0, 360.0))
+        self.assertEqual(se.gap_range(0.25), (30.0, 30.0))  # never under 30 seconds
+        self.assertEqual(se.gap_range(500), (2880.0, 4320.0))  # capped at an hour
+
+    def test_panel_passes_minutes_apart_and_refuses_nonsense(self):
+        import control_panel as cp
+
+        ok = {"MAIL_ADDRESS": "a@b.c", "MAIL_APP_PASSWORD": "x", "MAIL_FROM_NAME": "Ash"}
+        steps = lambda gap: cp.build_steps({"action": "send_followups", "send_gap": gap}, ok)  # noqa: E731
+        self.assertIn((cp.SEND, ["--followups", "--gap-minutes", "5"]), steps("5")[0](None))
+        self.assertIn((cp.SEND, ["--followups"]), steps("")[0](None))
+        self.assertIsNone(steps("61")[0])
+        self.assertIsNone(steps("soon")[0])
+
+    def test_says_how_long_the_run_takes(self):
+        self.assertEqual(se.describe_gap(5, 20), "about 5 minutes apart - roughly 1h35 for 20")
+        self.assertEqual(se.describe_gap(0, 20), "40-90 seconds apart - roughly 20 min for 20")
 
 
 if __name__ == "__main__":
