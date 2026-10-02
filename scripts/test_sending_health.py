@@ -126,3 +126,14 @@ class RunAndStop(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SlowDns(unittest.TestCase):
+    def test_a_hanging_resolver_counts_as_no_answer_not_a_stuck_run(self):
+        import time
+        from unittest import mock
+
+        with mock.patch.object(sh, "DNS_TIMEOUT_S", 0.2), mock.patch("socket.gethostbyname_ex", lambda n: time.sleep(2)):
+            started = time.monotonic()
+            self.assertIsNone(sh.listed("scalar.co.uk", "dbl.spamhaus.org", "dbltest.com"))
+            self.assertLess(time.monotonic() - started, 1.5)
