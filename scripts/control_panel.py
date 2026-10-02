@@ -77,7 +77,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "59"
+PANEL_VERSION = "60"
 MAX_LOG_LINES = 5000
 
 
@@ -1395,6 +1395,13 @@ class Handler(BaseHTTPRequestHandler):
             steps, error = build_steps(body, settings)
             if steps is None:
                 return self._json({"error": error}, 400)
+            import autopilot
+
+            if autopilot.is_running():
+                # Said loudly, with what it's doing, so the page can offer to stop it - a list run
+                # refused quietly here is why a Mailmeteor file never appeared.
+                return self._json({"error": "The autopilot is running, so nothing else can run until it finishes or is stopped.",
+                                   "autopilot": autopilot.now_doing()}, 409)
             finder = body["action"] in ("find", "count")
             label = ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") and not finder else "")
             error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] != "install_segno",
