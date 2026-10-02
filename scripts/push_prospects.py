@@ -167,6 +167,13 @@ def score_line(score) -> str:
     return f"It scored {s} out of 100 on Google's mobile speed test, which Google itself counts as {band}."
 
 
+def why_line(score) -> str:
+    """Why a slow site matters to them - only said when it really is slow (under Google's 90), never guessed."""
+    if score is None or int(score) >= 90:
+        return ""
+    return "When a site is slow on a phone, a lot of people press back before it loads and ring the next firm instead."
+
+
 def link_loads(url: str, timeout: int = 20) -> str | None:
     """None if the preview page loads with the firm on it, else what went wrong."""
     return check_preview(url, timeout)[0]
@@ -505,7 +512,7 @@ def main() -> None:
                 f,
                 fieldnames=[
                     "business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status",
-                    "trade", "area", "top_issue", "score_line", "issue_line",
+                    "trade", "area", "top_issue", "score_line", "issue_line", "why_line",
                 ],
             )
             writer.writeheader()
@@ -529,6 +536,7 @@ def main() -> None:
                         # using {{score_line}} {{issue_line}} never reads "...and noticed ."
                         "score_line": score_line(score),
                         "issue_line": f"I also noticed {p['_top_issue']}." if p.get("_top_issue") else "",
+                        "why_line": why_line(score),
                     }
                 )
         print(f"Wrote {out.name} and {mm.name}")

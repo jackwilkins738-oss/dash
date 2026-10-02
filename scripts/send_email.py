@@ -48,18 +48,17 @@ DAILY_CAP = 100  # first emails + follow-ups per inbox in one day, whatever the 
 GAP_SECONDS = (40, 90)
 
 DEFAULT_TEMPLATES = {
-    "first_subject": "A quick look at {{business}}'s website",
+    "first_subject": "{{business}} - quick look at your website",
     "first_body": """Hi {{greeting_name}},
 
-I had a look at {{business}}'s website on my phone and ran it through Google's own speed test. {{score_line}} {{issue_line}}
-
-I build fast, hand-coded websites for trade firms, and I've put together a short preview of what a new site for {{business}} could look like - next to how your current one measures up:
+I put together a preview of what a new website for {{business}} could look like, next to how your current one measures up:
 
 {{preview_url}}
 
-There's nothing to sign up for. If it's of interest, just reply and I'll happily talk it through.
+I checked your current site on my phone too. {{score_line}} {{issue_line}} {{why_line}}
 
-Kind regards,
+Worth a 10-minute chat?
+
 {{your_name}}
 Scalar Digital · 07401 696272 · scalardigital.co.uk
 
@@ -86,7 +85,7 @@ VARIANT_B = {"first_subject_b": "", "first_body_b": ""}
 
 # What a template may use: the batch file's columns, plus your name.
 FIELDS = {"business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status", "trade", "area",
-          "top_issue", "score_line", "issue_line", "your_name", "booking_link"}
+          "top_issue", "score_line", "issue_line", "why_line", "your_name", "booking_link"}
 PLACEHOLDER = re.compile(r"\{\{\s*([a-z_]+)\s*\}\}")
 
 

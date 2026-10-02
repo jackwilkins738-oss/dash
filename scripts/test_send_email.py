@@ -77,14 +77,14 @@ class SendEmail(unittest.TestCase):
         self.assertEqual(self.send(smtp), 3)
         self.assertEqual([m["To"] for m in smtp.sent], [f["email"] for f in FIRMS])
         first = smtp.sent[0]
-        self.assertEqual(first["Subject"], "A quick look at Kerr Roofing's website")
+        self.assertEqual(first["Subject"], "Kerr Roofing - quick look at your website")
         self.assertEqual(first["From"], "Jack Wilkins <jack@scalar.co.uk>")
         self.assertIn("mailto:jack@scalar.co.uk?subject=unsubscribe", first["List-Unsubscribe"])
         body = first.get_content()
         self.assertIn("Hi Bill,", body)
-        self.assertIn("speed test. It scored 41 out of 100.\n", body)  # empty issue_line leaves no stray space
+        self.assertIn("on my phone too. It scored 41 out of 100.\n", body)  # empty issue/why lines leave no stray space
         self.assertIn("https://s.co/for/kerr-1", body)
-        self.assertIn("Kind regards,\nJack Wilkins", body)
+        self.assertIn("Worth a 10-minute chat?\n\nJack Wilkins", body)
         self.assertNotIn("{{", body)
         self.assertEqual(len(self.sleeps), 2)
         self.assertTrue(all(40 <= s <= 90 for s in self.sleeps))
@@ -127,7 +127,7 @@ class SendEmail(unittest.TestCase):
         smtp = FakeSMTP()
         self.assertEqual(se.send_batch(self.out, followups=True, smtp=smtp, sleep=self.sleeps.append, today=date(2026, 10, 5), out=lambda s: None), 1)
         msg = smtp.sent[0]
-        self.assertEqual(msg["Subject"], "Re: A quick look at Kerr Roofing's website")
+        self.assertEqual(msg["Subject"], "Re: Kerr Roofing - quick look at your website")
         self.assertEqual(msg["In-Reply-To"], first_id)
         self.assertIn("Just following up", msg.get_content())
         self.assertEqual(read(self.out / eb.SENT)[0]["followup_sent"], "2026-10-05")
@@ -155,10 +155,6 @@ class SendEmail(unittest.TestCase):
         self.assertIn("preview_url", se.save_templates(self.out, {**t, "followup_body": "Hello {{business}}"}))
         self.assertEqual(se.save_templates(self.out, {**t, "first_subject": "Your site, {{business}}"}), "")
         self.assertEqual(se.load_templates(self.out)["first_subject"], "Your site, {{business}}")
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class MultipleInboxes(SendEmail):
@@ -260,3 +256,17 @@ class TodaySummary(unittest.TestCase):
     def test_never_over_the_cap(self):
         self.log([{"email": f"x{i}@y.co.uk", "sent": "2026-09-30", "sent_from": "me@scalar.co.uk"} for i in range(se.DAILY_CAP + 5)])
         self.assertEqual(se.today_summary(self.out, self.today, ["me@scalar.co.uk"])["left"], 0)
+
+
+class WhyLine(unittest.TestCase):
+    def test_only_said_when_the_site_really_is_slow(self):
+        from push_prospects import why_line
+
+        self.assertIn("press back before it loads", why_line(34))
+        self.assertIn("press back before it loads", why_line(89))
+        self.assertEqual(why_line(90), "")
+        self.assertEqual(why_line(None), "")
+
+
+if __name__ == "__main__":
+    unittest.main()
