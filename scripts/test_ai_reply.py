@@ -101,3 +101,76 @@ class Errors(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Alerts(unittest.TestCase):
+    ENV = {"ANTHROPIC_API_KEY": "k", "MAIL_FROM_NAME": "Ash", "QUOTE_PRICE_BUILD": "3000", "BOOKING_LINK": "https://cal.com/ash"}
+
+    def test_env_values(self):
+        v = ai_reply.env_values(self.ENV, "Sam Kerr")
+        self.assertEqual((v["greeting_name"], v["your_name"], v["price_build"], v["price_landing"]), ("Sam", "Ash", "3,000", "750"))
+        self.assertEqual(ai_reply.env_values({}, "")["greeting_name"], "there")
+
+    def test_try_draft_never_raises(self):
+        self.assertEqual(ai_reply.try_draft(FIRM, {}), "")  # no key
+        with mock.patch.object(ai_reply, "draft", side_effect=ai_reply.AIError("out of credit")):
+            self.assertEqual(ai_reply.try_draft(FIRM, self.ENV), "")
+        with mock.patch.object(ai_reply, "draft", return_value="Hi Sam,") as d:
+            self.assertEqual(ai_reply.try_draft(FIRM, self.ENV, "Sam Kerr"), "Hi Sam,")
+            self.assertIn("=== How much? ===", d.call_args.args[2])  # the default saved replies as the style guide
+
+    def test_with_draft_fits_a_telegram_message(self):
+        self.assertEqual(ai_reply.with_draft("alert", ""), "alert")
+        out = ai_reply.with_draft("alert", "x" * 9000)
+        self.assertLessEqual(len(out), ai_reply.TELEGRAM_MAX)
+        self.assertIn("Suggested reply", out)
+
+
+class PanelAlerts(unittest.TestCase):
+    def reply(self, n, kind="interested"):
+        return {"kind": kind, "business": f"Firm {n}", "from": f"a{n}@b.co.uk", "snippet": "How much?", "message": "How much?", "contact": "Sam"}
+
+    def test_without_a_key_one_summary_as_before(self):
+        import reply_scanner as rs
+
+        out = rs.alert_messages([self.reply(1), self.reply(2)], {})
+        self.assertEqual(len(out), 1)
+        self.assertNotIn("Suggested reply", out[0])
+
+    def test_with_a_key_first_three_get_drafts_rest_summarised(self):
+        import reply_scanner as rs
+
+        replies = [self.reply(n) for n in range(5)] + [self.reply(9, "bounce")]
+        with mock.patch.object(ai_reply, "try_draft", return_value="Hi Sam,\n\nKind regards,\nAsh") as t:
+            out = rs.alert_messages(replies, {"ANTHROPIC_API_KEY": "k"}, "saved")
+        self.assertEqual(t.call_count, 3)
+        self.assertEqual(len(out), 4)
+        self.assertTrue(all("Suggested reply" in m for m in out[:3]))
+        self.assertIn("Firm 3", out[3])
+        self.assertIn("Firm 4", out[3])
+
+    def test_no_interested_replies_no_texts(self):
+        import reply_scanner as rs
+
+        self.assertEqual(rs.alert_messages([self.reply(1, "bounce")], {"ANTHROPIC_API_KEY": "k"}), [])
+
+
+class CloudAlerts(unittest.TestCase):
+    def test_drafts_first_three_and_counts_them(self):
+        import cloud_reply_watch as cw
+
+        alerts = [(f"line {n}", {"business": f"F{n}", "message": "How much?", "contact": ""}) for n in range(4)]
+        with mock.patch.object(ai_reply, "try_draft", side_effect=["Hi,", "", "Hi,"]):
+            out, drafted = cw.texts(alerts, {"ANTHROPIC_API_KEY": "k"})
+        self.assertEqual(drafted, 2)
+        self.assertEqual(len(out), 4)
+        self.assertEqual(out[1], "line 1")  # a failed draft still texts the reply
+        self.assertIn("line 3", out[3])
+        self.assertIn("Check replies", out[3])
+
+    def test_without_a_key_one_message(self):
+        import cloud_reply_watch as cw
+
+        out, drafted = cw.texts([("line", {})], {})
+        self.assertEqual((len(out), drafted), (1, 0))
+        self.assertEqual(cw.texts([], {}), ([], 0))

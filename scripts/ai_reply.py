@@ -140,3 +140,50 @@ def draft(firm: dict, values: dict, saved: str, key: str, chosen_model: str = ""
     if not text.strip():
         raise AIError("The draft came back empty - try again.")
     return tidy(text)
+
+
+# ---------------------------------------------------------------- for the phone alerts
+
+ALERT_DRAFTS = 3  # drafts per check, at most - each is a separate (small) charge
+TELEGRAM_MAX = 4000
+
+
+def env_values(env: dict, display_name: str = "") -> dict[str, str]:
+    """The panel's reply facts from settings / environment - for alerts, where there's no Calls tab item."""
+    from saved_replies import first_name
+
+    def price(key: str, default: str) -> str:
+        try:
+            return f"{float(env.get(key) or default):,.0f}"
+        except ValueError:
+            return default
+
+    return {
+        "greeting_name": first_name(display_name),
+        "preview_url": "",
+        "booking_link": env.get("BOOKING_LINK", ""),
+        "price_build": price("QUOTE_PRICE_BUILD", "2500"),
+        "price_landing": price("QUOTE_PRICE_LANDING", "750"),
+        "your_name": env.get("MAIL_FROM_NAME") or env.get("LETTER_SIGNOFF") or "Scalar Digital",
+    }
+
+
+def try_draft(firm: dict, env: dict, display_name: str = "", saved: str = "") -> str:
+    """A draft for a phone alert, or "" - no key, no credit or no connection never stops the alert."""
+    from saved_replies import DEFAULT
+
+    key = (env.get("ANTHROPIC_API_KEY") or "").strip()
+    if not key:
+        return ""
+    try:
+        return draft(firm, env_values(env, display_name), saved or DEFAULT, key, env.get("AI_MODEL", ""))
+    except AIError:
+        return ""
+
+
+def with_draft(alert: str, text: str) -> str:
+    """The alert, then the suggested answer - ready to copy into the Gmail app."""
+    if not text:
+        return alert
+    out = f"{alert}\n\n✍️ Suggested reply - read it and change anything before you send it:\n\n{text}"
+    return out if len(out) <= TELEGRAM_MAX else out[: TELEGRAM_MAX - 1] + "…"

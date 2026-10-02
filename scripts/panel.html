@@ -608,7 +608,7 @@ function render() {
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
   $("set-psi").textContent = s.settings.PAGESPEED_API_KEY ? "(saved)" : "(not set - needed for speed checks)";
-  $("set-ai").textContent = s.settings.ANTHROPIC_API_KEY ? "(saved)" : "(optional - console.anthropic.com, a few pence a draft)";
+  $("set-ai").textContent = s.settings.ANTHROPIC_API_KEY ? "(saved)" : "(optional - drafts replies in Calls and in your reply texts; about 1p a draft)";
   aiReady = !!s.settings.ANTHROPIC_API_KEY;
   $("set-mail").textContent = s.settings.MAIL_APP_PASSWORD ? "(saved)" : "(lets the panel send your emails and read replies)";
   $("set-tg").textContent = s.settings.TELEGRAM_BOT_TOKEN ? "(saved)" : "(optional)";

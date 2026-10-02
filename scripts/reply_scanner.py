@@ -243,7 +243,8 @@ def scan(outreach: Path, imap, since: date, my_address: str = "") -> list[dict]:
         mid = (msg.get("Message-ID") or "").strip() or f"{msg.get('Date')}|{msg.get('From')}"
         if mid in done:
             continue
-        sender = (getaddresses([msg.get("From") or ""]) or [("", "")])[0][1].lower()
+        display, sender = (getaddresses([msg.get("From") or ""]) or [("", "")])[0]
+        sender = sender.lower()
         if my_address and sender == my_address.lower():
             continue
         subject = _header(msg, "Subject")
@@ -266,7 +267,7 @@ def scan(outreach: Path, imap, since: date, my_address: str = "") -> list[dict]:
         text = body_text(msg)
         new.append({"message_id": mid, "date": when, "from": sender, **firm, "kind": classify(msg, text), "intent": intent(text),
                     "subject": subject[:150], "snippet": text[:300], "handled": "",
-                    "message": text[:4000]})  # the whole reply, for "Draft with AI" - stays on this PC
+                    "message": text[:4000], "contact": display[:80]})  # the whole reply, for "Draft with AI" - stays on this PC
     return new
 
 
@@ -322,21 +323,41 @@ def alert_text(replies: list[dict]) -> str:
     return "\n\n".join(lines) + "\n\nAnswer from the panel's Calls tab - the sooner the better."
 
 
-def alert(replies: list[dict]) -> None:
+def alert_messages(replies: list[dict], env: dict, saved: str = "") -> list[str]:
+    """One text per interested reply, each with an AI draft when ANTHROPIC_API_KEY is set (the first
+    few only); without a key, the single summary text as before."""
+    import ai_reply
+
+    hot = [r for r in replies if r["kind"] == "interested"]
+    if not hot:
+        return []
+    if not (env.get("ANTHROPIC_API_KEY") or "").strip():
+        return [alert_text(replies)]
+    out = []
+    for r in hot[: ai_reply.ALERT_DRAFTS]:
+        firm = {**r, "message": r.get("message") or r.get("snippet") or ""}
+        out.append(ai_reply.with_draft(alert_text([r]), ai_reply.try_draft(firm, env, r.get("contact", ""), saved)))
+    rest = hot[ai_reply.ALERT_DRAFTS:]
+    if rest:
+        out.append(alert_text(rest))
+    return out
+
+
+def alert(replies: list[dict], saved: str = "") -> None:
     # With the cloud watch on (cloud_reply_watch.py), it does the texting - this would be a second text.
     if os.environ.get("CLOUD_REPLY_ALERTS", "").strip().lower() in ("1", "yes", "on", "true"):
         return
     token, chat = os.environ.get("TELEGRAM_BOT_TOKEN", ""), os.environ.get("TELEGRAM_CHAT_ID", "")
-    text = alert_text(replies)
-    if not (token and chat and text):
+    if not (token and chat):
         return
-    try:
-        req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",
-                                     data=json.dumps({"chat_id": chat, "text": text}).encode(),
-                                     headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=15).close()
-    except OSError:
-        pass
+    for text in alert_messages(replies, dict(os.environ), saved):
+        try:
+            req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",
+                                         data=json.dumps({"chat_id": chat, "text": text, "disable_web_page_preview": True}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=15).close()
+        except OSError:
+            pass
 
 
 LOCK = ".reply-check.lock"
@@ -419,7 +440,9 @@ def _check(outreach: Path) -> None:
             except Exception:
                 pass
     counts = act(outreach, replies)
-    alert(replies)
+    import saved_replies
+
+    alert(replies, saved_replies.load(outreach))
     # A Mailmeteor batch waiting to be marked as sent: tick off whatever is already in Sent.
     try:
         import mailmeteor_sync
