@@ -54,6 +54,8 @@ GO_LIVE = HERE / "go_live.py"
 CLIENT_SPEED = HERE / "client_speed.py"
 BACKUP = HERE / "backup.py"
 SENDING_HEALTH = HERE / "sending_health.py"
+SITE_COPY = HERE / "site_copy.py"
+SITE_QA = HERE / "site_qa.py"
 
 
 def replies_first(settings: dict[str, str]) -> list:
@@ -75,7 +77,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "54"
+PANEL_VERSION = "55"
 MAX_LOG_LINES = 5000
 
 
@@ -350,7 +352,9 @@ ACTIONS = {
     "client_speed": "Speed check client sites",
     "backup_now": "Back up now",
     "sending_health": "Check sending health",
+    "write_copy": "Write site copy (AI)",
     "build_site": "Build site",
+    "site_qa": "Check site (pre-launch QA)",
     "publish_site": "Publish site",
     "scorecard": "Scorecard",
     "speed": "Speed check the next batch",
@@ -540,6 +544,22 @@ def build_steps(body: dict, settings: dict[str, str]):
         folder = str(body.get("publish_folder") or "").strip().lower()
         extra = ["--folder", folder] if re.match(r"^[a-z0-9][a-z0-9-]{0,80}$", folder) else []
         return (lambda job: [(GO_LIVE, ["dns" if action == "dns_snapshot" else "check", domain, *extra])]), ""
+    if action == "write_copy":
+        folder = str(body.get("publish_folder") or "").strip().lower()
+        if not re.match(r"^[a-z0-9][a-z0-9-]{0,80}$", folder):
+            return None, "Type the firm's folder name under outreach/sites, e.g. kerr-roofing."
+        if not (OUTREACH / "sites" / folder / "site.json").exists():
+            return None, f"There's no outreach/sites/{folder}/site.json yet - use Draft their site on the Calls tab first."
+        if not settings.get("ANTHROPIC_API_KEY"):
+            return None, "Add ANTHROPIC_API_KEY in Settings first."
+        return (lambda job: [(SITE_COPY, [folder])]), ""
+    if action == "site_qa":
+        folder = str(body.get("publish_folder") or "").strip().lower()
+        if not re.match(r"^[a-z0-9][a-z0-9-]{0,80}$", folder):
+            return None, "Type the firm's folder name under outreach/sites, e.g. kerr-roofing."
+        if not (OUTREACH / "sites" / folder / "site").is_dir():
+            return None, f"There's no built site for {folder} yet - press Build site first."
+        return (lambda job: [(SITE_QA, [folder])]), ""
     if action == "build_site":
         folder = str(body.get("publish_folder") or "").strip().lower()
         if not re.match(r"^[a-z0-9][a-z0-9-]{0,80}$", folder):
