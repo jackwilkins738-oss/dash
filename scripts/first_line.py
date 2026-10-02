@@ -142,3 +142,16 @@ def fill(outreach: Path, firms: list[dict], env: dict, writer=write, say=print) 
         if len(todo) > MAX_PER_RUN:
             say(f"First lines: {len(todo) - MAX_PER_RUN} more next run.")
     return {w: (r.get("first_line") or "").strip() for w, r in rows.items()}
+
+
+def latest(outreach: Path) -> dict[str, str]:
+    """business name (lower case) -> line, as first-lines.csv says right now - so an edit or a blanked line
+    there counts at send time, even for a batch made before the edit."""
+    return {(r.get("business") or "").strip().lower(): (r.get("first_line") or "").strip()
+            for r in load(outreach).values() if (r.get("business") or "").strip()}
+
+
+def apply(row: dict, lines: dict[str, str]) -> dict:
+    key = (row.get("business") or "").strip().lower()
+    return {**row, "first_line": lines[key]} if key in lines else row
+

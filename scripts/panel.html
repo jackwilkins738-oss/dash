@@ -178,6 +178,7 @@
         <select id="batch-scope" style="width:auto"><option value="all">from every list</option><option value="sheet">from this list</option></select>
       </div>
       <div class="row">
+        <button data-preview-emails="batch" title="Every email in the batch as it will go - nothing is sent">Preview emails</button>
         <button data-action="send_test" data-test-kind="batch">Send test to me</button>
         <button class="primary" data-action="send_batch">Send today's batch</button>
         <input type="number" id="send-gap" min="0" max="60" step="1" placeholder="1" title="Minutes between emails - blank for about a minute" style="width:70px"><span class="dim">min apart</span>
@@ -194,6 +195,7 @@
         <span class="dim">after</span><input type="number" id="followup-days" value="5" min="1" max="60"><span class="dim">days</span>
       </div>
       <div class="row">
+        <button data-preview-emails="followups" title="Every follow-up as it will go - nothing is sent">Preview emails</button>
         <button data-action="send_test" data-test-kind="followups">Send test to me</button>
         <button class="primary" data-action="send_followups">Send follow-ups</button>
         <span class="dim">uses the same min apart and inbox as above - a follow-up always goes from the inbox that sent the first email</span>
@@ -824,6 +826,28 @@ async function sendReply(b) {
   if (!r.error) setTimeout(loadCalls, 2500);
 }
 loadSavedReplies();
+// "Preview emails": the waiting batch exactly as Send would write it - read here, nothing sent.
+document.querySelectorAll("[data-preview-emails]").forEach((b) => b.addEventListener("click", async () => {
+  const card = b.closest(".card");
+  let box = card.querySelector("[data-email-preview]");
+  if (!box) { box = document.createElement("div"); box.dataset.emailPreview = ""; card.appendChild(box); }
+  if (box.dataset.open === b.dataset.previewEmails) { box.innerHTML = ""; box.dataset.open = ""; b.textContent = "Preview emails"; return; }
+  b.disabled = true; b.textContent = "Loading...";
+  const r = await post("/api/email-preview", { kind: b.dataset.previewEmails, from: $("send-from") ? $("send-from").value : "" });
+  b.disabled = false; b.textContent = "Hide preview";
+  box.dataset.open = b.dataset.previewEmails;
+  if (r.error) { box.innerHTML = `<p class="hint" style="color:var(--bad)">${esc(r.error)}</p>`; return; }
+  const list = r.emails || [];
+  const going = list.filter((e) => !e.skip).length;
+  const noLine = list.filter((e) => !e.skip && !e.first_line).length;
+  box.innerHTML = `<p class="hint"><b>${going}</b> will go${list.length - going ? `, ${list.length - going} skipped` : ""}${b.dataset.previewEmails === "batch" ? ` · ${noLine} without a first line` : ""}. Nothing has been sent - check each one, fix a first line in outreach/first-lines.csv (save it, then preview again - Send uses the file as it is) or the template, and send when it reads right.</p>`
+    + list.map((e) => `<div class="ritem" style="${e.skip ? "opacity:.55" : ""}">
+      <div class="top"><b>${esc(e.business || e.email)}</b><span class="hint">to ${esc(e.email)}${e.from ? ` · from ${esc(e.from)}` : ""}${r.ab && e.variant ? ` · version ${esc(e.variant)}` : ""}</span>
+        ${e.preview_url ? `<a href="${esc(e.preview_url)}" target="_blank" rel="noopener">their preview ↗</a>` : '<span class="hint" style="color:var(--warn)">no preview link</span>'}</div>
+      ${e.skip ? `<div class="why" style="color:var(--warn)">Won't be sent: ${esc(e.skip)}</div>` : ""}
+      <div class="why"><b>${esc(e.subject)}</b></div>
+      <pre style="white-space:pre-wrap;font:inherit;margin:6px 0 0;height:auto;min-height:0;max-height:none;overflow:visible">${esc(e.body)}</pre></div>`).join("");
+}));
 async function draftSite(b) {
   const card = b.closest(".ritem");
   const item = (callData[card.dataset.sec] || []).find((x) => x.key === card.dataset.key);
