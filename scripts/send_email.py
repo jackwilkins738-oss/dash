@@ -45,7 +45,29 @@ import mail_accounts  # noqa: E402
 
 TEMPLATES = "email-templates.json"
 DAILY_CAP = 100  # first emails + follow-ups per inbox in one day, whatever the batch sizes say
-GAP_SECONDS = (40, 90)
+GAP_SECONDS = (40, 90)  # the default spacing when no "minutes apart" is chosen
+MAX_GAP_MINUTES = 60
+
+
+def gap_range(minutes: float | None) -> tuple[float, float]:
+    """Seconds to wait between two emails. "5 minutes apart" waits 4-6 minutes - never exactly the same gap,
+    which looks like a script to the receiving server (the same idea as Mailmeteor's autopilot)."""
+    if not minutes or minutes <= 0:
+        return GAP_SECONDS
+    m = min(float(minutes), MAX_GAP_MINUTES) * 60
+    lo = max(30.0, m * 0.8)
+    return lo, max(lo, m * 1.2)
+
+
+def describe_gap(minutes: float | None, count: int | None = None) -> str:
+    """'about 5 minutes apart - roughly 1h35 for 20' for the start-of-run line."""
+    lo, hi = gap_range(minutes)
+    each = f"{int(lo)}-{int(hi)} seconds apart" if hi < 120 else f"about {round((lo + hi) / 120)} minutes apart"
+    if not count or count < 2:
+        return each
+    total = (count - 1) * (lo + hi) / 2 / 60
+    took = f"{int(total)} min" if total < 60 else f"{int(total // 60)}h{int(total % 60):02d}"
+    return f"{each} - roughly {took} for {count}"
 
 DEFAULT_TEMPLATES = {
     "first_subject": "{{business}} - quick look at your website",
@@ -286,7 +308,7 @@ def bounce_problem(outreach: Path, today: date) -> str:
 
 
 def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp=None, sleep=time.sleep,
-               today: date | None = None, out=print) -> int:
+               today: date | None = None, out=print, gap_minutes: float | None = None) -> int:
     """Sends the waiting batch; returns how many were sent. Raises SendStopped on a run-ending problem."""
     today = today or date.today()
     your_name = os.environ.get("MAIL_FROM_NAME", "").strip()
@@ -408,7 +430,7 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
             sent += 1
             out(f"[{i + 1}/{len(todo)}] sent to {business} ({email})" + (f" from {inbox.address}" if len(inboxes) > 1 else ""))
             if i < len(todo) - 1:
-                sleep(random.uniform(*GAP_SECONDS))
+                sleep(random.uniform(*gap_range(gap_minutes)))
     finally:
         for c in [smtp] if smtp is not None else conns.values():
             try:
@@ -433,13 +455,19 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--followups", action="store_true")
     ap.add_argument("--test", action="store_true", help="send the first email to yourself only")
+    ap.add_argument("--gap-minutes", type=float, default=0,
+                    help=f"spread the emails this many minutes apart (varied a little each time; up to {MAX_GAP_MINUTES}). "
+                         "Leave out for 40-90 seconds")
     args = ap.parse_args()
     outreach = eb.outreach_dir()
     what = "follow-ups" if args.followups else "emails"
     if not args.test:
-        print(f"Sending the waiting {what}, 40-90 seconds apart. Stop any time - pressing Send again carries on.", flush=True)
+        waiting = len(eb._rows(outreach / (eb.FOLLOWUP_PENDING if args.followups else eb.PENDING))[1])
+        print(f"Sending the waiting {what}, {describe_gap(args.gap_minutes, waiting)}. "
+              "Stop any time - pressing Send again carries on.", flush=True)
     try:
-        n = send_batch(outreach, followups=args.followups, test=args.test, out=lambda s: print(s, flush=True))
+        n = send_batch(outreach, followups=args.followups, test=args.test, out=lambda s: print(s, flush=True),
+                       gap_minutes=args.gap_minutes)
     except SendStopped as e:
         sys.exit(str(e))
     if not args.test:

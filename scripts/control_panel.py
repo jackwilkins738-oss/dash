@@ -71,7 +71,7 @@ SECRET_KEYS = {"CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "44"
+PANEL_VERSION = "45"
 MAX_LOG_LINES = 5000
 
 
@@ -429,6 +429,14 @@ def build_steps(body: dict, settings: dict[str, str]):
             follow = body.get("test_kind") == "followups"
             return (lambda job: [(SEND, ["--test", *(["--followups"] if follow else [])])]), ""
         extra = ["--followups"] if action == "send_followups" else []
+        try:
+            gap = float(body.get("send_gap") or 0)
+        except (TypeError, ValueError):
+            return None, "Minutes apart must be a number (or blank for about a minute)."
+        if not 0 <= gap <= 60:
+            return None, "Minutes apart must be between 0 and 60."
+        if gap:
+            extra += ["--gap-minutes", f"{gap:g}"]
         # Replies first, so anyone who said no since the batch was made is left out.
         return (lambda job: [*replies_first(settings), (SEND, extra), (EXPORT, [])]), ""
     if action == "scorecard":
