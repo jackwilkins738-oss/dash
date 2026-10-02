@@ -101,3 +101,44 @@ export async function recordProspectOptOut(slug: string): Promise<string | null>
     return null
   }
 }
+
+/** Time on page, scroll depth and sections reached (dashboard migration 059). Fire and forget. */
+export async function recordProspectEngagement(
+  slug: string,
+  e: { seconds: number; scroll: number; reached: string[] },
+): Promise<void> {
+  const cfg = config()
+  if (!cfg || !isProspectSlug(slug)) return
+  try {
+    await fetch(`${cfg.base}/api/prospects/${slug}/engagement`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${cfg.secret}`, 'content-type': 'application/json' },
+      body: JSON.stringify(e),
+      cache: 'no-store',
+    })
+  } catch {
+    // Engagement is a nice-to-have; a miss never matters.
+  }
+}
+
+/** A one-tap answer from their preview. Returns the firm (from the dashboard's record), or null. */
+export async function recordProspectChoice(
+  slug: string,
+  choice: string,
+): Promise<{ business_name: string; trade: string | null; area: string | null; view_count: number } | null> {
+  const cfg = config()
+  if (!cfg || !isProspectSlug(slug)) return null
+  try {
+    const res = await fetch(`${cfg.base}/api/prospects/${slug}/choice`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${cfg.secret}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ choice }),
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as { prospect?: { business_name: string; trade: string | null; area: string | null; view_count: number } }
+    return body.prospect ?? null
+  } catch {
+    return null
+  }
+}
