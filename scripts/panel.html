@@ -726,6 +726,15 @@ async function loadCalls() {
   callData = await (await fetch("/api/calls/" + encodeURIComponent(name))).json();
   renderCalls();
 }
+// "2m 40s on the page · got to the price" - how keen a viewer looks (dashboard migration 059).
+const REACHED_LABEL = { pricing: "the price", rebuilt: "their rebuilt homepage", race: "the speed race", findings: "what we found", loading: "their site loading", reply: "the reply buttons" };
+function engagedText(i) {
+  if (!i.seconds && !(i.reached || []).length) return "";
+  const t = i.seconds >= 60 ? `${Math.floor(i.seconds / 60)}m ${i.seconds % 60}s` : `${i.seconds}s`;
+  const order = ["pricing", "rebuilt", "race", "findings", "reply", "loading"];
+  const got = order.find((r) => (i.reached || []).includes(r));
+  return ` · <b>${esc(t)}</b> on the page` + (got ? ` · got to ${esc(REACHED_LABEL[got])}` : "") + (i.seconds < 10 && i.views > 1 ? ' <span class="hint">(quick glances - maybe a link checker)</span>' : "");
+}
 function callRow(i, section) {
   const phone = i.phone ? `<a href="tel:${esc(i.phone.replace(/\s/g, ""))}" style="font-size:14px">📞 ${esc(i.phone)}</a>` : '<span class="hint">no phone - check their site</span>';
   const views = i.views ? ` · opened their preview ${i.views} time${i.views === 1 ? "" : "s"}, last ${esc(agoIso(i.last_viewed))}` : "";
@@ -734,7 +743,7 @@ function callRow(i, section) {
     : section === "callbacks"
     ? `<b style="color:var(--warn)">Call back ${i.overdue ? `- ${i.overdue} day${i.overdue === 1 ? "" : "s"} overdue` : "today"}</b>${i.note ? ` · "${esc(i.note)}"` : ""}${views}`
     : section === "viewing"
-    ? `<b style="color:var(--ok)">${i.views} visit${i.views === 1 ? "" : "s"}</b> · last ${esc(agoIso(i.last_viewed))}`
+    ? `<b style="color:var(--ok)">${i.views} visit${i.views === 1 ? "" : "s"}</b> · last ${esc(agoIso(i.last_viewed))}${engagedText(i)}`
     : `letter posted ${i.waited} days ago · not opened yet`;
   const last = i.last_call ? ` · last call: ${esc(i.last_call)} ${esc(agoIso(i.last_call_at))}` : "";
   return `<div class="ritem" data-key="${esc(i.key)}" data-sec="${section}">

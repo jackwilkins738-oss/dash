@@ -16,6 +16,7 @@ import { teardownFindings, teardownPasses, usableFrames } from '@/lib/teardown'
 import { PrintButton } from '@/components/print-button'
 import { PreviewOptOut } from '@/components/preview-optout'
 import { RebuiltPreview } from '@/components/rebuilt-preview'
+import { QuickReply } from '@/components/quick-reply'
 import { LoadFilmstrip, TodayPhone } from '@/components/load-filmstrip'
 import { PRICES } from '@/lib/site'
 import { SITE } from '@/lib/site'
@@ -243,6 +244,12 @@ export default async function ProspectPreviewPage({ params }: Props) {
         </section>
       )}
 
+      <section id="reply" className="scroll-mt-20 border-t border-border py-16 sm:py-20">
+        <div className="mx-auto max-w-3xl px-5 sm:px-8">
+          <QuickReply slug={p.slug} firmName={p.business_name} />
+        </div>
+      </section>
+
       {showRace && (
         <PreviewRace
           firmName={p.business_name}
@@ -256,7 +263,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
       )}
 
       {findings.length > 0 && p.website && (
-        <section className="border-t border-border py-20 sm:py-24">
+        <section id="findings" className="scroll-mt-20 border-t border-border py-20 sm:py-24">
           <div className="mx-auto max-w-4xl px-5 sm:px-8">
             <Reveal>
               <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
@@ -297,7 +304,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
       )}
 
       {/* Ready to go ahead: the package picked, so the reply is a quote, not a question. */}
-      <section className="border-t border-border py-16 sm:py-20">
+      <section id="pricing" className="scroll-mt-20 border-t border-border py-16 sm:py-20">
         <div className="mx-auto max-w-4xl px-5 sm:px-8">
           <Reveal>
             <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Next step</span>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isProspectSlug, recordProspectView } from '@/lib/prospect-api'
+import { isBotUserAgent } from '@/lib/engagement'
 
 // "A prospect just opened their preview page." Called once per browser
 // session by components/preview-beacon.tsx. Records the visit in the
@@ -43,6 +44,9 @@ export async function POST(request: Request) {
   if (origin && origin !== new URL(request.url).origin) {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 403 })
   }
+
+  // An email security scanner opening the link in a headless browser isn't the prospect looking.
+  if (isBotUserAgent(request.headers.get('user-agent'))) return NextResponse.json({ ok: true })
 
   const ip =
     request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ||

@@ -39,6 +39,53 @@ class DashboardMissing(Exception):
     """The dashboard doesn't have the activity endpoint yet (or refused)."""
 
 
+# One-tap answers from the preview page (dashboard migration 059) -> how they land in replies.csv.
+CHOICE_REPLIES = {
+    "call": ("interested", "call", 'Tapped "Yes, give me a ring" on their preview'),
+    "whatsapp": ("interested", "call", 'Tapped "WhatsApp me" on their preview - check WhatsApp'),
+    "not_now": ("read it", "later", 'Tapped "Maybe later" on their preview'),
+}
+
+
+def interest(item: dict) -> float:
+    """How keen a viewer looks: visits, real time on the page, how far they got - the price and the
+    rebuilt homepage count most. Before migration 059 it's visits alone, as it always was."""
+    score = item.get("views", 0) * 10
+    score += min(item.get("seconds", 0), 600) / 20  # up to 30 for ten minutes of looking
+    score += item.get("scroll", 0) / 10  # up to 10 for reaching the bottom
+    reached = set(item.get("reached") or [])
+    score += 15 * ("pricing" in reached) + 8 * ("rebuilt" in reached) + 5 * ("reply" in reached)
+    return score
+
+
+def sync_choices(outreach: Path, choices: list[tuple[dict, str, str, str]]) -> int:
+    """Adds each new one-tap answer to replies.csv once -> how many were added."""
+    from reply_scanner import FIELDS, REPLIES
+
+    path = outreach / REPLIES
+    existing = []
+    if path.exists():
+        with path.open(encoding="utf-8") as f:
+            existing = list(csv.DictReader(f))
+    seen = {r.get("message_id") for r in existing}
+    new = []
+    for act, business, domain, email in choices:
+        kind, intent, said = CHOICE_REPLIES[act["choice"]]
+        mid = f"preview-choice:{act.get('slug')}:{act['choice']}"
+        if mid in seen:
+            continue
+        seen.add(mid)
+        new.append({"message_id": mid, "date": (act.get("choice_at") or "")[:16], "from": email.lower(), "business": business,
+                    "website": domain, "kind": kind, "subject": "", "snippet": said, "handled": "", "intent": intent,
+                    "message": said, "objection": "not now" if act["choice"] == "not_now" else ""})
+    if new:
+        with path.open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
+            w.writeheader()
+            w.writerows(existing + new)
+    return len(new)
+
+
 def fetch_activity(api: str, secret: str, tenant: str) -> dict[str, dict]:
     req = urllib.request.Request(
         f"{api.rstrip('/')}/api/prospects/activity?tenant_id={tenant}", headers={"Authorization": f"Bearer {secret}"}
@@ -211,7 +258,7 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
             posted = {r["key"]: r.get("posted") or "" for r in csv.DictReader(f) if r.get("key")}
     calls = load_calls(outreach)
 
-    viewing, letters = [], []
+    viewing, letters, choices = [], [], []
     for row in rows:
         business = str(row.get("Business") or "").strip()
         domain = domain_of(str(row.get("Website") or ""))
@@ -233,6 +280,11 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
 
             add_to_blocklist(outreach, [("name", business), ("website", domain)], "not for us (preview page)")
             continue
+        if act.get("choice") in CHOICE_REPLIES:
+            # A one-tap answer on their preview is a reply: into replies.csv (so it's in "Replied" and
+            # their follow-up email stops), not the "looking" list.
+            choices.append((act, business, domain, str(row.get("Email") or "").strip() or extra.get("email", "")))
+            continue
         item = {
             "key": key, "business": business, "website": domain,
             "contact": str(row.get("Contact name") or "").strip() or extra.get("contact", ""),
@@ -242,13 +294,15 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
             "status": act.get("status") or "",
             "last_call": last.get("outcome") if last else "", "last_call_at": last.get("at") if last else "",
             "calls": len(history), "posted": posted.get(key, ""),
+            "seconds": int(act.get("engaged_seconds") or 0), "scroll": int(act.get("max_scroll") or 0),
+            "reached": [r for r in (act.get("reached") or []) if isinstance(r, str)],
         }
         called = _when(item["last_call_at"])
         viewed = _when(item["last_viewed"])
         if item["views"] and (not called or not viewed or viewed > called or last.get("outcome") in ("Call back", "Interested")):
             # Hottest first: seen recently, and more than once.
             age_h = (now - viewed).total_seconds() / 3600 if viewed else 1e6
-            item["heat"] = round(item["views"] * 10 / (1 + age_h / 24), 2)
+            item["heat"] = round(interest(item) / (1 + age_h / 24), 2)
             viewing.append(item)
         elif item["posted"] and activity is not None and not item["views"]:
             try:
@@ -260,6 +314,8 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
                 item["waited"] = waited
                 letters.append(item)
     viewing.sort(key=lambda i: -i["heat"])
+    if choices:
+        sync_choices(outreach, choices)
     letters.sort(key=lambda i: -i["waited"])
 
     # Replies waiting for you (from reply_scanner.py), from any list - newest first.

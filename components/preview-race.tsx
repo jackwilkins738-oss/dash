@@ -91,7 +91,7 @@ export function PreviewRace({
   const times = Math.round((theirLcpMs / scalarLcpMs) * 10) / 10
 
   return (
-    <section data-print="hide" className="border-t border-border py-20 sm:py-24" aria-labelledby="preview-race-heading">
+    <section id="race" data-print="hide" className="scroll-mt-20 border-t border-border py-20 sm:py-24" aria-labelledby="preview-race-heading">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="max-w-2xl">
           <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
