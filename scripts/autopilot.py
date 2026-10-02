@@ -216,6 +216,8 @@ def run() -> int:
         if settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD"):
             r.step(panel.REPLIES, [])
 
+        if settings.get("MAIL_ADDRESS"):
+            r.step(panel.SENDING_HEALTH, [])  # before anything is sent: a blocklisting stops the send
         sent_early = morning_send(r, cfg, settings)
 
         new_sheet = None

@@ -745,7 +745,8 @@ class Autopilot(unittest.TestCase):
                 code = autopilot.run()
             order = [name for name, _ in ran]
             self.assertEqual(order[0], "reply_scanner.py")
-            self.assertEqual(order[1], "find_prospects.py")
+            self.assertEqual(order[1], "sending_health.py")  # checked before anything can be sent
+            self.assertEqual(order[2], "find_prospects.py")
             self.assertIn("push_prospects.py", order)  # the whole list ran on the new sheet
             tail = order[:-1] if monday else order
             self.assertEqual(tail[-4:], ["email_batches.py", "email_batches.py", "export_results.py", "backup.py"])

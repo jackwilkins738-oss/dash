@@ -179,6 +179,7 @@
       </div>
       <div class="row">
         <button data-preview-emails="batch" title="Every email in the batch as it will go - nothing is sent">Preview emails</button>
+        <button data-action="sending_health" title="SPF, DKIM, DMARC and spam blocklists for your sending domains - the autopilot runs it every morning">Check sending health</button>
         <button data-action="send_test" data-test-kind="batch">Send test to me</button>
         <button class="primary" data-action="send_batch">Send today's batch</button>
         <input type="number" id="send-gap" min="0" max="60" step="1" placeholder="1" title="Minutes between emails - blank for about a minute" style="width:70px"><span class="dim">min apart</span>

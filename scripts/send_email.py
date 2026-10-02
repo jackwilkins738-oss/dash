@@ -319,7 +319,9 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
     if problem:
         raise SendStopped(problem)
     if not test:
-        paused = bounce_problem(outreach, today)
+        import sending_health
+
+        paused = bounce_problem(outreach, today) or sending_health.stop_sending(outreach)
         if paused:
             raise SendStopped(paused)
     kind = "followup" if followups else "first"
