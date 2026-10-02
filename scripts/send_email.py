@@ -332,10 +332,13 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
     details = {(r.get("email") or "").strip().lower(): r for r in eb._rows(batch_file)[1]} if batch_file.is_file() else {}
     sent_rows = {(r.get("email") or "").lower(): r for r in eb._rows(outreach / eb.SENT)[1]}
 
+    import first_line
+
+    lines = first_line.latest(outreach)
     todo = []
     for p in pending:
         email = (p.get("email") or "").strip().lower()
-        row = {**details.get(email, {}), **{k: v for k, v in p.items() if v}, "email": email}
+        row = first_line.apply({**details.get(email, {}), **{k: v for k, v in p.items() if v}, "email": email}, lines)
         already = sent_rows.get(email, {})
         if not test and (already.get("followup_sent") if followups else already.get("sent")):
             continue  # sent on an earlier press
@@ -460,6 +463,66 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
     if not left:
         (outreach / pending_name).unlink(missing_ok=True)
     return sent
+
+
+PREVIEW_MAX = 100
+
+
+def preview_batch(outreach: Path, followups: bool = False, env: dict | None = None, only_from: str = "") -> dict:
+    """The waiting batch exactly as Send would write it - who, from which inbox, subject, body, version, and
+    who'd be skipped and why. Reads only: nothing is sent or recorded. For the panel's "Preview emails"."""
+    env = dict(os.environ) if env is None else env
+    your_name = (env.get("MAIL_FROM_NAME") or "").strip() or "[your name - set MAIL_FROM_NAME in Settings]"
+    templates = load_templates(outreach)
+    problem = template_problem(templates)
+    if problem:
+        return {"error": problem}
+    kind = "followup" if followups else "first"
+    pending = eb._rows(outreach / (eb.FOLLOWUP_PENDING if followups else eb.PENDING))[1]
+    if not pending:
+        return {"error": "No follow-up batch waiting - press Make follow-ups first." if followups
+                else "No batch waiting - press Make batch first."}
+    batch_file = outreach / pending[0].get("batch", "")
+    details = {(r.get("email") or "").strip().lower(): r for r in eb._rows(batch_file)[1]} if batch_file.is_file() else {}
+    sent_rows = {(r.get("email") or "").lower(): r for r in eb._rows(outreach / eb.SENT)[1]}
+    inboxes = mail_accounts.accounts(env)
+    main = inboxes[0].address if inboxes else ""
+    used = sent_today(outreach, date.today(), by_inbox=True, main=main) if inboxes else {}
+    used = {a.address: used.get(a.address, 0) for a in inboxes}
+    only_from = (only_from or "").strip().lower()
+    booking = (env.get("BOOKING_LINK") or "").strip()
+    import first_line
+
+    lines = first_line.latest(outreach)
+    emails = []
+    for p in pending:
+        email = (p.get("email") or "").strip().lower()
+        row = first_line.apply({**details.get(email, {}), **{k: v for k, v in p.items() if v}, "email": email}, lines)
+        if booking and not row.get("booking_link"):
+            row["booking_link"] = booking
+        already = sent_rows.get(email, {})
+        if already.get("followup_sent") if followups else already.get("sent"):
+            continue
+        variant = "" if followups else variant_for(email, templates)
+        suffix = "_b" if variant == "B" else ""
+        subject = render(templates[f"{kind}_subject{suffix}"], row, your_name).strip()
+        if followups and already.get("subject"):
+            subject = "Re: " + already["subject"]
+        skip = _still_ok(outreach, email, row.get("business", ""))
+        sender = ""
+        if followups:
+            sender = (already.get("sent_from") or main).lower()
+        elif only_from:
+            sender = only_from
+        elif used and not skip:
+            sender = min(used, key=lambda a: used[a])
+            used[sender] += 1
+        emails.append({"business": row.get("business", ""), "email": email, "from": sender, "subject": subject,
+                       "body": render(templates[f"{kind}_body{suffix}"], row, your_name), "variant": variant,
+                       "preview_url": row.get("preview_url", ""), "first_line": row.get("first_line", ""), "skip": skip})
+        if len(emails) >= PREVIEW_MAX:
+            break
+    return {"ok": True, "emails": emails, "ab": has_variant_b(templates) and not followups}
 
 
 def _done(outreach: Path, p: dict, followups: bool) -> bool:

@@ -74,7 +74,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "51"
+PANEL_VERSION = "52"
 MAX_LOG_LINES = 5000
 
 
@@ -1400,6 +1400,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": why}, 400) if why else self._json({"ok": True})
         if route == "/api/reply-draft":
             return self._json(*reply_draft_action(body))
+        if route == "/api/email-preview":
+            import send_email
+
+            return self._json(send_email.preview_batch(OUTREACH, body.get("kind") == "followups", load_settings(),
+                                                       str(body.get("from") or "")))
         if route == "/api/reply-ai":
             return self._json(*reply_ai_action(body))
         if route == "/api/reply-send":

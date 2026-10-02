@@ -238,6 +238,47 @@ class MultipleInboxes(SendEmail):
         self.assertEqual(list(self.by_inbox), ["jack@getscalar.co.uk"])  # the main inbox is full today
 
 
+class PreviewEmails(SendEmail):
+    SETTINGS = {"MAIL_ADDRESS": "jack@scalar.co.uk", "MAIL_APP_PASSWORD": "x", "MAIL_FROM_NAME": "Jack Wilkins",
+                "MAIL_EXTRA_1_ADDRESS": "ash@scalar2.co.uk", "MAIL_EXTRA_1_PASSWORD": "y"}
+
+    def test_shows_every_email_as_it_will_go_and_sends_nothing(self):
+        smtp = FakeSMTP()
+        out = se.preview_batch(self.out, env=self.SETTINGS)
+        self.assertTrue(out["ok"])
+        self.assertEqual([e["business"] for e in out["emails"]], ["Kerr Roofing", "Acme Drives", "Oak Lofts"])
+        kerr = out["emails"][0]
+        self.assertEqual(kerr["subject"], "Kerr Roofing - quick look at your website")
+        self.assertIn("Hi Bill,", kerr["body"])
+        self.assertIn("It scored 41 out of 100.", kerr["body"])
+        self.assertIn("Jack Wilkins", kerr["body"])
+        self.assertEqual(kerr["preview_url"], "https://s.co/for/kerr-1")
+        self.assertEqual({e["from"] for e in out["emails"]}, {"jack@scalar.co.uk", "ash@scalar2.co.uk"})  # spread
+        self.assertEqual(smtp.sent, [])
+        self.assertFalse((self.out / eb.SENT).exists())
+
+    def test_marks_who_would_be_skipped(self):
+        write(self.out / "replies.csv", ["from", "business", "kind"], [{"from": "sue@oak.co.uk", "business": "Oak Lofts", "kind": "read it"}])
+        out = se.preview_batch(self.out, env=self.SETTINGS)
+        self.assertEqual(out["emails"][2]["skip"], "they've replied")
+        self.assertEqual(out["emails"][0]["skip"], "")
+
+    def test_first_line_edits_count_without_remaking_the_batch(self):
+        import first_line
+
+        first_line.save(self.out, {"kerr.co.uk": {"website": "kerr.co.uk", "business": "Kerr Roofing",
+                                                  "first_line": "Saw you fit flat roofs around Leeds.", "made_on": ""}})
+        out = se.preview_batch(self.out, env=self.SETTINGS)
+        self.assertIn("Hi Bill,\n\nSaw you fit flat roofs around Leeds. I put together", out["emails"][0]["body"])
+        smtp = FakeSMTP()
+        self.send(smtp, test=True)
+        self.assertIn("Saw you fit flat roofs around Leeds.", smtp.sent[0].get_content())
+
+    def test_nothing_waiting_says_so(self):
+        (self.out / eb.PENDING).unlink()
+        self.assertIn("No batch waiting", se.preview_batch(self.out, env=self.SETTINGS)["error"])
+
+
 class TodaySummary(unittest.TestCase):
     """What the panel shows under the batch: sent today, left today, and the same per inbox."""
 
