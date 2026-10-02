@@ -77,7 +77,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "58"
+PANEL_VERSION = "59"
 MAX_LOG_LINES = 5000
 
 
@@ -1066,6 +1066,8 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
     import autopilot
 
     action = str(body.get("action") or "")
+    if action == "stop":
+        return {"ok": True, "message": autopilot.stop()}, 200
     cfg = autopilot.load_config()
     if action in ("save", "on"):
         new = body.get("config") or {}
@@ -1319,7 +1321,9 @@ class Handler(BaseHTTPRequestHandler):
                 lines = [ln.split("  ", 1)[-1] for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
                 tail = [ln for ln in lines if ln.startswith(("Autopilot done", "Replies:", "READY", "Next:")) or "had problems" in ln]
                 last = f"Last run {time.strftime('%a %d %b %H:%M', time.localtime(log.stat().st_mtime))}: " + " · ".join(tail[-6:])
-            return self._json({"config": cfg, "last": last, "running": autopilot.is_running(), "windows": sys.platform == "win32"})
+            running = autopilot.is_running()
+            return self._json({"config": cfg, "last": last, "running": running, "now": autopilot.now_doing() if running else {},
+                               "windows": sys.platform == "win32"})
         if route.startswith("/api/batch"):
             import email_batches
 

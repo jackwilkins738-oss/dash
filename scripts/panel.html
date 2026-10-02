@@ -221,7 +221,9 @@
         <button class="primary" id="ap-on">Save &amp; turn on</button>
         <button id="ap-off">Turn off</button>
         <button data-action="autopilot_now">Run now</button>
+        <button class="danger" id="ap-stop" hidden>Stop the run</button>
       </div>
+      <p class="hint" id="ap-now" style="color:var(--warn)"></p>
       <p class="hint" id="ap-last"></p>
       <div class="msg" id="ap-msg"></div>
       </details>
@@ -947,7 +949,12 @@ async function loadAutopilot() {
   if ($("send-from").options.length > 1) { $("ap-from").innerHTML = $("send-from").innerHTML; $("ap-from").value = c.send_from || ""; }
   apSearch = c.find || null;
   $("ap-search").textContent = describeSearch(apSearch);
-  $("ap-state").textContent = r.running ? "· running now" : c.enabled ? `· on, daily at ${c.time}${c.auto_send ? ", sends itself" : ""}` : "· off";
+  const now = r.now || {};
+  $("ap-state").textContent = r.running ? `· running now (${now.minutes ?? 0} min)` : c.enabled ? `· on, daily at ${c.time}${c.auto_send ? ", sends itself" : ""}` : "· off";
+  $("ap-now").textContent = r.running ? `Running for ${now.minutes ?? 0} min. Now: ${now.last || "starting"}${c.auto_send ? " - with Send automatically on, sending a batch takes a while (the gap between emails)." : ""}` : "";
+  $("ap-stop").hidden = !r.running;
+  clearTimeout(apPoll);
+  if (r.running) apPoll = setTimeout(loadAutopilot, 15000);
   $("ap-last").textContent = r.last || "";
   if (!r.windows) $("ap-on").title = "Scheduling needs Windows";
 }
@@ -964,6 +971,14 @@ async function saveAutopilot(action) {
 $("ap-use-search").addEventListener("click", () => {
   apSearch = finderForm();
   $("ap-search").textContent = describeSearch(apSearch) + " (press Save & turn on to keep it)";
+});
+let apPoll = null;
+$("ap-stop").addEventListener("click", async () => {
+  if (!confirm("Stop the autopilot run now? Anything already sent stays sent.")) return;
+  const r = await post("/api/autopilot", { action: "stop" });
+  $("ap-msg").style.color = r.error ? "var(--bad)" : "var(--ok)";
+  $("ap-msg").textContent = r.error || r.message;
+  loadAutopilot();
 });
 $("ap-on").addEventListener("click", () => saveAutopilot("on"));
 $("ap-off").addEventListener("click", () => saveAutopilot("off"));

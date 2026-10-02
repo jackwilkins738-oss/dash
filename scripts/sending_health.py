@@ -37,7 +37,8 @@ FREE = {"gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "hotmail.co
 # believed from a list that's really answering this computer)
 BLOCKLISTS = [("Spamhaus", "dbl.spamhaus.org", "dbltest.com"), ("SURBL", "multi.surbl.org", "test.surbl.org"),
               ("URIBL", "multi.uribl.com", "test.uribl.com")]
-STALE_HOURS = 48  # a blocklisting older than this no longer stops sending - check again instead
+STALE_HOURS = 48
+DNS_TIMEOUT_S = 10  # a blocklisting older than this no longer stops sending - check again instead
 
 
 def _ask():
@@ -50,11 +51,23 @@ def system_dns(name: str) -> list[str]:
     """A-record answers from this computer's own resolver - blocklists refuse the big public ones, but
     usually answer a home or office connection. No answer at all comes back as []."""
     import socket
+    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import TimeoutError as Slow
 
+    def ask() -> list[str]:
+        try:
+            return socket.gethostbyname_ex(name)[2]
+        except (socket.gaierror, socket.herror, UnicodeError):
+            return []
+
+    # The system resolver has no timeout of its own; a slow one must never hold up the morning run.
+    pool = ThreadPoolExecutor(max_workers=1)
     try:
-        return socket.gethostbyname_ex(name)[2]
-    except (socket.gaierror, socket.herror, UnicodeError):
-        return []
+        return pool.submit(ask).result(timeout=DNS_TIMEOUT_S)
+    except Slow as e:
+        raise OSError(f"DNS took over {DNS_TIMEOUT_S}s") from e
+    finally:
+        pool.shutdown(wait=False)
 
 
 def _hit(answers: list[str]) -> bool | None:

@@ -118,6 +118,50 @@ def is_running() -> bool:
     return False
 
 
+def now_doing(outreach: Path | None = None) -> dict:
+    """While a run is going: how long it's been running and the last thing it said - so a long run
+    (speed checks, a send spread over hours) reads as busy, not stuck."""
+    outreach = outreach or panel.OUTREACH
+    lock, log = outreach / LOCK, outreach / "autopilot-log.txt"
+    if not lock.exists():
+        return {}
+    minutes = int((time.time() - lock.stat().st_mtime) // 60)
+    last = ""
+    if log.exists():
+        lines = [ln.strip() for ln in log.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
+        last = lines[-1].split("  ", 1)[-1].strip() if lines else ""
+    return {"minutes": minutes, "last": last[:160]}
+
+
+def stop(outreach: Path | None = None) -> str:
+    """Ends a run that's going (and whatever step it's on), and clears its lock."""
+    outreach = outreach or panel.OUTREACH
+    lock = outreach / LOCK
+    if not lock.exists():
+        return "The autopilot isn't running."
+    try:
+        pid = int(lock.read_text().strip() or 0)
+    except (OSError, ValueError):
+        pid = 0
+    if pid and _alive(pid):
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, timeout=30)
+        else:
+            import signal
+
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+    lock.unlink(missing_ok=True)
+    try:
+        with (outreach / "autopilot-log.txt").open("a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().strftime('%H:%M')}  Stopped from the panel.\n")
+    except OSError:
+        pass
+    return "Autopilot stopped. Anything already sent stays sent; the next run picks up from there."
+
+
 class Run:
     def __init__(self, log_path: Path) -> None:
         self.log = log_path.open("w", encoding="utf-8")
