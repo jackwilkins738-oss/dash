@@ -96,6 +96,17 @@ class Checking(unittest.TestCase):
             self.assertIn(reason, text)
         self.assertNotIn("/websites-for/roofers", text)
 
+    def test_outside_statistics_in_any_wording(self):
+        for line in ("Google has reported that more than half of mobile visits are abandoned.",
+                     "Nearly half of homeowners check reviews first.",
+                     "Most experts say speed matters, and the majority of visitors use a phone."):
+            g = good_guide()
+            g["sections"][1]["paragraphs"].append(line)
+            self.assertTrue(any("cites research" in w for w in check(g)[1]), line)
+        g = good_guide()
+        g["sections"][1]["paragraphs"].append("Half the battle is answering the phone.")
+        self.assertEqual(check(g)[1], [])
+
     def test_taken_slug_and_word_count(self):
         _, why = check(good_guide(), taken={"photos-that-win-trade-jobs"})
         self.assertIn("already exists", " ".join(why))
