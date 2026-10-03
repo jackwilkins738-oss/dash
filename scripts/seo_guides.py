@@ -36,8 +36,13 @@ WORDS = (900, 2400)
 SECTIONS = (4, 9)
 FAQS = (3, 6)
 SUMMARY = (150, 700)
-MADE_UP = re.compile(r"\b(studies|research|surveys?|statistics|data) (show|shows|suggest|suggests|found|finds)\b|"
-                     r"\baccording to\b|\b\d+ (out of|in) \d+\b", re.I)
+# Outside figures and research, however they're worded: the guide may only state what the site says.
+MADE_UP = re.compile(r"\b(studies|research|surveys?|statistics|data|figures) (show|shows|suggest|suggests|found|finds)\b|"
+                     r"\baccording to\b|\b\d+ (out of|in) \d+\b|"
+                     r"\b(google|ofcom|which\?|experts?|analysts?|researchers?) (has |have )?(reported|found|says|say|estimates?|shown)\b|"
+                     r"\b(more than|over|nearly|almost|around|about) (half|a third|a quarter|two thirds|three quarters)\b|"
+                     r"\b(half|a third|a quarter|two thirds|three quarters|the majority) of (all |mobile |online )?"
+                     r"(people|visitors|visits|users|customers|homeowners|searches|consumers)\b", re.I)
 PLACEHOLDER = re.compile(r"\b(TODO|TBC|lorem ipsum|insert|placeholder|your company name)\b|\{\{|\}\}", re.I)
 
 SYSTEM = """You write one practical guide for the website of a UK web designer who builds fast, hand-coded \
