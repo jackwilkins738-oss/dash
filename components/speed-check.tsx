@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, Gauge, Loader2, TriangleAlert } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { SITE } from '@/lib/site'
+import { ReportRequest } from '@/components/report-request'
 
 /*
  * A real, live speed check - not another illustration. Calls Google's own
@@ -128,6 +129,7 @@ export function SpeedCheck({
   const [theirs, setTheirs] = useState<Score | null>(null)
   const [ownScore, setOwnScore] = useState<Score | null>(null)
   const [checkedHost, setCheckedHost] = useState('')
+  const [checkedUrl, setCheckedUrl] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -167,6 +169,7 @@ export function SpeedCheck({
       setTheirs(theirScore)
       setOwnScore(ownScoreResult)
       setCheckedHost(new URL(url).hostname.replace(/^www\./, ''))
+      setCheckedUrl(url)
       setStatus('done')
     } catch (err) {
       setStatus('error')
@@ -285,7 +288,10 @@ export function SpeedCheck({
               , run in your browser just now. Scores can vary slightly between runs.
             </p>
 
-            {theirs.score < 90 && (
+            {/* On the public tool, ask for the report; a prospect's own preview page already is one. */}
+            {!initialUrl && <ReportRequest website={checkedUrl} score={theirs.score} />}
+
+            {theirs.score < 90 && initialUrl && (
               <div className="mx-auto mt-8 flex max-w-lg flex-col items-center gap-4 rounded-2xl border border-blueprint/40 bg-card p-7 text-center">
                 <p className="text-pretty leading-relaxed text-foreground/90">
                   That gap is real customers leaving before your site finishes loading. A Scalar build is

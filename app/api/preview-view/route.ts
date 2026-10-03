@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isProspectSlug, recordProspectView } from '@/lib/prospect-api'
 import { isBotUserAgent } from '@/lib/engagement'
+import { callNowButtons } from '@/lib/owner-alert'
 
 // "A prospect just opened their preview page." Called once per browser
 // session by components/preview-beacon.tsx. Records the visit in the
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+        body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true, reply_markup: callNowButtons(slug) }),
       })
     } catch (error) {
       console.error('[preview-view] Telegram request error:', error)

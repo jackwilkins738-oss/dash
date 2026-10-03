@@ -34,6 +34,12 @@ const SECTIONS = [
           This is used for one purpose: to reply to your enquiry with a plan and a price. It isn&apos;t used for
           marketing, sold, or shared with anyone outside the delivery of that reply.
         </p>
+        <p className="mt-3">
+          The &ldquo;send me the full report&rdquo; form under the free speed test collects your name, business
+          name, email, website, and optionally your phone, trade and town. It&apos;s used to prepare and send
+          the report you asked for (including a preview of your site rebuilt) and to reply to you about it -
+          nothing else, and you can ask for it to be deleted at any time.
+        </p>
       </>
     ),
   },
