@@ -4,6 +4,7 @@ import { PageHeader, HeaderActions } from '@/components/page-header'
 import { SiteShowcase } from '@/components/site-showcase'
 import { SpeedCheck } from '@/components/speed-check'
 import { Pricing } from '@/components/pricing'
+import { StartQuote } from '@/components/start-quote'
 import { CtaBand } from '@/components/cta-band'
 import { BookCallBand } from '@/components/book-call'
 import { Reveal } from '@/components/reveal'
@@ -312,12 +313,14 @@ export default async function ProspectPreviewPage({ params }: Props) {
               Want this for {p.business_name}?
             </h2>
             <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
-              Pick one and I&apos;ll come back with a fixed price and a plan - usually the same day. Nothing is
-              charged until you&apos;ve seen the quote and said yes.
+              Pick one and your fixed-price quote opens straight away - accept it online whenever you&apos;re ready.
+              Nothing is charged until you&apos;ve read it and said yes.
             </p>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              <a
-                href={`/contact?firm=${encodeURIComponent(p.business_name)}&package=build`}
+              <StartQuote
+                slug={slug}
+                pkg="build"
+                businessName={p.business_name}
                 className="group rounded-2xl border border-blueprint/50 bg-card p-6 transition-colors hover:border-blueprint"
               >
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-blueprint">The Scalar build</span>
@@ -325,17 +328,19 @@ export default async function ProspectPreviewPage({ params }: Props) {
                 <span className="mt-2 block text-sm text-muted-foreground">
                   Five pages plus your own dashboard for enquiries, quotes and invoices.
                 </span>
-                <span className="mt-4 inline-block font-semibold text-blueprint">Go ahead with this &rarr;</span>
-              </a>
-              <a
-                href={`/contact?firm=${encodeURIComponent(p.business_name)}&package=landing`}
+                <span className="mt-4 inline-block font-semibold text-blueprint">See my quote &rarr;</span>
+              </StartQuote>
+              <StartQuote
+                slug={slug}
+                pkg="landing"
+                businessName={p.business_name}
                 className="group rounded-2xl border border-border bg-card/50 p-6 transition-colors hover:border-blueprint"
               >
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Landing page</span>
                 <span className="mt-2 block font-display text-3xl font-bold">£{PRICES.landing.toLocaleString('en-GB')}</span>
                 <span className="mt-2 block text-sm text-muted-foreground">One fast page, built to turn visitors into enquiries.</span>
-                <span className="mt-4 inline-block font-semibold text-blueprint">Go ahead with this &rarr;</span>
-              </a>
+                <span className="mt-4 inline-block font-semibold text-blueprint">See my quote &rarr;</span>
+              </StartQuote>
             </div>
           </Reveal>
           <dl className="mt-12 divide-y divide-border border-y border-border">

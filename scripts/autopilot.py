@@ -291,6 +291,10 @@ def run() -> int:
             r.note("PROSPECTS_API_SECRET isn't in Settings - nothing can be pushed. Stopping.")
             return 1
 
+        ok, published = panel.publish_quotes()  # keeps "See my quote" on preview pages in step with Settings
+        if not ok:
+            r.note(f"Self-serve quotes: {published}")
+
         if settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD"):
             r.step(panel.REPLIES, [])
 

@@ -79,7 +79,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "71"
+PANEL_VERSION = "72"
 MAX_LOG_LINES = 5000
 
 
@@ -987,6 +987,20 @@ def reply_draft_action(body: dict) -> tuple[dict, int]:
     return {"ok": True, "text": saved_replies.render(replies[name], reply_values(load_settings(), body))}, 200
 
 
+def publish_quotes() -> tuple[bool, str]:
+    """Your packages' quotes to the dashboard, for "See my quote" on preview pages."""
+    import quotes
+
+    settings = load_settings()
+    if len(settings["PROSPECTS_API_SECRET"]) < 32:
+        return False, "Add PROSPECTS_API_SECRET in Settings first."
+    try:
+        lines = quotes.publish_self_serve(settings)
+    except quotes.QuoteFailed as e:
+        return False, f"Not published: {e}."
+    return True, "Published - " + ", ".join(lines) + ". Preview pages now offer See my quote."
+
+
 def research_action(body: dict) -> tuple[dict, int]:
     """Calls tab "Research": company age and directors, what their site says, their speed check."""
     import research
@@ -1500,6 +1514,9 @@ class Handler(BaseHTTPRequestHandler):
 
             return self._json(send_email.preview_batch(OUTREACH, body.get("kind") == "followups", load_settings(),
                                                        str(body.get("from") or "")))
+        if route == "/api/publish-quotes":
+            ok, message = publish_quotes()
+            return self._json({"ok": True, "message": message} if ok else {"error": message}, 200 if ok else 502)
         if route == "/api/research":
             return self._json(*research_action(body))
         if route == "/api/reply-ai":
@@ -1518,6 +1535,7 @@ class Handler(BaseHTTPRequestHandler):
             import telegram_bot
 
             telegram_bot.start(sys.modules[__name__])  # Telegram just set up: no restart needed
+            threading.Thread(target=publish_quotes, daemon=True).start()  # prices may have changed
             from company_lookup import key_problem
 
             ch = load_settings()["COMPANIES_HOUSE_API_KEY"]

@@ -62,13 +62,11 @@ def extras(settings: dict[str, str]) -> list[dict]:
     return [e for e in out if e["price_pence"] > 0][:MAX_EXTRAS]
 
 
-def create_quote(settings: dict[str, str], business: str, email: str, phone: str, package: str,
-                 slug: str | None = None, note: str = "", founding: bool = False) -> dict:
-    """{quote_number, total_pence, quote_url} from the dashboard, or raises QuoteFailed with the reason."""
+def quote_body(settings: dict[str, str], package: str, founding: bool = False) -> dict:
+    """What any quote for this package says - price, deposit, VAT, payment terms, exclusions, terms of
+    business, extras - the same whether you send it or they start it from their preview."""
     import terms
 
-    if package not in PACKAGES:
-        raise QuoteFailed("unknown package")
     _, _, description = PACKAGES[package]
     founding = founding and package == "build"
     if founding:
@@ -78,20 +76,58 @@ def create_quote(settings: dict[str, str], business: str, email: str, phone: str
         deposit = max(0, min(100, int(float(settings.get("QUOTE_DEPOSIT_PERCENT") or 0))))
     except ValueError:
         deposit = 0
+    return {
+        "line_items": [{"category": "labour", "description": description, "unit_price_pence": price(settings, package) * 100}],
+        "vat_rate": vat,
+        "deposit_percent": deposit,
+        "payment_terms": terms.payment_terms(deposit),
+        "exclusions": terms.EXCLUSIONS,
+        "terms": terms.terms(package, deposit, vat, founding),
+        "optional_items": extras(settings),
+    }
+
+
+def publish_self_serve(settings: dict[str, str], post=None) -> list[str]:
+    """Sends both packages' quotes to the dashboard for "See my quote" on preview pages -> lines for the log.
+    Raises QuoteFailed if the dashboard can't take them."""
+    post = post or _post_template
+    api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
+    out = []
+    for package in PACKAGES:
+        body = {"tenant_id": settings.get("SCALAR_TENANT_ID") or DEFAULT_TENANT, "package": package,
+                "quote": quote_body(settings, package)}
+        post(f"{api}/api/prospects/quote-template", body, settings.get("PROSPECTS_API_SECRET", ""))
+        out.append(f"{package}: £{price(settings, package):,} published")
+    return out
+
+
+def _post_template(url: str, body: dict, secret: str) -> None:
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                 headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=30).close()
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise QuoteFailed("your dashboard doesn't have self-serve checkout yet") from e
+        detail = e.read(300).decode("utf-8", errors="replace")
+        raise QuoteFailed(f"the dashboard said HTTP {e.code} {detail}") from e
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        raise QuoteFailed(f"couldn't reach the dashboard ({getattr(e, 'reason', e)})") from e
+
+
+def create_quote(settings: dict[str, str], business: str, email: str, phone: str, package: str,
+                 slug: str | None = None, note: str = "", founding: bool = False) -> dict:
+    """{quote_number, total_pence, quote_url} from the dashboard, or raises QuoteFailed with the reason."""
+    if package not in PACKAGES:
+        raise QuoteFailed("unknown package")
     body = {
         "tenant_id": settings.get("SCALAR_TENANT_ID") or DEFAULT_TENANT,
         "slug": slug,
         "client_name": business,
         "email": email or None,
         "phone": phone or None,
-        "line_items": [{"category": "labour", "description": description, "unit_price_pence": price(settings, package) * 100}],
-        "vat_rate": vat,
-        "deposit_percent": deposit,
         "note": note or "Quoted from the outreach call list",
-        "payment_terms": terms.payment_terms(deposit),
-        "exclusions": terms.EXCLUSIONS,
-        "terms": terms.terms(package, deposit, vat, founding),
-        "optional_items": extras(settings),
+        **quote_body(settings, package, founding),
     }
     api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
     req = urllib.request.Request(

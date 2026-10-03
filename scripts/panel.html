@@ -507,6 +507,8 @@ Scalar Digital · 07401 696272</textarea>
       <label style="margin-top:10px">Optional extras (the client ticks them on the quote page) - <code>name price; name price</code>, £ before VAT</label>
       <input type="text" id="QUOTE_EXTRAS" placeholder="Extra page 150; Google Business Profile set up and optimised 150; Logo tidy-up 250; Writing your website's words 200">
       <p class="hint">Used by the Quote buttons on Calls, the terms the client signs, and the proposal. VAT 0 unless you're VAT-registered. Extras: blank uses the ones shown; type <code>none</code> for no extras.</p>
+      <div class="row"><button id="publish-quotes">Publish to preview pages</button><span class="hint" id="publish-quotes-msg"></span></div>
+      <p class="hint">Prospects can press <b>See my quote</b> on their preview, and get exactly this quote (price, deposit, terms) to accept, sign and pay - no call needed. It's re-published every time you save Settings and every autopilot run; the button does it now. Keep these prices the same as the ones on your website.</p>
     </div>
 
     <div class="card">
@@ -1023,6 +1025,11 @@ $("ap-stop").addEventListener("click", async () => {
   $("ap-msg").style.color = r.error ? "var(--bad)" : "var(--ok)";
   $("ap-msg").textContent = r.error || r.message;
   loadAutopilot();
+});
+$("publish-quotes").addEventListener("click", async () => {
+  $("publish-quotes-msg").textContent = "Publishing...";
+  const r = await post("/api/publish-quotes", {});
+  $("publish-quotes-msg").textContent = r.error || r.message;
 });
 $("ap-on").addEventListener("click", () => saveAutopilot("on"));
 $("ap-off").addEventListener("click", () => saveAutopilot("off"));
