@@ -776,7 +776,8 @@ function callRow(i, section) {
     <div class="why">${seen}${last}</div>
     <div class="btns">${(callData.outcomes || []).map((o) => `<button data-outcome="${esc(o)}" ${o === "Not interested" ? 'class="danger"' : o === "Interested" || o === "Won" ? 'class="primary"' : ""}>${esc(o)}</button>`).join("")}
       <input type="text" placeholder="note (optional)" data-note></div>
-    <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><label class="hint" title="One of the first three Scalar builds: 24 months' free dashboard, the speed guarantee, first in the queue - for a case study, video and review"><input type="checkbox" data-founding> founding client</label><button data-draft>Draft their site</button></div>
+    <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><label class="hint" title="One of the first three Scalar builds: 24 months' free dashboard, the speed guarantee, first in the queue - for a case study, video and review"><input type="checkbox" data-founding> founding client</label><button data-draft>Draft their site</button><button data-research title="Company age and directors, what their site says, their speed check - before you dial">🔎 Research</button></div>
+    <div class="why" data-research-box hidden></div>
     <div class="why" data-quote-result></div>
     ${section === "replied" && i.email ? `<div class="btns" style="margin-top:6px">
       <button class="primary" data-reply-ai title="Claude writes a first draft from their reply, your prices and your saved replies - you read and edit it before anything is sent">✨ Draft with AI</button>
@@ -804,6 +805,7 @@ function renderCalls() {
   document.querySelectorAll("#calls [data-outcome]").forEach((b) => b.addEventListener("click", () => callOutcome(b)));
   document.querySelectorAll("#calls [data-quote]").forEach((b) => b.addEventListener("click", () => makeQuote(b)));
   document.querySelectorAll("#calls [data-draft]").forEach((b) => b.addEventListener("click", () => draftSite(b)));
+  document.querySelectorAll("#calls [data-research]").forEach((b) => b.addEventListener("click", () => researchFirm(b)));
   document.querySelectorAll("#calls [data-reply-pick]").forEach((sel) => sel.addEventListener("change", () => pickReply(sel)));
   document.querySelectorAll("#calls [data-reply-send]").forEach((b) => b.addEventListener("click", () => sendReply(b)));
   document.querySelectorAll("#calls [data-reply-ai]").forEach((b) => b.addEventListener("click", () => aiReply(b)));
@@ -812,6 +814,18 @@ function renderCalls() {
     sel.value = b.dataset.replySuggest; pickReply(sel);
   }));
   document.querySelectorAll("#calls [data-callback-in]").forEach((b) => b.addEventListener("click", () => callOutcome(b, b.dataset.callbackIn)));
+}
+async function researchFirm(b, fresh = false) {
+  const [card, item] = replyItem(b);
+  const box = card.querySelector("[data-research-box]");
+  box.hidden = false; box.textContent = "Looking them up - a few seconds...";
+  b.disabled = true;
+  const r = await post("/api/research", { business: item.business, website: item.website, area: item.area || "", fresh });
+  b.disabled = false;
+  if (r.error) { box.textContent = r.error; return; }
+  box.innerHTML = (r.lines || []).map((l) => `<div>${esc(l)}</div>`).join("")
+    + `<div><a href="${esc(r.google)}" target="_blank" rel="noopener">Their Google reviews ↗</a> · <span class="hint">looked up ${esc(r.at || "")}</span> <button class="link" data-research-again>refresh</button></div>`;
+  box.querySelector("[data-research-again]").addEventListener("click", () => researchFirm(b, true));
 }
 let savedReplies = [];
 async function loadSavedReplies() {
