@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next'
 import { TRADES } from '@/lib/trades'
 import { SITE, UPDATED } from '@/lib/site'
 import { lastmod } from '@/lib/seo'
+import { loadGuides } from '@/lib/guides'
 
 // `lastModified` is the date the page's content last really changed (see lib/site.ts), not the
 // build time. A date that changes on every deploy teaches Google to ignore the field.
@@ -25,6 +26,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     at('/guides/wix-or-hand-coded-website-for-tradesmen', '2026-10-01', 0.7),
     at('/guides/website-not-getting-enquiries', '2026-10-02', 0.7),
     at('/guides/is-a-website-worth-it-for-tradesmen', '2026-10-02', 0.7),
+    ...loadGuides().map((g) => at(`/guides/${g.slug}`, g.published, 0.7)),
     at('/process', UPDATED, 0.6),
     at('/speed-test', UPDATED, 0.7),
     at('/contact', UPDATED, 0.7),

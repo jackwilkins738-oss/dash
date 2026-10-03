@@ -1,6 +1,8 @@
-# The monthly SEO loop (scripts/seo_loop.py): Search Console -> pages nearly on page one -> Claude
-# drafts a better title, description and FAQs -> checked -> a pull request you merge with one tap,
-# and a Telegram text with the link. Nothing goes live until you merge.
+# The SEO loop (scripts/seo_loop.py), on the 1st and 15th: Search Console -> better titles,
+# descriptions and FAQs for pages nearly on page one, one new guide (scripts/seo_guides.py), and a
+# check of which pages Google has indexed -> a pull request you merge with one tap (read a new
+# guide on its Vercel preview first), and a Telegram text with the link. Nothing goes live until
+# you merge.
 #
 # Setup, once (keyless - no service account key is ever made, so nothing secret sits in GitHub):
 #   1. Google Cloud Shell (the >_ button at console.cloud.google.com, with your project picked):
@@ -21,7 +23,7 @@ name: SEO loop
 
 on:
   schedule:
-    - cron: "23 5 1 * *"  # 1st of the month, early morning UK
+    - cron: "23 5 1,15 * *"  # 1st and 15th, early morning UK
   workflow_dispatch:
 
 permissions:
@@ -96,16 +98,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add content/seo.json
-          git commit -m "SEO loop: $(date -u +'%B %Y') search snippets"
+          git add content
+          git commit -m "SEO loop: $(date -u +'%-d %B %Y')"
           git push origin "$branch"
           python3 - "$branch" "$BASE" > "$RUNNER_TEMP/pr.json" <<'EOF'
           import json, os, sys
           from datetime import date
           summary = open(os.path.join(os.environ["RUNNER_TEMP"], "seo", "summary.md"), encoding="utf-8").read()
-          body = (summary + "\n\nWritten by the monthly SEO loop (scripts/seo_loop.py): only `content/seo.json` changes. "
+          body = (summary + "\n\nWritten by the SEO loop (scripts/seo_loop.py): only files under `content/` change. "
                   "Lint, type check, tests and a full build passed before this was opened. Merge to publish; close to skip.")
-          print(json.dumps({"title": f"SEO loop: {date.today():%B %Y} search snippets", "head": sys.argv[1],
+          print(json.dumps({"title": f"SEO loop: {date.today():%-d %B %Y}", "head": sys.argv[1],
                             "base": sys.argv[2], "body": body}))
           EOF
           url=$(curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
