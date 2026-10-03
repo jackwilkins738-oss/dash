@@ -29,7 +29,7 @@ PENDING = "mailmeteor-batch-pending.csv"
 FOLLOWUP_PENDING = "mailmeteor-followup-pending.csv"
 SENT = "emails-sent.csv"
 SENT_FIELDS = ["email", "business", "preview_url", "batch", "sent", "followup_sent", "message_id", "subject", "variant",
-               "sent_from"]
+               "sent_from", "sent_at"]
 FOLLOWUP_AFTER_DAYS = 5
 # Someone who opened their preview is a call, not an email - but if no call is logged this long after
 # the first email, they get the one follow-up after all, so a warm firm is never simply forgotten.
@@ -252,15 +252,19 @@ def _write_sent(outreach: Path, rows: list[dict]) -> None:
 
 
 def record_sent(outreach: Path, row: dict, batch: str, today: date, message_id: str = "", subject: str = "",
-                variant: str = "", sent_from: str = "") -> None:
-    """One email just sent from the panel (send_email.py) - recorded straight away."""
+                variant: str = "", sent_from: str = "", sent_at: str | None = None) -> None:
+    """One email just sent from the panel (send_email.py) - recorded straight away, with the time (HH:MM)
+    so the scorecard can tell whether early sends get more replies."""
+    from datetime import datetime
+
+    sent_at = datetime.now().strftime("%H:%M") if sent_at is None else sent_at
     rows = _rows(outreach / SENT)[1]
     email = row["email"].strip().lower()
     if any((r.get("email") or "").lower() == email for r in rows):
         return
     rows.append({"email": email, "business": row.get("business", ""), "preview_url": row.get("preview_url", ""),
                  "batch": batch, "sent": today.isoformat(), "message_id": message_id, "subject": subject,
-                 "variant": variant, "sent_from": sent_from})
+                 "variant": variant, "sent_from": sent_from, "sent_at": sent_at})
     _write_sent(outreach, rows)
 
 
