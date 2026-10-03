@@ -339,7 +339,23 @@ def report(rows: list[dict], today: date | None = None) -> list[str]:
 
 
 def main() -> None:
+    import os
+    from datetime import timedelta
+
+    import mail_accounts
+    import mailmeteor_sync
+
     outreach = eb.outreach_dir()
+    # The Sent folders are the real record: sends that never reached emails-sent.csv (Mailmeteor straight
+    # from a list file, a replaced batch, by hand) are added first, so every number below is true.
+    inboxes = mail_accounts.accounts(dict(os.environ))
+    if inboxes:
+        found = mailmeteor_sync.read_sent(inboxes, date.today() - timedelta(days=180),
+                                          host=os.environ.get("MAIL_IMAP_HOST") or "imap.gmail.com")
+        firsts, follows = mailmeteor_sync.backfill(outreach, found)
+        print(f"Checked {len(inboxes)} Sent folder(s): {firsts} sends and {follows} follow-ups weren't recorded - added.", flush=True)
+    else:
+        print("No inbox login in Settings, so only recorded sends are counted (add MAIL_ADDRESS to include everything).", flush=True)
     rows = build(outreach, eb.preview_views())
     lines = report(rows)
     text = "\n".join(lines) + "\n"
