@@ -2,13 +2,15 @@
 # drafts a better title, description and FAQs -> checked -> a pull request you merge with one tap,
 # and a Telegram text with the link. Nothing goes live until you merge.
 #
-# Setup, once:
-#   1. Google Cloud: a service account (no roles needed), enable "Google Search Console API" on its
-#      project, and create a JSON key for it.
+# Setup, once (keyless - no service account key is ever made, so nothing secret sits in GitHub):
+#   1. Google Cloud Shell (the >_ button at console.cloud.google.com, with your project picked):
+#      run the commands in docs/seo-loop-setup.sh. They make the seo-loop service account and let
+#      only this repository's workflows act as it, for an hour at a time (Workload Identity Federation).
 #   2. Search Console -> scalardigital.co.uk -> Settings -> Users and permissions -> Add user:
-#      the service account's email, Restricted.
-#   3. This repository -> Settings -> Secrets and variables -> Actions: GSC_SERVICE_ACCOUNT_JSON =
-#      the whole key file. (ANTHROPIC_API_KEY and TELEGRAM_* are already there.)
+#      the seo-loop@... email the commands print, Restricted.
+#   3. This repository -> Settings -> Secrets and variables -> Actions -> Variables tab: add
+#      GCP_WIF_PROVIDER and GCP_SERVICE_ACCOUNT with the two values the commands print. (They're
+#      names, not secrets. ANTHROPIC_API_KEY and TELEGRAM_* secrets are already there.)
 #   4. Settings -> Actions -> General -> "Allow GitHub Actions to create and approve pull requests".
 #      Without it you get a link to open the pull request yourself instead.
 #
@@ -25,6 +27,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write  # for the keyless Google sign-in
 
 concurrency:
   group: seo-loop
@@ -40,9 +43,20 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install cryptography
+      - name: Sign in to Google (keyless)
+        id: google
+        if: vars.GCP_WIF_PROVIDER != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/webmasters.readonly
+          create_credentials_file: false
       - name: Search Console and drafts
         id: loop
         env:
+          GSC_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
           GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AI_MODEL: ${{ secrets.AI_MODEL }}
