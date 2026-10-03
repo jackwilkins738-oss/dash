@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/page-header'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { Reveal } from '@/components/reveal'
 import { withSeo } from '@/lib/seo'
+import { loadGuides } from '@/lib/guides'
 
 export const metadata: Metadata = withSeo('/guides', {
   title: 'Website Guides for UK Trades',
@@ -12,7 +13,7 @@ export const metadata: Metadata = withSeo('/guides', {
   alternates: { canonical: '/guides' },
 })
 
-const GUIDES = [
+const WRITTEN = [
   {
     href: '/guides/website-not-getting-enquiries',
     title: "Why isn't my website getting enquiries?",
@@ -56,6 +57,8 @@ const GUIDES = [
 ]
 
 export default function GuidesPage() {
+  // The SEO loop's newest guides first, then the hand-written ones.
+  const GUIDES = [...loadGuides().map((g) => ({ href: `/guides/${g.slug}`, title: g.title, body: g.card })), ...WRITTEN]
   return (
     <main>
       <Breadcrumbs items={[{ name: 'Guides', href: '/guides' }]} />

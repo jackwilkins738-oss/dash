@@ -14,8 +14,12 @@ Run by .github/workflows/seo-loop.yml on the 1st of each month (or by hand from 
     5. Writes content/seo.json (the site lays it over each page - lib/seo.ts), and a summary.
        The workflow then builds the site, opens the pull request, and texts you the link.
 
-It also reports how last time's changes did: clicks and position in the 28 days before each change
-against the last 28 days.
+It also:
+    - drafts one new guide a run (seo_guides.py) - new pages that answer what trades search are
+      what a young site needs most;
+    - asks Google which sitemap pages it has indexed (URL Inspection) and lists the ones it hasn't,
+      with the one-click fix;
+    - compares views and clicks with the 28 days before, and how last time's changes did.
 
 This repository is public: the log and the pull request carry page paths and counts only. The
 search phrases go to you by Telegram, never into GitHub.
@@ -50,6 +54,8 @@ SITE = "https://www.scalardigital.co.uk"
 SEO_FILE = HERE.parent / "content" / "seo.json"
 SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
 GSC = "https://www.googleapis.com/webmasters/v3"
+INSPECT = "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect"
+MAX_INSPECT = 60  # Google allows 2,000 a day; the site has a few dozen pages
 BRAND = " | Scalar Digital"
 TITLE_MAX = 60 - len(BRAND)  # what's left for the page's own words before Google cuts it off
 TITLE_MIN = 15
@@ -136,6 +142,11 @@ class Console:
     def property_for(self, site: str) -> str:
         sites = self.http(f"{GSC}/sites", None, self.auth).get("siteEntry") or []
         return pick_property(sites, site)
+
+    def inspect(self, prop: str, url: str) -> dict:
+        """Google's own view of one page: indexed or not, and why."""
+        res = self.http(INSPECT, json.dumps({"inspectionUrl": url, "siteUrl": prop}).encode(), self.auth)
+        return ((res.get("inspectionResult") or {}).get("indexStatusResult")) or {}
 
     def rows(self, prop: str, start: date, end: date, dimensions: list[str]) -> list[dict]:
         out, start_row = [], 0
@@ -393,10 +404,59 @@ def results(console: Console, prop: str, entries: dict, now_pages: dict[str, dic
     return lines
 
 
+# ---------------------------------------------------------------- indexing and the trend
+
+def indexing(console, prop: str, site: str, live: set[str], log=print) -> dict | None:
+    """Which sitemap pages Google has indexed. None if Search Console won't say (e.g. permissions)."""
+    indexed, missing = [], []
+    for path in sorted(live)[:MAX_INSPECT]:
+        try:
+            res = console.inspect(prop, site + ("/" if path == "/" else path))
+        except LoopError as e:
+            log(f"Indexing check skipped: {e}")
+            return None
+        if res.get("verdict") == "PASS":
+            indexed.append(path)
+        else:
+            missing.append((path, res.get("coverageState") or res.get("verdict") or "unknown"))
+    return {"indexed": indexed, "missing": missing}
+
+
+def totals(rows: list[dict]) -> tuple[int, int]:
+    return sum(int(r.get("impressions") or 0) for r in rows), sum(int(r.get("clicks") or 0) for r in rows)
+
+
+def change(now: int, before: int) -> str:
+    if not before:
+        return "new" if now else "no change"
+    pct = round((now - before) * 100 / before)
+    return f"{'+' if pct >= 0 else ''}{pct}%"
+
+
+def link_targets(live: set[str]) -> dict[str, str]:
+    """Pages a new guide may link to, with a readable name (from the address)."""
+    out = {}
+    for path in sorted(live):
+        name = path.strip("/").split("/")[-1].replace("-", " ") or "home page"
+        out[path] = {"work": "prices and what's included", "process": "how a build works", "guides": "all guides",
+                     "speed test": "free website speed test", "contact": "contact"}.get(name, name)
+    return out
+
+
+def ask_guide(system: str, user: str, key: str, model: str = "") -> dict:
+    import ai_reply
+
+    out = ai_reply._request("/messages", key, {
+        "model": ai_reply.model_for(key, model), "max_tokens": 8000, "system": system,
+        "messages": [{"role": "user", "content": user}],
+    }, timeout=240)
+    return parse_json("".join(b.get("text", "") for b in out.get("content") or [] if isinstance(b, dict) and b.get("type") == "text"))
+
+
 # ---------------------------------------------------------------- the run
 
 def run(env: dict, today: date | None = None, console=None, fetch=None, draft=None, seo_file: Path = SEO_FILE,
-        log=print) -> dict:
+        log=print, guide_ask=None, guide_dirs: dict | None = None) -> dict:
     """Returns {"changed": [paths], "summary": str (public), "message": str (private, for Telegram)}."""
     today = today or date.today()
     fetch = fetch or fetch_page
@@ -424,6 +484,10 @@ def run(env: dict, today: date | None = None, console=None, fetch=None, draft=No
         def draft(path, facts, page):
             return ask_claude(path, facts, page, key, env.get("AI_MODEL", ""))
 
+    if guide_ask is None and key:
+        def guide_ask(system, user):
+            return ask_guide(system, user, key, env.get("AI_MODEL", ""))
+
     prop = console.property_for(site)
     end = today - timedelta(days=LAG)
     rows = console.rows(prop, end - timedelta(days=WINDOW - 1), end, ["page", "query"])
@@ -432,6 +496,10 @@ def run(env: dict, today: date | None = None, console=None, fetch=None, draft=No
     live = sitemap_paths(fetch(f"{site}/sitemap.xml"), site)
     total_imp = sum(p["impressions"] for p in pages.values())
     total_clicks = sum(p["clicks"] for p in pages.values())
+    start = end - timedelta(days=WINDOW - 1)
+    prev_imp, prev_clicks = totals(console.rows(prop, start - timedelta(days=WINDOW), start - timedelta(days=1), ["page"]))
+    trend = (f"{total_imp} Google views ({change(total_imp, prev_imp)} on the 28 days before), "
+             f"{total_clicks} clicks ({change(total_clicks, prev_clicks)})")
     log(f"Search Console: {len(pages)} pages, {total_imp} impressions, {total_clicks} clicks in {WINDOW} days.")
 
     past = results(console, prop, entries, pages, today, site) if entries else []
@@ -464,14 +532,46 @@ def run(env: dict, today: date | None = None, console=None, fetch=None, draft=No
         seo_file.parent.mkdir(parents=True, exist_ok=True)
         seo_file.write_text(json.dumps(entries, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
+    # One new guide a run - the biggest lever a young site has.
+    import seo_guides
+
+    guide, guide_why = None, []
+    if guide_ask is not None:
+        try:
+            site_text = " ".join(page_facts(fetch(site + p)).get("text", "") for p in ("/", "/work", "/process"))
+            guide, guide_why = seo_guides.make(pages, link_targets(live), site_text, guide_ask, today, TITLE_MAX,
+                                               (DESC_MIN, DESC_MAX), HYPE, log=log, **(guide_dirs or {}))
+        except Exception as e:  # noqa: BLE001 - a failed guide never stops the snippet fixes
+            guide_why = [f"drafting failed ({type(e).__name__})"]
+            log(f"Guide: {guide_why[0]}.")
+    if guide:
+        changed.append(f"/guides/{guide['slug']}")
+
+    index = indexing(console, prop, site, live, log)
+
+    guide_line = (f"`/guides/{guide['slug']}`: {guide['title']}" if guide else
+                  f"none this run ({'; '.join(guide_why[:4]) or 'not set up'})")
+    if index is None:
+        index_line = "couldn't check (Search Console didn't allow URL inspection)"
+    else:
+        index_line = f"{len(index['indexed'])} of {len(index['indexed']) + len(index['missing'])} sitemap pages indexed"
+    missing = [f"- `{p}`: {why}" for p, why in (index or {}).get("missing", [])]
+    snippets = [p for p in changed if not (guide and p == f"/guides/{guide['slug']}")]
     summary = "\n".join([
-        f"Search Console, last {WINDOW} days: {len(pages)} pages, {total_imp} impressions, {total_clicks} clicks.",
-        "", "**This month**", *(public or ["- No page had enough nearly-there searches to work on yet."]),
+        f"Search Console, last {WINDOW} days: {len(pages)} pages, {trend}.",
+        "", "**Snippets**", *(public or ["- No page had enough nearly-there searches to work on yet."]),
+        "", f"**New guide**: {guide_line}" + ("\n\nRead it on the Vercel preview link below before merging." if guide else ""),
+        "", f"**Indexing**: {index_line}", *missing,
     ] + (["", "**Last changes** (28 days before vs the last 28 days)", *[f"- {line}" for line in past]] if past else []))
     message = "\n".join([
-        f"SEO loop ({today:%b %Y}): {total_imp} Google views, {total_clicks} clicks in {WINDOW} days.",
-        *([f"\n{len(changed)} page(s) improved - review and merge:"] + private if changed else
-          ["\nNothing to change this month." if picked else "\nNot enough search data on any page yet - nothing to change."]),
+        f"SEO loop ({today:%d %b %Y}): {trend} in {WINDOW} days.",
+        *([f"\n{len(snippets)} page snippet(s) improved:"] + private if snippets else
+          ["\nNo snippet changes." if picked else "\nNot enough search data for snippet changes yet."]),
+        f"\nNew guide: {guide['title']} - read it on the preview in the PR before merging." if guide else
+        f"\nNo new guide this run: {'; '.join(guide_why[:3]) or 'not set up'}.",
+        f"\nIndexing: {index_line}." + (
+            "\nNot indexed yet:\n" + "\n".join(f"  {p} ({why})" for p, why in index["missing"][:10])
+            + "\nFix: Search Console -> URL inspection -> paste the page -> Request indexing." if index and index["missing"] else ""),
         *(["\nHow last changes did:"] + past if past else []),
     ])
     return {"changed": changed, "summary": summary, "message": message}

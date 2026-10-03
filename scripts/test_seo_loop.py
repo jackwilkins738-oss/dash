@@ -41,6 +41,9 @@ class FakeConsole:
         self.calls.append((start, end, dims))
         return self._rows if dims == ["page", "query"] else self._before
 
+    def inspect(self, prop, url):
+        return {"verdict": "NEUTRAL", "coverageState": "Discovered - currently not indexed"} if url.endswith("/work") else {"verdict": "PASS"}
+
 
 class Jwt(unittest.TestCase):
     def test_signs_a_token_google_can_verify(self):
@@ -191,6 +194,24 @@ class Run(unittest.TestCase):
         self.assertIn("for a builder", res["message"])
         self.assertIn("description: description is 1 characters", res["summary"])
         self.assertIn("before 0 clicks, pos 30.0 -> now 1 clicks, pos 11.0", res["message"])
+        # Indexing: the sitemap's /work isn't indexed; the trend compares with the 28 days before.
+        self.assertIn("2 of 3 sitemap pages indexed", res["summary"])
+        self.assertIn("`/work`: Discovered - currently not indexed", res["summary"])
+        self.assertIn("Request indexing", res["message"])
+        self.assertIn("40 Google views (+300% on the 28 days before), 1 clicks (new)", res["message"])
+
+    def test_a_guide_is_added_and_counts_as_a_change(self):
+        import test_seo_guides
+
+        with tempfile.TemporaryDirectory() as d:
+            dirs = {"guides_dir": Path(d) / "guides", "written_dir": Path(d) / "app", "ideas_file": Path(d) / "ideas.json"}
+            dirs["ideas_file"].write_text('["Photos that win trade jobs"]')
+            res = seo_loop.run({}, TODAY, FakeConsole([]), self.fetch, lambda *a: {}, Path(d) / "seo.json", lambda *_: None,
+                               guide_ask=lambda system, user: test_seo_guides.good_guide(), guide_dirs=dirs)
+            self.assertTrue((dirs["guides_dir"] / "photos-that-win-trade-jobs.json").exists())
+        self.assertEqual(res["changed"], ["/guides/photos-that-win-trade-jobs"])
+        self.assertIn("**New guide**: `/guides/photos-that-win-trade-jobs`", res["summary"])
+        self.assertIn("New guide: Photos that win trade jobs", res["message"])
 
     def test_no_data_writes_nothing(self):
         with tempfile.TemporaryDirectory() as d:
