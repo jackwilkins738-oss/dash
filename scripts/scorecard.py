@@ -21,12 +21,18 @@ many emails it takes to win a job - your letters (who scanned the code), and
 your calls, and how many were real conversations. The autopilot texts it to
 you every Monday.
 
+Also a weekly funnel (each week's sends followed through: opened, replied,
+keen, quoted, won - where they drop out) and an experiment board: replies by
+send time (recorded from panel v66 on) and by how slow their site was.
+
 Small numbers mislead: a version isn't called better until each has 100+
-sends and at least 5 replies between them.
+sends and at least 5 replies between them; a send time or score band needs
+50+ sends in each group compared.
 """
 
 from __future__ import annotations
 
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -51,10 +57,15 @@ def gather(outreach: Path, views: dict[str, dict] | None, today: date | None = N
     """One row per firm emailed, with what happened since."""
     today = today or date.today()
     trades: dict[str, str] = {}
+    scores: dict[str, int] = {}
     for src in eb.sources(outreach, None):
         for r in eb._rows(src)[1]:
             if r.get("email"):
                 trades[_lower(r["email"])] = (r.get("trade") or "").strip() or "Unknown"
+                try:
+                    scores[_lower(r["email"])] = int(float(r.get("mobile_score") or ""))
+                except ValueError:
+                    pass
     replied_from, replied_names, keen_from, keen_names = set(), set(), set(), set()
     bounced = {_lower(r.get("from")) for r in eb._rows(outreach / "replies.csv")[1] if r.get("kind") == "bounce"}
     for r in eb._rows(outreach / "replies.csv")[1]:
@@ -83,6 +94,8 @@ def gather(outreach: Path, views: dict[str, dict] | None, today: date | None = N
             sent = None
         out.append({
             "email": email, "business": name, "sent": sent, "trade": trades.get(email, "Unknown"),
+            "hour": int(r["sent_at"][:2]) if re.fullmatch(r"\d{2}:\d{2}", r.get("sent_at") or "") else None,
+            "score": scores.get(email),
             "variant": (r.get("variant") or "").strip() or "-",
             "inbox": _lower(r.get("sent_from")),
             "bounced": email in bounced,
@@ -129,6 +142,74 @@ def verdict(rows: list[dict]) -> str:
         return "No clear winner yet - the two versions are within normal chance of each other."
     best = "B" if rate_b > rate_a else "A"
     return f"Version {best} is getting clearly more replies - make it the main email, and test a new B against it."
+
+
+MIN_GROUP = 50  # sends in each of the two groups being compared before one is called better
+
+
+def compare(title: str, groups: dict[str, list[dict]]) -> list[str]:
+    """One line per group, then a verdict that stays "not enough data" until a difference is real -
+    so a hunch about 7am vs lunchtime isn't settled by 12 emails."""
+    groups = {k: v for k, v in groups.items() if v}
+    if len(groups) < 2:
+        return []
+    out = [f"{title}:"] + [f"  {line(k, v)}" for k, v in groups.items()]
+    big = sorted((k for k, v in groups.items() if len(v) >= MIN_GROUP),
+                 key=lambda k: -sum(bool(r["replied"]) for r in groups[k]) / len(groups[k]))
+    replies = sum(bool(r["replied"]) for v in groups.values() for r in v)
+    if len(big) < 2 or replies < MIN_REPLIES:
+        out.append(f"  Not enough data yet - needs {MIN_GROUP}+ sends in at least two groups and {MIN_REPLIES}+ replies.")
+        return out
+    best, next_ = big[0], big[1]
+    rb, rn = (sum(bool(r["replied"]) for r in groups[k]) for k in (best, next_))
+    rate_b, rate_n = rb / len(groups[best]), rn / len(groups[next_])
+    if rate_b >= 1.5 * rate_n and rb - rn >= 3:
+        out.append(f"  {best} is clearly getting more replies.")
+    else:
+        out.append("  No clear difference yet - within normal chance.")
+    return out
+
+
+def hour_band(h: int) -> str:
+    return "Before 9am" if h < 9 else "9am-12" if h < 12 else "12-5pm" if h < 17 else "After 5pm"
+
+
+def score_band(s: int) -> str:
+    return "Score under 30" if s < 30 else "Score 30-49" if s < 50 else "Score 50-69" if s < 70 else "Score 70+"
+
+
+def experiments(rows: list[dict]) -> list[str]:
+    """Replies by send time and by how slow their site was - what to change next."""
+    out = []
+    by_hour: dict[str, list[dict]] = {}
+    for r in rows:
+        if r.get("hour") is not None:
+            by_hour.setdefault(hour_band(r["hour"]), []).append(r)
+    out += compare("By send time", {k: by_hour.get(k, []) for k in ("Before 9am", "9am-12", "12-5pm", "After 5pm")})
+    by_score: dict[str, list[dict]] = {}
+    for r in rows:
+        if r.get("score") is not None:
+            by_score.setdefault(score_band(r["score"]), []).append(r)
+    out += compare("By their mobile score", {k: by_score.get(k, []) for k in ("Score under 30", "Score 30-49", "Score 50-69", "Score 70+")})
+    return out
+
+
+def funnel(rows: list[dict], today: date, weeks: int = 4) -> list[str]:
+    """Each week's sends, followed through: where do they drop out?"""
+    out = []
+    start = today - timedelta(days=today.weekday())
+    for w in range(weeks):
+        monday = start - timedelta(weeks=w)
+        week = [r for r in rows if r["sent"] and monday <= r["sent"] < monday + timedelta(days=7)]
+        if not week:
+            continue
+        steps = [f"{len(week)} sent"]
+        if any(r["opened"] is not None for r in week):
+            steps.append(f"{sum(bool(r['opened']) for r in week)} opened")
+        steps += [f"{sum(bool(r[k]) for r in week)} {label}" for k, label in
+                  (("replied", "replied"), ("keen", "keen"), ("quoted", "quoted"), ("won", "won"))]
+        out.append(f"  w/c {monday:%d %b}: " + " -> ".join(steps))
+    return (["Weekly funnel (each week's sends, followed through):"] + out) if out else []
 
 
 def domains(rows: list[dict]) -> list[str]:
@@ -238,6 +319,8 @@ def scorecard(outreach: Path, views: dict[str, dict] | None, today: date | None 
     if len(by_trade) > 1:
         for trade, rs in sorted(by_trade.items(), key=lambda kv: -len(kv[1])):
             out.append(line(trade, rs))
+    out += funnel(rows, today)
+    out += experiments(rows)
     out += domains(rows)
     out += money(outreach, rows)
     held = objections(outreach, today)
