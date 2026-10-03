@@ -21,14 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           sparse-checkout: scripts
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       # Which replies were already texted, as one-way hashes - so nothing is texted twice.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: .reply-watch
           key: reply-watch-${{ github.run_id }}
@@ -47,7 +47,7 @@ jobs:
           QUOTE_PRICE_BUILD: ${{ secrets.QUOTE_PRICE_BUILD }}
           QUOTE_PRICE_LANDING: ${{ secrets.QUOTE_PRICE_LANDING }}
         run: python scripts/cloud_reply_watch.py
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: always() && hashFiles('.reply-watch/seen.txt') != ''
         with:
           path: .reply-watch
