@@ -1,1 +1,31 @@
-{}
+{
+  "/websites-for/roofers": {
+    "description": "Hand-coded websites for roofing firms: tap-to-call, a page for each job, your areas and proof of your work. Fixed price agreed before we start.",
+    "faqs": [
+      {
+        "q": "How fast should a roofing website load?",
+        "a": "It should load quickly on a weak mobile signal, because people often search from vans, driveways and gardens. A lightweight, hand-coded page loads while a heavy WordPress theme is still thinking, and Google measures that speed too."
+      },
+      {
+        "q": "Do I own my roofing website?",
+        "a": "Yes. Every site is written from scratch with no page-builder, theme or plugins, and you own the code and the domain outright. You get a fixed price before any work starts."
+      }
+    ],
+    "changed": "2026-10-03"
+  },
+  "/websites-for/landscapers": {
+    "title": "Websites for Landscapers & Garden Designers",
+    "description": "Hand-coded websites for landscapers and garden designers: a portfolio that shows your best work, clear services and easy enquiries. Fixed price.",
+    "faqs": [
+      {
+        "q": "What should a landscaper's website include?",
+        "a": "A portfolio built around a few complete projects, clear separate pages for design, build and maintenance, and the areas you cover. It also needs a short introduction about who you are and a simple way to get in touch, such as a short form or WhatsApp."
+      },
+      {
+        "q": "Why does a landscaping website need to be fast?",
+        "a": "Landscaping sites are image-heavy, which is where slow sites suffer most. Hand-coded pages with properly sized images stay quick on mobile even with a big portfolio."
+      }
+    ],
+    "changed": "2026-10-03"
+  }
+}
