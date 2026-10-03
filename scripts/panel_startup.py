@@ -4,38 +4,54 @@ work whenever the PC is on, without opening the panel first.
     python scripts/panel_startup.py --install
     python scripts/panel_startup.py --remove
 
-Opening the panel as usual (control_panel.bat) then just shows the one already running.
+Puts "Scalar Panel.cmd" in your own Startup folder (Win+R, shell:startup) - no administrator rights
+needed, unlike a Task Scheduler logon task. Delete that file to undo it by hand. Opening the panel as
+usual (control_panel.bat) then just shows the one already running.
 """
 
 from __future__ import annotations
 
-import subprocess
+import os
 import sys
 from pathlib import Path
 
-TASK_NAME = "Scalar Panel"
+NAME = "Scalar Panel.cmd"
 PANEL = Path(__file__).resolve().parent / "control_panel.py"
 
 
-def command(runner: Path) -> list[str]:
-    return ["schtasks", "/Create", "/F", "/SC", "ONLOGON", "/TN", TASK_NAME, "/TR", f'"{runner}" "{PANEL}" --no-browser']
+def startup_folder() -> Path | None:
+    appdata = os.environ.get("APPDATA")
+    return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" if appdata else None
+
+
+def launcher(runner: Path) -> str:
+    # "start" hands over to pythonw and the window closes at once - no console left on screen.
+    return f'@echo off\r\nstart "" "{runner}" "{PANEL}" --no-browser\r\n'
 
 
 def install() -> str:
     if sys.platform != "win32":
         return "Starting at login needs Windows - elsewhere, add control_panel.py --no-browser to your startup items."
+    folder = startup_folder()
+    if folder is None or not folder.is_dir():
+        return "Couldn't find your Startup folder (Win+R, shell:startup) - put a shortcut to control_panel.bat in it by hand."
     exe = Path(sys.executable)
     quiet = exe.with_name("pythonw.exe")  # no window sitting on the taskbar
-    res = subprocess.run(command(quiet if quiet.exists() else exe), capture_output=True, text=True)
-    return "" if res.returncode == 0 else (res.stderr or res.stdout).strip() or "Task Scheduler refused."
+    try:
+        (folder / NAME).write_text(launcher(quiet if quiet.exists() else exe), encoding="utf-8", newline="")
+    except OSError as e:
+        return f"Couldn't write to your Startup folder ({e})."
+    return ""
 
 
 def remove() -> str:
-    if sys.platform != "win32":
-        return ""
-    res = subprocess.run(["schtasks", "/Delete", "/F", "/TN", TASK_NAME], capture_output=True, text=True)
-    out = (res.stderr or res.stdout).strip()
-    return "" if res.returncode == 0 or "cannot find" in out.lower() else out
+    folder = startup_folder()
+    if folder is not None:
+        try:
+            (folder / NAME).unlink(missing_ok=True)
+        except OSError as e:
+            return f"Couldn't remove {NAME} from your Startup folder ({e})."
+    return ""
 
 
 def main() -> None:
@@ -43,8 +59,8 @@ def main() -> None:
         sys.exit("Usage: python scripts/panel_startup.py --install | --remove")
     if sys.argv[1] == "--install":
         err = install()
-        print(err or "Done: the panel now starts by itself when you log in to Windows (no window, no browser). "
-                     "Telegram controls work whenever the PC is on and awake.")
+        print(err or f"Done: the panel now starts by itself when you log in (no browser). It's {NAME} in your Startup "
+                     "folder (Win+R, shell:startup). Telegram controls work whenever the PC is on and awake.")
     else:
         err = remove()
         print(err or "Done: the panel no longer starts with Windows.")
