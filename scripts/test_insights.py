@@ -60,6 +60,7 @@ class Insights(unittest.TestCase):
         self.assertIn("+ Trade = Roofing", text)
         self.assertEqual(insights.subject_pattern("Firm1 Roofing - quick look at your website", "firm1 roofing"),
                          "<firm> - quick look at your website")
+        self.assertEqual(insights.subject_pattern("Firm1 - 41/100 on Google's speed test", "firm1"), "<firm> - N/N on Google's speed test")
         self.assertIn("Reply intents: price 19", text)
         self.assertIn("Sections reached: pricing", text)
         # Nothing that names or reaches anyone.
@@ -76,3 +77,12 @@ class Insights(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ZeroAverage(unittest.TestCase):
+    def test_nothing_is_better_than_a_zero_average_by_rounding(self):
+        rows = [{"replied": False, "viewed": False, "engaged": False, "keen": False, "won": False, "dims": {"Trade": t}}
+                for t in ["Roofing"] * 40 + ["Building"] * 40]
+        text = "\n".join(insights.compare("Replies", rows, "Trade"))
+        self.assertNotIn("BETTER", text)
+        self.assertNotIn("WORSE", text)

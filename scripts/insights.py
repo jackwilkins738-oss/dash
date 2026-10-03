@@ -136,7 +136,8 @@ def build(outreach: Path, views: dict[str, dict] | None, today: date | None = No
     facts = sheet_facts(outreach)
     replies = defaultdict(list)
     for r in eb._rows(outreach / "replies.csv")[1]:
-        replies[_lower(r.get("from"))].append(r)
+        if r.get("kind") in scorecard.REPLY_KINDS:  # not out-of-office or bounces
+            replies[_lower(r.get("from"))].append(r)
     calls_by_name = defaultdict(list)
     for r in eb._rows(outreach / "calls.csv")[1]:
         calls_by_name[_lower(r.get("business"))].append(r.get("outcome") or "")
@@ -171,6 +172,7 @@ def build(outreach: Path, views: dict[str, dict] | None, today: date | None = No
             "intent": next((r.get("intent") for r in replies.get(email, []) if r.get("intent")), ""),
             "objection": next((r.get("objection") for r in replies.get(email, []) if r.get("objection")), ""),
             "calls": calls_by_name.get(b["business"], []),
+            "matched": bool(m or f),
             "dims": {
                 "Trade": b["trade"],
                 "Area": (m.get("area") or f.get("Area") or "unknown").strip().title() or "unknown",
@@ -200,7 +202,7 @@ def subject_pattern(subject: str, business: str) -> str:
         return "unknown"
     if business:
         subject = re.sub(re.escape(business), "<firm>", subject, flags=re.I)
-    return subject[:60]
+    return re.sub(r"\d+(\.\d+)?", "N", subject)[:60]  # "41/100" and "56/100" are one subject
 
 
 def pct(k: int, n: int) -> str:
@@ -232,7 +234,7 @@ def compare(title: str, rows: list[dict], dim: str, metric: str = "replied", min
         lo, hi = wilson(k, n)
         mark = ""
         if n >= MIN_GROUP:
-            mark = "  << BETTER than average" if lo > overall else "  << WORSE than average" if hi < overall else ""
+            mark = "  << BETTER than average" if lo > overall + 1e-9 else "  << WORSE than average" if hi < overall - 1e-9 else ""
         else:
             mark = "  (too few to judge)"
         out.append(f"  {name[:45]:45} {len(rs):4} sent | viewed {pct(sum(bool(r['viewed']) for r in rs if r['viewed'] is not None), sum(1 for r in rs if r['viewed'] is not None))}"
@@ -249,6 +251,11 @@ def report(rows: list[dict], today: date | None = None) -> list[str]:
            "(counts and percentages only - no names, emails or websites)", ""]
     out.append("FUNNEL")
     out.append("  " + funnel_line(rows))
+    unmatched = [r for r in rows if not r["matched"]]
+    if unmatched:
+        out.append(f"  {len(unmatched)} sends match no list on this PC (a list since deleted or renamed), so their preview views "
+                   "can't be linked - without them:")
+        out.append("  " + funnel_line([r for r in rows if r["matched"]]))
     dated = [r["sent"] for r in rows if r["sent"]]
     if dated:
         out.append(f"  First send {min(dated):%d %b}, last {max(dated):%d %b}; bounced {pct(sum(r['bounced'] for r in rows), len(rows))}")
@@ -330,9 +337,9 @@ def report(rows: list[dict], today: date | None = None) -> list[str]:
             if len(rs) >= MIN_GROUP:
                 k = sum(bool(r["replied"]) for r in rs)
                 lo, hi = wilson(k, len(rs))
-                if lo > overall:
+                if lo > overall + 1e-9:
                     standouts.append(f"  + {dim} = {name}: {pct(k, len(rs))} reply ({len(rs)} sent) vs {100 * overall:.1f}% overall")
-                elif hi < overall:
+                elif hi < overall - 1e-9:
                     standouts.append(f"  - {dim} = {name}: {pct(k, len(rs))} reply ({len(rs)} sent) vs {100 * overall:.1f}% overall")
     out += ["", "STANDOUTS (beyond chance)"] + (standouts or ["  None yet - not enough sends for any difference to be real. Keep sending."])
     return out
