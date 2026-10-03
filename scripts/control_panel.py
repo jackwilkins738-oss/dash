@@ -65,7 +65,7 @@ def replies_first(settings: dict[str, str]) -> list:
     return [(REPLIES, [])] if settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD") else []
 RESULTS_NAME = "outreach-results.xlsx"
 SETTING_KEYS = [
-    "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+    "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
     "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME",
     "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD",
     "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD",
@@ -73,13 +73,13 @@ SETTING_KEYS = [
     "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR",
     "ANTHROPIC_API_KEY", "AI_MODEL",
 ]
-SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
+SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
                "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"}
 # A run this long gets a phone alert when it ends (if Telegram is set up).
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "68"
+PANEL_VERSION = "69"
 MAX_LOG_LINES = 5000
 
 
@@ -436,7 +436,10 @@ def build_find_args(body: dict, settings: dict[str, str]) -> tuple[list[str] | N
     """find_prospects.py options from the finder form - every value checked, nothing passed through raw."""
     from find_prospects import AGE_BANDS, DEFAULT_EXCLUDE, TRADES
 
-    if not settings.get("COMPANIES_HOUSE_API_KEY"):
+    google = body.get("source") == "google"
+    if google and not (settings.get("GOOGLE_PLACES_API_KEY") or settings.get("PAGESPEED_API_KEY")):
+        return None, "Add GOOGLE_PLACES_API_KEY in Settings first (a Google Cloud key with Places API (New) enabled)."
+    if not google and not settings.get("COMPANIES_HOUSE_API_KEY"):
         return None, "Add COMPANIES_HOUSE_API_KEY in Settings first (free from developer.company-information.service.gov.uk)."
     trades = [t for t in body.get("trades") or [] if t in TRADES]
     if not trades:
@@ -460,6 +463,8 @@ def build_find_args(body: dict, settings: dict[str, str]) -> tuple[list[str] | N
     if not 1 <= most <= 1000:
         return None, "Max firms must be 1-1000."
     args = ["--trades", ",".join(trades), "--areas", areas, "--age", age, "--max", str(most), "--exclude", exclude]
+    if google:
+        args += ["--source", "google"]
     if include:
         args += ["--include", include]
     if (body.get("website_only") or body.get("email_only")) and body.get("no_websites"):
@@ -1121,7 +1126,7 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
             args, error = build_find_args({**find, "action": "find"}, {**settings, "COMPANIES_HOUSE_API_KEY": settings.get("COMPANIES_HOUSE_API_KEY") or "x"})
             if args is None:
                 return {"error": f"Search: {error}"}, 400
-            find = {k: find.get(k) for k in ("trades", "areas", "age", "max", "include", "exclude", "email_only", "website_only", "no_directors", "no_websites")}
+            find = {k: find.get(k) for k in ("source", "trades", "areas", "age", "max", "include", "exclude", "email_only", "website_only", "no_directors", "no_websites")}
         try:
             gap = float(new.get("send_gap") or 0)
         except (TypeError, ValueError):
