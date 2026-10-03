@@ -466,6 +466,12 @@ Scalar Digital · 07401 696272</textarea>
       <p class="hint">Scorecard: sent → opened → replied → quoted → won, the money, and letters. Excel: every firm from every list, with your Notes kept. Close the workbook before exporting.</p>
     </div>
     <div class="card">
+      <h2>Data requests (UK GDPR)</h2>
+      <div class="row"><input type="text" id="dr-who" placeholder="Their email or website, e.g. kerrroofing.co.uk" style="flex:1"></div>
+      <div class="row"><button data-action="dr_find">Find</button><button data-action="dr_export">Export what we hold</button><button class="danger" data-action="dr_erase">Erase everywhere</button></div>
+      <p class="hint">If anyone asks what you hold on them, press <b>Export</b>. It writes <code>outreach/data-requests/&lt;date&gt;-&lt;website&gt;.txt</code> to send them; reply within a month. If they ask you to delete it, press <b>Erase</b>. That removes them from every list, CSV and their preview page, and keeps only their website and email on do-not-contact so no future list emails them. Delete their emails from your inbox yourself.</p>
+    </div>
+    <div class="card">
       <h2>Files in outreach/</h2>
       <ul class="files" id="files"></ul>
     </div>
@@ -673,11 +679,12 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "batch_sent" && !confirm("Mark the last batch as sent? Do this once Mailmeteor has sent it - they won't be picked again.")) return;
   if (action === "send_batch" && !confirm(`Send today's batch now, from your own email, ${$("send-gap").value ? $("send-gap").value + " min" : "about a minute"} apart? You can stop it any time.`)) return;
   if (action === "send_followups" && !confirm("Send the follow-ups now, from your own email?")) return;
+  if (action === "dr_erase" && !confirm(`Erase ${$("dr-who").value} everywhere - every list, every CSV and their preview page? This can't be undone.`)) return;
   if (action === "publish_site" && !confirm(`Publish outreach/sites/${$("publish-folder").value}/site live on their Cloudflare?`)) return;
   const r = await runOrStopAutopilot({ action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
     batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "", send_gap: $("send-gap").value, send_from: $("send-from").value,
     launch_old: $("launch-old").value, launch_new: $("launch-new").value,
-    golive_domain: $("golive-domain").value,
+    golive_domain: $("golive-domain").value, dr_who: $("dr-who").value,
     publish_folder: $("publish-folder").value, publish_account: $("publish-account").value, publish_project: $("publish-project").value,
     build_draft: $("build-draft").checked });
   if (r.error) $("run-msg").textContent = r.error;
