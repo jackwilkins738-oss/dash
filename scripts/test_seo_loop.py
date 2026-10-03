@@ -65,6 +65,16 @@ class Jwt(unittest.TestCase):
             seo_loop.Console({"client_email": "x", "private_key": "nope"}, http=lambda *a: {})
 
 
+class Token(unittest.TestCase):
+    def test_a_ready_token_skips_the_key(self):
+        calls = []
+        c = seo_loop.Console(token="abc", http=lambda url, data, headers: calls.append((url, headers)) or {"siteEntry": []})
+        with self.assertRaises(seo_loop.LoopError):
+            c.property_for(seo_loop.SITE)
+        self.assertEqual(calls[0][1]["Authorization"], "Bearer abc")
+        self.assertTrue(calls[0][0].endswith("/sites"))
+
+
 class Property(unittest.TestCase):
     def test_prefers_the_domain_property(self):
         sites = [{"siteUrl": "https://www.scalardigital.co.uk/", "permissionLevel": "siteFullUser"},

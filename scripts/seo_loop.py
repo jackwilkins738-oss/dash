@@ -20,8 +20,11 @@ against the last 28 days.
 This repository is public: the log and the pull request carry page paths and counts only. The
 search phrases go to you by Telegram, never into GitHub.
 
-Secrets: GSC_SERVICE_ACCOUNT_JSON (a Google service account's key, added as a user on the Search
-Console property), ANTHROPIC_API_KEY, and optionally AI_MODEL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID.
+Google sign-in is keyless: in the workflow, GitHub proves to Google it's this repository's job
+(Workload Identity Federation) and gets a one-hour token as the seo-loop service account, passed in
+as GSC_ACCESS_TOKEN. A service account key (GSC_SERVICE_ACCOUNT_JSON) still works where a Google
+organisation allows keys. Also ANTHROPIC_API_KEY, and optionally AI_MODEL, TELEGRAM_BOT_TOKEN,
+TELEGRAM_CHAT_ID.
 """
 
 from __future__ import annotations
@@ -114,14 +117,17 @@ def _http(url: str, data: bytes | None = None, headers: dict | None = None, time
 class Console:
     """Search Console, read-only."""
 
-    def __init__(self, account: dict, http=None):
+    def __init__(self, account: dict | None = None, http=None, token: str = ""):
         self.http = http or _http
+        if token:
+            self.auth = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+            return
         try:
-            jwt = signed_jwt(account)
+            jwt = signed_jwt(account or {})
         except (KeyError, ValueError, TypeError) as e:
             raise LoopError("GSC_SERVICE_ACCOUNT_JSON isn't a service account key (the JSON file Google gives you).") from e
         body = urllib.parse.urlencode({"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": jwt}).encode()
-        res = self.http(account.get("token_uri") or "https://oauth2.googleapis.com/token", body,
+        res = self.http((account or {}).get("token_uri") or "https://oauth2.googleapis.com/token", body,
                         {"Content-Type": "application/x-www-form-urlencoded"})
         if not res.get("access_token"):
             raise LoopError("Google didn't sign the service account in.")
@@ -396,14 +402,19 @@ def run(env: dict, today: date | None = None, console=None, fetch=None, draft=No
     fetch = fetch or fetch_page
     site = (env.get("SEO_SITE") or SITE).rstrip("/")
     if console is None:
+        token = (env.get("GSC_ACCESS_TOKEN") or "").strip()
         raw = (env.get("GSC_SERVICE_ACCOUNT_JSON") or "").strip()
-        if not raw:
-            raise LoopError("Add the GSC_SERVICE_ACCOUNT_JSON secret (a Google service account key) - see the workflow file.")
-        try:
-            account = json.loads(raw)
-        except ValueError as e:
-            raise LoopError("GSC_SERVICE_ACCOUNT_JSON isn't valid JSON - paste the whole key file.") from e
-        console = Console(account)
+        if token:
+            console = Console(token=token)
+        elif raw:
+            try:
+                account = json.loads(raw)
+            except ValueError as e:
+                raise LoopError("GSC_SERVICE_ACCOUNT_JSON isn't valid JSON - paste the whole key file.") from e
+            console = Console(account)
+        else:
+            raise LoopError("Google sign-in isn't set up - add the GCP_WIF_PROVIDER and GCP_SERVICE_ACCOUNT repository "
+                            "variables (see .github/workflows/seo-loop.yml).")
     key = (env.get("ANTHROPIC_API_KEY") or "").strip()
     if draft is None:
         if not key:
