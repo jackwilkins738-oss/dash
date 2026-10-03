@@ -139,3 +139,31 @@ class Bot(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CallNow(unittest.TestCase):
+    def test_finds_the_firm_by_preview_and_sends_its_number(self):
+        import openpyxl
+
+        from push_prospects import make_slug
+
+        d = Path(tempfile.mkdtemp())
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Outreach"
+        ws.append(["Business", "Website", "Phone", "Contact name", "Area"])
+        ws.append(["Other Roofing", "other.co.uk", "01111", "", ""])
+        ws.append(["Kerr Roofing", "kerrroofing.co.uk", "01483 111222", "John Kerr", "Guildford"])
+        wb.save(d / "list.xlsx")
+        panel, _ = fake_panel(d)
+        panel.sheets = lambda: ["list.xlsx"]
+        sent = []
+        bot = telegram_bot.Bot(panel, "tok", CHAT, http=lambda m, p, timeout=30: sent.append((m, p)) or {})
+        slug = make_slug("Kerr Roofing", "kerrroofing.co.uk", "x" * 40)
+        bot.handle({"callback_query": {"id": "q", "data": f"callnow:{slug}", "message": {"chat": {"id": int(CHAT)}}}})
+        texts = [p["text"] for m, p in sent if m == "sendMessage"]
+        self.assertIn("01483 111222", texts[0])
+        self.assertIn("ask for John Kerr", texts[0])
+        self.assertIn("KERR ROOFING LTD", texts[1])  # the research card
+        bot.handle({"callback_query": {"id": "q", "data": "callnow:nobody-123456", "message": {"chat": {"id": int(CHAT)}}}})
+        self.assertIn("Couldn't find", [p["text"] for m, p in sent if m == "sendMessage"][-1])

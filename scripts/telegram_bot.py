@@ -109,6 +109,8 @@ class Bot:
             data = str(q.get("data") or "")
             if data == "inbound":  # the website's "asked for their report" alert - its own text is the lead
                 self.inbound(str((q.get("message") or {}).get("text") or ""))
+            elif data.startswith("callnow:"):  # the website's "just opened their preview" alert
+                self.call_now(data.partition(":")[2])
             else:
                 self.on_button(data)
             return
@@ -402,6 +404,68 @@ class Bot:
             out, _ = p.reply_send_action({**body, "to": item.get("email", ""), "text": text, "message_id": item.get("message_id", ""),
                                           "subject": item.get("subject", ""), "name": "Telegram"})
             self.send(out.get("message") or out.get("error", ""))
+
+    def find_by_slug(self, slug: str) -> dict | None:
+        """The firm whose preview this is, from your lists - with the phone only this PC has."""
+        import csv
+
+        import openpyxl
+
+        import calls
+        import overrides
+        from push_prospects import domain_of, make_slug
+
+        p = self.panel
+        settings = p.load_settings()
+        secret = settings["PROSPECTS_API_SECRET"]
+        found = {}
+        contacts = p.OUTREACH / "contacts-found.csv"
+        if contacts.exists():
+            with contacts.open(encoding="utf-8") as f:
+                found = {r["website"]: r for r in csv.DictReader(f) if r.get("website")}
+        site = (settings.get("SITE_URL") or "https://www.scalardigital.co.uk").rstrip("/")
+        for name in p.sheets():
+            try:
+                wb = openpyxl.load_workbook(p.OUTREACH / name, read_only=True, data_only=True)
+            except Exception:  # noqa: BLE001 - open in Excel: try the others
+                continue
+            try:
+                for tab in ("Outreach", "Check website"):
+                    if tab not in wb.sheetnames:
+                        continue
+                    rows = wb[tab].iter_rows(values_only=True)
+                    header = [str(h).strip() if h else "" for h in next(rows, ())]
+                    for values in rows:
+                        row = dict(zip(header, values))
+                        business = str(row.get("Business") or "").strip()
+                        domain = domain_of(str(row.get("Website") or row.get("Possible website") or "")) or ""
+                        if not business or not domain or make_slug(business, domain, secret) != slug:
+                            continue
+                        extra = found.get(domain) or {}
+                        phone = next((str(row[c]).strip() for c in calls.PHONE_COLUMNS if str(row.get(c) or "").strip()), "") or extra.get("phone", "")
+                        return {"key": overrides.row_key(row), "sheet": name, "business": business, "website": domain,
+                                "contact": str(row.get("Contact name") or "").strip() or extra.get("contact", ""),
+                                "email": str(row.get("Email") or "").strip() or extra.get("email", ""), "phone": phone,
+                                "area": str(row.get("Area") or row.get("Town") or "").strip(),
+                                "preview": f"{site}/for/{slug}?src=dashboard"}
+            finally:
+                wb.close()
+        return None
+
+    def call_now(self, slug: str) -> None:
+        item = self.find_by_slug(slug)
+        if not item:
+            self.send("Couldn't find that firm in your lists on this PC - check Calls on the panel.")
+            return
+        sid = self._remember("call", item)
+        who = f" - ask for {item['contact']}" if item.get("contact") else ""
+        self.send(f"📞 {item['business']}{who}\n{item['phone'] or 'No phone on your list - check their site: ' + item['website']}\n"
+                  "Open with: \"I saw you had a look at the site I made for you...\"",
+                  [[("No answer", f"o:{sid}:No answer"), ("Call back tmrw", f"cb:{sid}")],
+                   [("👍 Interested", f"o:{sid}:Interested"), ("🚫 Not interested", f"ni?:{sid}")]])
+        out, _ = self.panel.research_action({"business": item["business"], "website": item["website"], "area": item.get("area", "")})
+        if out.get("lines"):
+            self.send("\n".join(out["lines"]))
 
     def inbound(self, text: str) -> None:
         """"Add to pipeline" on a website lead: into inbound.xlsx, preview built, then a personal reply offered."""

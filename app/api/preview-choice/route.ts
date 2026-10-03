@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getProspect, isProspectSlug, recordProspectChoice } from '@/lib/prospect-api'
 import { CHOICES, choiceAlert, cleanPhone, type Choice } from '@/lib/engagement'
-import { ownerAlert } from '@/lib/owner-alert'
+import { callNowButtons, ownerAlert } from '@/lib/owner-alert'
 
 // A one-tap answer on a prospect's preview page (components/quick-reply.tsx):
 // "Yes, give me a ring", "WhatsApp me" or "Maybe later". Recorded in the
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   // If the dashboard can't record it (its update not deployed, or migration 059 not run yet), the
   // owner still hears about it - a "ring me" must never be lost.
   const firm = (await recordProspectChoice(slug, choice)) ?? (await getProspect(slug))
-  if (firm) await ownerAlert(choiceAlert(choice, firm, cleanPhone(body.phone)), 'preview-choice')
+  if (firm) await ownerAlert(choiceAlert(choice, firm, cleanPhone(body.phone)), 'preview-choice', choice === 'call' ? callNowButtons(slug) : undefined)
   // Always the same answer, so the page can't be used to probe slugs.
   return NextResponse.json({ ok: true })
 }
