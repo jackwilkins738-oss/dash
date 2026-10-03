@@ -142,3 +142,24 @@ export async function recordProspectChoice(
     return null
   }
 }
+
+export type StartedQuote = { quote_url: string; quote_number: string; total_pence: number; reused: boolean; business_name: string }
+
+/** "See my quote" on their preview: the quote the owner published for that package, made (or reopened) for them. */
+export async function startProspectQuote(slug: string, pkg: 'build' | 'landing'): Promise<StartedQuote | null> {
+  const cfg = config()
+  if (!cfg || !isProspectSlug(slug)) return null
+  try {
+    const res = await fetch(`${cfg.base}/api/prospects/${slug}/start`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${cfg.secret}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ package: pkg }),
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as Partial<StartedQuote>
+    return typeof body.quote_url === 'string' && /^https:\/\//.test(body.quote_url) ? (body as StartedQuote) : null
+  } catch {
+    return null
+  }
+}
