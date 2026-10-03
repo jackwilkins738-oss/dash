@@ -56,6 +56,7 @@ BACKUP = HERE / "backup.py"
 SENDING_HEALTH = HERE / "sending_health.py"
 DATA_REQUEST = HERE / "data_request.py"
 PANEL_STARTUP = HERE / "panel_startup.py"
+INSIGHTS = HERE / "insights.py"
 SITE_COPY = HERE / "site_copy.py"
 SITE_QA = HERE / "site_qa.py"
 
@@ -79,7 +80,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "72"
+PANEL_VERSION = "73"
 MAX_LOG_LINES = 5000
 
 
@@ -367,6 +368,7 @@ ACTIONS = {
     "publish_site": "Publish site",
     "publish_preview": "Publish a preview for the client",
     "scorecard": "Scorecard",
+    "insights": "Insights (deep dive)",
     "dr_find": "Data request: find",
     "dr_export": "Data request: export",
     "dr_erase": "Data request: erase",
@@ -505,6 +507,8 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
             return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first."
         return (lambda job: [(REPLIES, [])]), ""
+    if action == "insights":
+        return (lambda job: [(INSIGHTS, [])]), ""
     if action in ("startup_on", "startup_off"):
         return (lambda job: [(PANEL_STARTUP, ["--install" if action == "startup_on" else "--remove"])]), ""
     if action in ("reply_watch_on", "reply_watch_off"):
