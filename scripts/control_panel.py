@@ -54,6 +54,7 @@ GO_LIVE = HERE / "go_live.py"
 CLIENT_SPEED = HERE / "client_speed.py"
 BACKUP = HERE / "backup.py"
 SENDING_HEALTH = HERE / "sending_health.py"
+DATA_REQUEST = HERE / "data_request.py"
 SITE_COPY = HERE / "site_copy.py"
 SITE_QA = HERE / "site_qa.py"
 
@@ -77,7 +78,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "63"
+PANEL_VERSION = "64"
 MAX_LOG_LINES = 5000
 
 
@@ -363,6 +364,9 @@ ACTIONS = {
     "publish_site": "Publish site",
     "publish_preview": "Publish a preview for the client",
     "scorecard": "Scorecard",
+    "dr_find": "Data request: find",
+    "dr_export": "Data request: export",
+    "dr_erase": "Data request: erase",
     "speed": "Speed check the next batch",
     "one": "Check one firm",
     "contacts": "Find missing emails & phones",
@@ -538,6 +542,11 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not settings.get("MAIL_ADDRESS"):
             return None, "Add MAIL_ADDRESS in Settings first - it's your sending domain that gets checked."
         return (lambda job: [(SENDING_HEALTH, [])]), ""
+    if action in ("dr_find", "dr_export", "dr_erase"):
+        who = str(body.get("dr_who") or "").strip().lower()
+        if not (re.fullmatch(r"[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}", who) or re.fullmatch(r"(https?://)?[a-z0-9.-]+\.[a-z]{2,}/?", who)):
+            return None, "Type their email address or website, e.g. info@kerrroofing.co.uk or kerrroofing.co.uk."
+        return (lambda job: [(DATA_REQUEST, [action[3:], who])]), ""
     if action == "client_speed":
         if not settings.get("PAGESPEED_API_KEY"):
             return None, "Add PAGESPEED_API_KEY in Settings first."
