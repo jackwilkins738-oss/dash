@@ -78,7 +78,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "64"
+PANEL_VERSION = "65"
 MAX_LOG_LINES = 5000
 
 
@@ -976,6 +976,20 @@ def reply_draft_action(body: dict) -> tuple[dict, int]:
     return {"ok": True, "text": saved_replies.render(replies[name], reply_values(load_settings(), body))}, 200
 
 
+def research_action(body: dict) -> tuple[dict, int]:
+    """Calls tab "Research": company age and directors, what their site says, their speed check."""
+    import research
+    from push_prospects import domain_of
+
+    website = domain_of(str(body.get("website") or ""))
+    business = str(body.get("business") or "").strip()[:120]
+    if not (website and business):
+        return {"error": "That doesn't look right."}, 400
+    out = research.research(OUTREACH, business, website, str(body.get("area") or "").strip()[:80], load_settings(),
+                            fresh=bool(body.get("fresh")))
+    return out, 200
+
+
 def reply_ai_action(body: dict) -> tuple[dict, int]:
     """Calls tab "Draft with AI": Claude's first go at answering their reply - shown in the box, never sent."""
     import ai_reply
@@ -1475,6 +1489,8 @@ class Handler(BaseHTTPRequestHandler):
 
             return self._json(send_email.preview_batch(OUTREACH, body.get("kind") == "followups", load_settings(),
                                                        str(body.get("from") or "")))
+        if route == "/api/research":
+            return self._json(*research_action(body))
         if route == "/api/reply-ai":
             return self._json(*reply_ai_action(body))
         if route == "/api/reply-send":
