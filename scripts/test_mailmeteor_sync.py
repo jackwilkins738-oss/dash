@@ -144,3 +144,39 @@ class MailmeteorSync(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Backfill(unittest.TestCase):
+    """Sends the panel never recorded (Mailmeteor straight from a list file) are found in Sent and added."""
+
+    def test_adds_unrecorded_sends_and_follow_ups(self):
+        import tempfile
+        from datetime import date
+        from pathlib import Path
+
+        import mailmeteor_sync as ms
+
+        d = Path(tempfile.mkdtemp())
+        with (d / "mailmeteor-builders.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=["business", "email", "preview_url"])
+            w.writeheader()
+            w.writerows([{"business": "A Ltd", "email": "a@a.co.uk", "preview_url": "https://x/for/a-1"},
+                         {"business": "B Ltd", "email": "b@b.co.uk", "preview_url": "https://x/for/b-2"},
+                         {"business": "C Ltd", "email": "c@c.co.uk", "preview_url": "https://x/for/c-3"}])
+        with (d / eb.SENT).open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=eb.SENT_FIELDS)
+            w.writeheader()
+            w.writerow({"email": "c@c.co.uk", "business": "C Ltd", "sent": "2026-09-28", "sent_from": "me@x.co"})
+        found = {
+            "a@a.co.uk": [(date(2026, 9, 29), "me@x.co", "A Ltd - quick look at your website"),
+                          (date(2026, 10, 4), "me@x.co", "Re: A Ltd - quick look at your website")],
+            "b@b.co.uk": [(date(2026, 9, 30), "me@y.co", "B Ltd - quick look at your website")],
+            "friend@gmail.com": [(date(2026, 9, 30), "me@x.co", "Dinner")],  # not a prospect: ignored
+        }
+        self.assertEqual(ms.backfill(d, found), (2, 1))
+        rows = {r["email"]: r for r in eb._rows(d / eb.SENT)[1]}
+        self.assertEqual(set(rows), {"a@a.co.uk", "b@b.co.uk", "c@c.co.uk"})
+        self.assertEqual((rows["a@a.co.uk"]["sent"], rows["a@a.co.uk"]["followup_sent"], rows["a@a.co.uk"]["subject"]),
+                         ("2026-09-29", "2026-10-04", "A Ltd - quick look at your website"))
+        self.assertEqual((rows["b@b.co.uk"]["sent_from"], rows["c@c.co.uk"]["sent"]), ("me@y.co", "2026-09-28"))
+        self.assertEqual(ms.backfill(d, found), (0, 0))  # run again: nothing doubled
