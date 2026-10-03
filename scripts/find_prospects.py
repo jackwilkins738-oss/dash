@@ -514,6 +514,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--website-only", action="store_true", help="leave out firms with no website found")
     ap.add_argument("--email-only", action="store_true", help="leave out firms with no email found")
     ap.add_argument("--count-only", action="store_true", help="just say how many match")
+    ap.add_argument("--source", default="companies", choices=["companies", "google"],
+                    help="companies: Companies House (limited companies only); google: Google Maps (sole traders too)")
     args = ap.parse_args(argv)
 
     trades = [t for t in split_list(args.trades.lower()) if t in TRADES]
@@ -526,6 +528,18 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit("--max must be 1-1000.")
     if (args.email_only or args.website_only) and args.no_websites:
         sys.exit("Only firms with an email / a website needs the website search - untick Skip the website search.")
+    if args.source == "google":
+        import places_finder
+
+        outreach = outreach_dir()
+        outreach.mkdir(exist_ok=True)
+        args.trades = ",".join(trades)
+        key = (os.environ.get("GOOGLE_PLACES_API_KEY") or os.environ.get("PAGESPEED_API_KEY") or "").strip()
+        try:
+            places_finder.run(args, outreach, key, log=lambda line: print(line, flush=True))
+        except places_finder.PlacesError as e:
+            sys.exit(str(e))
+        return
     key = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
     if not key or key_problem(key):
         sys.exit("Needs a COMPANIES_HOUSE_API_KEY (Settings) - " + (key_problem(key) or "not set") + ".")

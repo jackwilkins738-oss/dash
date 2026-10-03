@@ -255,6 +255,12 @@
     <div class="card">
       <details id="finder-box" open>
       <summary>Find new prospects</summary>
+      <label for="f-source">Search</label>
+      <select id="f-source">
+        <option value="google">Google Maps - sole traders too, with phone and reviews (recommended)</option>
+        <option value="companies">Companies House - limited companies only, with directors</option>
+      </select>
+      <p class="hint">Most trades are sole traders, so they aren't on Companies House. Google Maps finds them, busiest first, and the email search runs when you Run the whole list. It needs GOOGLE_PLACES_API_KEY (or your PageSpeed key with Places API (New) enabled).</p>
       <label>Trades</label>
       <div class="chips" id="f-trades">
         <label class="chip"><input type="checkbox" value="roofing" checked> Roofing</label>
@@ -524,6 +530,7 @@ Scalar Digital · 07401 696272</textarea>
       <div class="grid2">
         <div><label>Dashboard secret <code>PROSPECTS_API_SECRET</code> <span id="set-secret"></span></label><input type="password" id="PROSPECTS_API_SECRET" autocomplete="off"></div>
         <div><label>Google speed test <code>PAGESPEED_API_KEY</code> <span id="set-psi"></span></label><input type="password" id="PAGESPEED_API_KEY" autocomplete="off"></div>
+        <div><label>Google Maps finder <code>GOOGLE_PLACES_API_KEY</code> <span id="set-places"></span></label><input type="password" id="GOOGLE_PLACES_API_KEY" autocomplete="off" placeholder="optional - else the PageSpeed key is used"></div>
         <div><label>AI reply drafts <code>ANTHROPIC_API_KEY</code> <span id="set-ai"></span></label><input type="password" id="ANTHROPIC_API_KEY" autocomplete="off"></div>
         <div><label>AI model <code>AI_MODEL</code> (optional)</label><input type="text" id="AI_MODEL" placeholder="Blank = the newest Sonnet your key can use"></div>
         <div><label>Companies House <code>COMPANIES_HOUSE_API_KEY</code> <span id="set-ch"></span></label><input type="password" id="COMPANIES_HOUSE_API_KEY" autocomplete="off"></div>
@@ -623,6 +630,7 @@ function render() {
   }
   $("set-secret").textContent = s.settings.PROSPECTS_API_SECRET ? "(saved)" : "(not set)";
   $("set-psi").textContent = s.settings.PAGESPEED_API_KEY ? "(saved)" : "(not set - needed for speed checks)";
+  $("set-places").textContent = s.settings.GOOGLE_PLACES_API_KEY ? "(saved)" : "(optional)";
   $("set-ai").textContent = s.settings.ANTHROPIC_API_KEY ? "(saved)" : "(optional - drafts replies in Calls and in your reply texts; about 1p a draft)";
   aiReady = !!s.settings.ANTHROPIC_API_KEY;
   $("set-mail").textContent = s.settings.MAIL_APP_PASSWORD ? "(saved)" : "(lets the panel send your emails and read replies)";
@@ -692,12 +700,12 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   lastLines = -1;
   setTimeout(poll, 150);
 }));
-const FINDER_FIELDS = ["f-areas", "f-age", "f-max", "f-include", "f-exclude"];
+const FINDER_FIELDS = ["f-source", "f-areas", "f-age", "f-max", "f-include", "f-exclude"];
 const FINDER_CHECKS = ["f-email-only", "f-website-only", "f-no-directors", "f-no-websites"];
 function finderForm() {
   return {
     trades: [...document.querySelectorAll("#f-trades input:checked")].map((i) => i.value),
-    areas: $("f-areas").value, age: $("f-age").value, max: $("f-max").value,
+    source: $("f-source").value, areas: $("f-areas").value, age: $("f-age").value, max: $("f-max").value,
     include: $("f-include").value, exclude: $("f-exclude").value,
     email_only: $("f-email-only").checked, website_only: $("f-website-only").checked, no_directors: $("f-no-directors").checked, no_websites: $("f-no-websites").checked,
   };
@@ -710,7 +718,7 @@ function saveFinder() {
   try { f = JSON.parse(localStorage.getItem("finder") || "null"); } catch (e) {}
   if (!f) return;
   document.querySelectorAll("#f-trades input").forEach((i) => (i.checked = (f.trades || []).includes(i.value)));
-  $("f-areas").value = f.areas || ""; $("f-age").value = f.age || "any"; $("f-max").value = f.max || 100;
+  $("f-source").value = f.source || "companies"; $("f-areas").value = f.areas || ""; $("f-age").value = f.age || "any"; $("f-max").value = f.max || 100;
   $("f-include").value = f.include || ""; if (f.exclude != null) $("f-exclude").value = f.exclude;
   $("f-email-only").checked = !!f.email_only; $("f-website-only").checked = !!f.website_only; $("f-no-directors").checked = !!f.no_directors; $("f-no-websites").checked = !!f.no_websites;
 })();
@@ -973,7 +981,7 @@ setInterval(() => { if (callsWanted()) loadCalls(); }, 60000);
 let apSearch = null;
 function describeSearch(f) {
   if (!f || !f.trades || !f.trades.length) return "Search: none saved yet - fill in Find new prospects, then press Use the search.";
-  return `Search: ${f.trades.join(", ")} in ${f.areas} - up to ${f.max} new firms a day${f.email_only ? ", only with an email" : ""}.`;
+  return `Search (${f.source === "google" ? "Google Maps" : "Companies House"}): ${f.trades.join(", ")} in ${f.areas} - up to ${f.max} new firms a day${f.email_only ? ", only with an email" : ""}.`;
 }
 async function loadAutopilot() {
   const r = await (await fetch("/api/autopilot")).json();
@@ -1205,9 +1213,9 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); loadBatch(); if (callsWanted()) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "ANTHROPIC_API_KEY", "AI_MODEL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "ANTHROPIC_API_KEY", "AI_MODEL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD", "ANTHROPIC_API_KEY"]) $(k).value = "";
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD", "ANTHROPIC_API_KEY"]) $(k).value = "";
   fillSendFrom(body);
   $("saved").textContent = "Saved"; setTimeout(() => ($("saved").textContent = ""), 2000);
   $("settings-msg").textContent = r.warning ? "Saved, but " + r.warning + "." : "";
