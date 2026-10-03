@@ -61,7 +61,8 @@ def sources(outreach: Path, sheet: str | None) -> list[Path]:
         stem = Path(sheet).stem
         path = outreach / ("mailmeteor.csv" if stem == "outreach-master" else f"mailmeteor-{stem}.csv")
         return [path] if path.exists() else []
-    files = [p for p in outreach.glob("mailmeteor*.csv") if not p.name.startswith("mailmeteor-batch")]
+    # Inbound leads asked to hear from you: answered personally, never in a cold batch.
+    files = [p for p in outreach.glob("mailmeteor*.csv") if not p.name.startswith("mailmeteor-batch") and p.name != "mailmeteor-inbound.csv"]
     return sorted(files, key=lambda p: p.stat().st_mtime)
 
 

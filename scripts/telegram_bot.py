@@ -106,7 +106,11 @@ class Bot:
             if not self.mine(((q.get("message") or {}).get("chat") or {}).get("id")):
                 return
             self.api("answerCallbackQuery", callback_query_id=q.get("id"))
-            self.on_button(str(q.get("data") or ""))
+            data = str(q.get("data") or "")
+            if data == "inbound":  # the website's "asked for their report" alert - its own text is the lead
+                self.inbound(str((q.get("message") or {}).get("text") or ""))
+            else:
+                self.on_button(data)
             return
         msg = update.get("message") or {}
         if not self.mine((msg.get("chat") or {}).get("id")):
@@ -374,7 +378,8 @@ class Bot:
             self.send("\n".join(out.get("lines") or [out.get("error", "")]) + (f"\nReviews: {out['google']}" if out.get("google") else ""))
         elif verb == "ai":
             self.send("Writing a draft...")
-            out, _ = p.reply_ai_action({k: item.get(k, "") for k in ("business", "trade", "area", "website", "mobile_score", "subject", "message")})
+            out, _ = p.reply_ai_action({k: item.get(k, "") for k in ("business", "trade", "area", "website", "mobile_score", "subject", "message",
+                                                                    "preview", "contact")})
             if out.get("error"):
                 self.send(out["error"])
                 return
@@ -398,6 +403,36 @@ class Bot:
                                           "subject": item.get("subject", ""), "name": "Telegram"})
             self.send(out.get("message") or out.get("error", ""))
 
+    def inbound(self, text: str) -> None:
+        """"Add to pipeline" on a website lead: into inbound.xlsx, preview built, then a personal reply offered."""
+        import inbound
+        import overrides
+        from push_prospects import domain_of, make_slug
+
+        lead = inbound.parse(text)
+        if not lead:
+            self.send("That alert doesn't have what's needed (business, email, website) - add them by hand.")
+            return
+        p = self.panel
+        status, message = inbound.add(p.OUTREACH, lead)
+        self.send(message)
+        if status not in ("added", "already"):
+            return
+        settings = p.load_settings()
+        site = (settings.get("SITE_URL") or "https://www.scalardigital.co.uk").rstrip("/")
+        domain = domain_of(lead["website"]) or ""
+        preview = f"{site}/for/{make_slug(lead['business'], domain, settings['PROSPECTS_API_SECRET'])}?src=dashboard"
+        score = f" and scored {lead['score']}/100 on mobile" if lead.get("score") else ""
+        item = {"key": overrides.row_key({"Business": lead["business"], "Website": lead["website"]}), "sheet": inbound.SHEET,
+                "business": lead["business"], "website": domain, "email": lead["email"], "contact": lead.get("name", ""),
+                "phone": lead.get("phone", ""), "trade": lead.get("trade", ""), "area": lead.get("town", ""),
+                "mobile_score": lead.get("score", ""), "preview": preview, "subject": "Your website report",
+                "message": f"Please send me the full report on my website ({domain}) - I ran your free speed test{score}."}
+        sid = self._remember("reply", item)
+        self.start("all", {"sheet": inbound.SHEET}, then=(
+            f"{lead['business']}'s preview: {preview.replace('src=dashboard', 'src=email')}\nThey asked for this - reply personally, today:",
+            [[("✨ AI draft with their preview", f"ai:{sid}"), ("✏️ Write it", f"wr:{sid}")]]))
+
     def offer_draft(self, sid: str) -> None:
         item = self.items[sid]["item"]
         self.send(f"To {item.get('email')}:\n\n{self.drafts[sid]}",
@@ -416,7 +451,7 @@ class Bot:
         skipped = [e for e in emails if e.get("skip")]
         self.send(f"{len(emails)} in the batch" + (f", {len(skipped)} would be skipped" if skipped else "") + " - the panel's Preview emails shows them all.")
 
-    def start(self, action: str, extra: dict | None = None) -> None:
+    def start(self, action: str, extra: dict | None = None, then: tuple | None = None) -> None:
         p = self.panel
         body = {"action": action, "batch_size": BATCH_SIZE, "batch_scope": "all", "followup_size": BATCH_SIZE, "followup_days": 5,
                 "send_gap": SEND_GAP_MIN, "send_from": "", **(extra or {})}
@@ -432,17 +467,21 @@ class Bot:
 
         if autopilot.is_running() and action != "autopilot_now":
             self.send("The autopilot is running, so this has to wait.", [[("⏹ Stop the autopilot", "apstop?")]])
-            return
-        label = p.ACTIONS[action]
-        error = p.JOB.start(label, steps, settings, keep_going=action in ("all", "batch"))
+            error = "busy"
+        else:
+            label = p.ACTIONS[action]
+            error = p.JOB.start(label, steps, settings, keep_going=action in ("all", "batch"))
+            if error:
+                self.send(error)
         if error:
-            self.send(error)
+            if then:  # what to do next still applies - the run can happen later (🗂 Lists)
+                self.send("Run the list later from 🗂 Lists. Meanwhile:\n" + then[0], then[1])
             return
         p.JOB.from_phone = True
         self.send(f"Started: {label}. I'll text you when it's done (📜 Log to look in on it).")
-        threading.Thread(target=self._report_when_done, daemon=True).start()
+        threading.Thread(target=self._report_when_done, args=(then,), daemon=True).start()
 
-    def _report_when_done(self) -> None:
+    def _report_when_done(self, then: tuple | None = None) -> None:
         job = self.panel.JOB
         thread = job.thread
         if thread is not None:
@@ -450,6 +489,8 @@ class Bot:
         state = job.state()
         tail = [ln.strip() for ln in state["lines"] if ln.strip() and not ln.startswith("> ")][-12:]
         self.send(f"{state['label']}:\n" + "\n".join(tail))
+        if then:
+            self.send(then[0], then[1])
 
 
 _BOT: Bot | None = None
