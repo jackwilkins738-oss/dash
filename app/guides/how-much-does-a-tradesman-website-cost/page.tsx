@@ -8,18 +8,19 @@ import { JsonLd } from '@/components/json-ld'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { PRICES, SITE, UPDATED } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
 const PATH = '/guides/how-much-does-a-tradesman-website-cost'
 const TITLE = 'How Much Does a Website Cost for a Tradesman? (UK 2026 Guide)'
 const DESCRIPTION =
   'What a tradesman’s website costs in the UK: DIY, freelancer, agency and fixed-price options compared, plus hidden costs and the questions to ask first.'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo(PATH, {
   title: 'Tradesman Website Cost: UK 2026 Guide',
   description: DESCRIPTION,
   alternates: { canonical: PATH },
   openGraph: { title: `${TITLE} | ${SITE.name}`, description: DESCRIPTION, url: PATH, type: 'article' },
-}
+})
 
 const OPTIONS = [
   {
@@ -241,7 +242,7 @@ export default function CostGuidePage() {
         </div>
       </article>
 
-      <Faq items={FAQS} title="More questions on website costs" />
+      <Faq items={FAQS} path={PATH} title="More questions on website costs" />
       <CtaBand />
     </main>
   )

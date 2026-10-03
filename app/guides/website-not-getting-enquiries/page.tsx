@@ -8,6 +8,7 @@ import { JsonLd } from '@/components/json-ld'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { SITE } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
 const PATH = '/guides/website-not-getting-enquiries'
 const PUBLISHED = '2026-10-02'
@@ -15,12 +16,12 @@ const TITLE = 'Why Isn’t My Trade Website Getting Enquiries? 9 Things to Check
 const DESCRIPTION =
   'A trade website that gets visits but no calls usually has one of nine problems. How to check each one yourself in a few minutes, and what fixes it.'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo(PATH, {
   title: 'Trade Website Not Getting Enquiries? 9 Things to Check',
   description: DESCRIPTION,
   alternates: { canonical: PATH },
   openGraph: { title: `${TITLE} | ${SITE.name}`, description: DESCRIPTION, url: PATH, type: 'article' },
-}
+})
 
 // Each one: what's wrong, how to check it yourself, what fixes it. Ordered by how often it's the cause.
 const CHECKS: { title: string; check: string; fix: string; link?: { href: string; label: string } }[] = [
@@ -189,7 +190,7 @@ export default function NoEnquiriesGuidePage() {
         </div>
       </article>
 
-      <Faq items={FAQS} title="More questions on getting enquiries" />
+      <Faq items={FAQS} path={PATH} title="More questions on getting enquiries" />
       <CtaBand />
     </main>
   )

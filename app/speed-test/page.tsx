@@ -6,13 +6,14 @@ import { SpeedCheck } from '@/components/speed-check'
 import { Faq, type QA } from '@/components/faq'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
+import { withSeo } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo('/speed-test', {
   title: 'Free Website Speed Test for Trade Businesses',
   description:
     "Check your website's real Google PageSpeed score for free, live, against Scalar's own — the same test Google uses to help decide where you rank.",
   alternates: { canonical: '/speed-test' },
-}
+})
 
 const FAQS: QA[] = [
   {
@@ -71,7 +72,7 @@ export default function SpeedTestPage() {
         </div>
       </section>
 
-      <Faq items={FAQS} title="About this speed test" eyebrow="FAQ" />
+      <Faq items={FAQS} path="/speed-test" title="About this speed test" eyebrow="FAQ" />
       <CtaBand />
     </main>
   )

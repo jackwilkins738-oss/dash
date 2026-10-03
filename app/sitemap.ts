@@ -1,13 +1,14 @@
 import type { MetadataRoute } from 'next'
 import { TRADES } from '@/lib/trades'
 import { SITE, UPDATED } from '@/lib/site'
+import { lastmod } from '@/lib/seo'
 
 // `lastModified` is the date the page's content last really changed (see lib/site.ts), not the
 // build time. A date that changes on every deploy teaches Google to ignore the field.
 export default function sitemap(): MetadataRoute.Sitemap {
   const at = (path: string, lastModified: string, priority: number): MetadataRoute.Sitemap[number] => ({
     url: `${SITE.url}${path}`,
-    lastModified,
+    lastModified: lastmod(path || '/', lastModified),
     priority,
   })
 

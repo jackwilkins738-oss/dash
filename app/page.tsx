@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { Hero } from '@/components/hero'
 import { ExampleBuild } from '@/components/example-build'
 import { DashShowcase } from '@/components/dash-showcase'
@@ -11,6 +12,10 @@ import { SpeedRace } from '@/components/speed-race'
 import { SpeedCheck } from '@/components/speed-check'
 import { CaseStudies } from '@/components/case-studies'
 import { CutWire } from '@/components/cut-wire'
+import { withSeo } from '@/lib/seo'
+
+// The layout's title and description, unless the monthly SEO loop has a better pair (content/seo.json).
+export const metadata: Metadata = withSeo('/', {})
 
 const PRINCIPLES = [
   {

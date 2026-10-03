@@ -12,6 +12,7 @@ import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { TRADES, TRADE_BY_SLUG } from '@/lib/trades'
 import { PRICES, SITE } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
 type Props = { params: Promise<{ trade: string }> }
 
@@ -25,12 +26,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { trade } = await params
   const t = TRADE_BY_SLUG[trade]
   if (!t) return {}
-  return {
+  return withSeo(`/websites-for/${t.slug}`, {
     title: t.metaTitle,
     description: t.metaDescription,
     alternates: { canonical: `/websites-for/${t.slug}` },
     openGraph: { title: `${t.metaTitle} | ${SITE.name}`, description: t.metaDescription, url: `/websites-for/${t.slug}`, type: 'website' },
-  }
+  })
 }
 
 export default async function TradePage({ params }: Props) {
@@ -179,7 +180,7 @@ export default async function TradePage({ params }: Props) {
         </div>
       </section>
 
-      <Faq items={t.faqs} title={`Questions from ${t.audience}`} />
+      <Faq items={t.faqs} path={`/websites-for/${t.slug}`} title={`Questions from ${t.audience}`} />
 
       <section className="border-t border-border py-16 sm:py-20">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">

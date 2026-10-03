@@ -8,6 +8,7 @@ import { JsonLd } from '@/components/json-ld'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { SITE } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
 const PATH = '/guides/google-business-profile-for-tradesmen'
 const PUBLISHED = '2026-09-28'
@@ -15,12 +16,12 @@ const TITLE = 'How to Get Your Trade Business on Google Maps: a Google Business 
 const DESCRIPTION =
   'Setting up and getting the most from a free Google Business Profile as a UK tradesperson: service areas, verification, categories, photos and reviews, and the mistakes that get profiles suspended.'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo(PATH, {
   title: 'Google Business Profile for Tradesmen: UK Guide',
   description: DESCRIPTION,
   alternates: { canonical: PATH },
   openGraph: { title: `${TITLE} | ${SITE.name}`, description: DESCRIPTION, url: PATH, type: 'article' },
-}
+})
 
 const STEPS = [
   {
@@ -186,7 +187,7 @@ export default function GoogleBusinessProfileGuide() {
         </div>
       </article>
 
-      <Faq items={FAQS} title="More questions on Google Business Profile" />
+      <Faq items={FAQS} path={PATH} title="More questions on Google Business Profile" />
       <CtaBand />
     </main>
   )

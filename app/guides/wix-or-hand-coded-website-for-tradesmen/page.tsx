@@ -8,6 +8,7 @@ import { JsonLd } from '@/components/json-ld'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { SITE } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
 const PATH = '/guides/wix-or-hand-coded-website-for-tradesmen'
 const PUBLISHED = '2026-10-01'
@@ -15,12 +16,12 @@ const TITLE = 'Wix, Squarespace or a Hand-Coded Website? An Honest Guide for Tra
 const DESCRIPTION =
   'Website builders like Wix, Squarespace and GoDaddy against a hand-coded site for a trade business - cost, speed on a phone, who owns it, and when a DIY builder is genuinely the right call.'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo(PATH, {
   title: 'Wix vs Hand-Coded Website for Tradesmen',
   description: DESCRIPTION,
   alternates: { canonical: PATH },
   openGraph: { title: `${TITLE} | ${SITE.name}`, description: DESCRIPTION, url: PATH, type: 'article' },
-}
+})
 
 // No builder prices quoted: plans change often and differ by tier. The guides/cost page carries the
 // broad ranges; this one is about the trade-offs.
@@ -220,7 +221,7 @@ export default function WixVsHandCodedGuidePage() {
         </div>
       </article>
 
-      <Faq items={FAQS} title="More questions on website builders" />
+      <Faq items={FAQS} path={PATH} title="More questions on website builders" />
       <CtaBand />
     </main>
   )
