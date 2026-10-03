@@ -413,8 +413,9 @@ def run(env: dict, today: date | None = None, console=None, fetch=None, draft=No
                 raise LoopError("GSC_SERVICE_ACCOUNT_JSON isn't valid JSON - paste the whole key file.") from e
             console = Console(account)
         else:
-            raise LoopError("Google sign-in isn't set up - add the GCP_WIF_PROVIDER and GCP_SERVICE_ACCOUNT repository "
-                            "variables (see .github/workflows/seo-loop.yml).")
+            raise LoopError("Google sign-in isn't set up: GitHub found no GCP_WIF_PROVIDER. Run docs/seo-loop-setup.sh in "
+                            "Google Cloud Shell, then add GCP_WIF_PROVIDER and GCP_SERVICE_ACCOUNT under the repo's "
+                            "Settings -> Secrets and variables -> Actions (Variables or Secrets tab), spelt exactly so.")
     key = (env.get("ANTHROPIC_API_KEY") or "").strip()
     if draft is None:
         if not key:

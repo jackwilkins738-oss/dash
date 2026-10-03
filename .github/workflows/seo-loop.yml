@@ -37,6 +37,10 @@ jobs:
   loop:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Read from the Variables tab, or the Secrets tab if they were added there instead.
+      WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER || secrets.GCP_WIF_PROVIDER }}
+      WIF_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT || secrets.GCP_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,11 +49,11 @@ jobs:
       - run: pip install cryptography
       - name: Sign in to Google (keyless)
         id: google
-        if: vars.GCP_WIF_PROVIDER != ''
+        if: env.WIF_PROVIDER != ''
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_ACCOUNT }}
           token_format: access_token
           access_token_scopes: https://www.googleapis.com/auth/webmasters.readonly
           create_credentials_file: false
