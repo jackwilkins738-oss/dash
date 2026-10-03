@@ -1,0 +1,467 @@
+"""Run the panel from your phone: Telegram buttons for the day-to-day loop.
+
+Runs inside the panel (so it shares its one-job-at-a-time lock and every safeguard), whenever the
+panel is open and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are set. Turn on "Start the panel with
+Windows" on the Today tab and it's always there while the PC is on.
+
+It only ever answers YOUR chat (TELEGRAM_CHAT_ID): anyone else who finds the bot gets silence. It
+asks Telegram for new taps (outbound only - no port is opened on your PC, nothing to configure).
+
+    📊 Status      what's running, the autopilot, today's sends, replies and calls waiting, red flags
+    💬 Replies     each reply waiting: ✨ AI draft -> Send / Edit / Discard, call back, not interested
+    📞 Calls       the hottest preview viewers (tap the number to ring): outcome buttons, 🔎 research
+    ✉️ Emails      waiting to email: make a batch, preview it, send it (asks first), follow-ups
+    🗂 Lists       run the whole list on any list with checks still to do
+    🤖 Autopilot   run it now, or stop a run
+    📈 Scorecard   the numbers
+    📜 Log / ⏹ Stop   the running job's last lines, or stop it
+
+Anything started here texts you its result when it finishes. Kept on the panel only (screen work, or
+too risky for a stray tap): finding new firms, building and publishing client sites, Settings, and
+erasing someone's data.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import threading
+import time
+import urllib.error
+import urllib.request
+
+MENU = [["📊 Status", "💬 Replies", "📞 Calls"], ["✉️ Emails", "🗂 Lists", "🤖 Autopilot"], ["📈 Scorecard", "📜 Log", "⏹ Stop"]]
+CALLS_SHOWN = 6
+LOG_LINES = 15
+SEND_GAP_MIN = 5
+BATCH_SIZE = 20
+
+
+def short(key: str) -> str:
+    return hashlib.sha1(key.encode()).hexdigest()[:10]
+
+
+def clip(text: str, n: int = 3800) -> str:
+    return text if len(text) <= n else text[: n - 20] + "\n... (cut short)"
+
+
+class Bot:
+    def __init__(self, panel, token: str, chat: str, http=None) -> None:
+        self.panel, self.token, self.chat = panel, token, str(chat).strip()
+        self.http = http or self._http
+        self.items: dict[str, dict] = {}  # short id -> {"kind", "item", "sheet"} from the last listing
+        self.drafts: dict[str, str] = {}  # short id -> reply text waiting for Send
+        self.awaiting: str = ""  # short id whose reply you're typing
+        self.lists: list[str] = []
+        self.offset = 0
+        self.stop_event = threading.Event()
+
+    # ------------------------------------------------------------ Telegram
+    def _http(self, method: str, payload: dict, timeout: float = 30) -> dict:
+        req = urllib.request.Request(f"https://api.telegram.org/bot{self.token}/{method}",
+                                     data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            return json.loads(res.read())
+
+    def api(self, method: str, **payload) -> dict:
+        try:
+            return self.http(method, payload)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return {}
+
+    def send(self, text: str, buttons: list[list[tuple[str, str]]] | None = None, menu: bool = False) -> None:
+        payload = {"chat_id": self.chat, "text": clip(text), "disable_web_page_preview": True}
+        if buttons:
+            payload["reply_markup"] = {"inline_keyboard": [[{"text": t, "callback_data": d} for t, d in row] for row in buttons]}
+        elif menu:
+            payload["reply_markup"] = {"keyboard": [[{"text": t} for t in row] for row in MENU], "resize_keyboard": True,
+                                       "is_persistent": True}
+        self.api("sendMessage", **payload)
+
+    def mine(self, chat_id) -> bool:
+        return bool(self.chat) and str(chat_id) == self.chat
+
+    # ------------------------------------------------------------ loop
+    def run_forever(self) -> None:
+        wait = 5
+        while not self.stop_event.is_set():
+            try:
+                res = self.http("getUpdates", {"offset": self.offset, "timeout": 50,
+                                               "allowed_updates": ["message", "callback_query"]}, 70)
+                wait = 5
+            except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+                self.stop_event.wait(wait)  # offline, or the PC just woke: try again, slower each time
+                wait = min(wait * 2, 300)
+                continue
+            for update in res.get("result") or []:
+                self.offset = max(self.offset, int(update.get("update_id", 0)) + 1)
+                try:
+                    self.handle(update)
+                except Exception as e:  # noqa: BLE001 - one bad tap never stops the bot
+                    self.send(f"That didn't work: {type(e).__name__}: {e}")
+
+    def handle(self, update: dict) -> None:
+        if "callback_query" in update:
+            q = update["callback_query"]
+            if not self.mine(((q.get("message") or {}).get("chat") or {}).get("id")):
+                return
+            self.api("answerCallbackQuery", callback_query_id=q.get("id"))
+            self.on_button(str(q.get("data") or ""))
+            return
+        msg = update.get("message") or {}
+        if not self.mine((msg.get("chat") or {}).get("id")):
+            return
+        text = (msg.get("text") or "").strip()
+        if not text:
+            return
+        handler = {"📊 Status": self.status, "💬 Replies": self.replies, "📞 Calls": self.calls, "✉️ Emails": self.emails,
+                   "🗂 Lists": self.list_menu, "🤖 Autopilot": self.autopilot, "📈 Scorecard": self.scorecard,
+                   "📜 Log": self.log, "⏹ Stop": self.stop_job}.get(text)
+        if handler:
+            self.awaiting = ""
+            handler()
+        elif text.lower() in ("/start", "/help", "menu", "help"):
+            self.awaiting = ""
+            self.send("Scalar panel - pick from the buttons below. Only this chat can use it.", menu=True)
+        elif self.awaiting:
+            sid, self.awaiting = self.awaiting, ""
+            self.drafts[sid] = text
+            self.offer_draft(sid)
+        else:
+            self.send("Pick from the buttons below.", menu=True)
+
+    # ------------------------------------------------------------ screens
+    def status(self) -> None:
+        import autopilot
+        import email_batches
+        import send_email
+        import sending_health
+        from datetime import date
+
+        p = self.panel
+        settings = p.load_settings()
+        lines = []
+        job = p.JOB.state()
+        if job["running"]:
+            mins = int((time.time() - job["started"]) // 60)
+            last = next((ln for ln in reversed(job["lines"]) if ln.strip() and not ln.startswith(">")), "")
+            lines.append(f"Running: {job['label']} ({mins} min) - {last[:120]}")
+        if autopilot.is_running():
+            now = autopilot.now_doing()
+            lines.append(f"Autopilot running ({now.get('minutes', 0)} min): {now.get('last', '')[:120]}")
+        else:
+            cfg = autopilot.load_config()
+            lines.append(f"Autopilot: on, daily at {cfg.get('time')}" if cfg.get("enabled") else "Autopilot: off")
+        import mail_accounts
+
+        inboxes = [a.address for a in mail_accounts.accounts({**settings})]
+        today = send_email.today_summary(p.OUTREACH, date.today(), inboxes)
+        lines.append(f"Sent today: {today['sent']} of {today['cap']}")
+        lines.append(f"Waiting to email: {email_batches.remaining(p.OUTREACH, None)}")
+        replies = self._replies_waiting()
+        lines.append(f"Replies waiting: {len(replies)}")
+        stop = sending_health.stop_sending(p.OUTREACH)
+        if stop:
+            lines.append("⚠️ " + stop)
+        bad = [h for h in p.health(p.OUTREACH, settings) if h.get("ok") is False]
+        lines += [f"⚠️ {h['name']}: {h['text']}" for h in bad]
+        self.send("\n".join(lines), menu=True)
+
+    def _replies_waiting(self) -> list[dict]:
+        import csv
+
+        path = self.panel.OUTREACH / "replies.csv"
+        if not path.exists():
+            return []
+        with path.open(encoding="utf-8") as f:
+            return [r for r in csv.DictReader(f) if r.get("kind") in ("interested", "read it") and not r.get("handled")]
+
+    def _all_calls(self) -> dict:
+        """Calls from every list, the dashboard asked once - newest list first, each firm once."""
+        import calls
+
+        p = self.panel
+        settings = p.load_settings()
+        secret = settings["PROSPECTS_API_SECRET"]
+        if len(secret) < 32:
+            return {"message": "Add PROSPECTS_API_SECRET in the panel's Settings first."}
+        api = (settings["DASHBOARD_API_URL"] or "https://admin.scalardigital.co.uk").rstrip("/")
+        site = (settings["SITE_URL"] or "https://www.scalardigital.co.uk").rstrip("/")
+        import os
+
+        tenant = os.environ.get("SCALAR_TENANT_ID", "abdc6408-1fd5-4fb6-9c4c-53600b571a6d")
+        try:
+            activity = calls.fetch_activity(api, secret, tenant)
+        except calls.DashboardMissing as e:
+            return {"message": str(e)}
+        out: dict[str, list] = {"callbacks": [], "viewing": [], "replied": []}
+        seen: set[tuple[str, str]] = set()
+        names = sorted(p.sheets(), key=lambda n: (p.OUTREACH / n).stat().st_mtime, reverse=True)
+        for name in names:
+            try:
+                got = calls.call_list(p.OUTREACH, name, secret, site, activity)
+            except Exception:  # noqa: BLE001 - a sheet open in Excel: skip it
+                continue
+            for section in out:
+                for item in got.get(section) or []:
+                    # A reply shows on every list; the list that has the firm knows its contact and phone.
+                    mark = (section, item.get("website") or item.get("key"))
+                    if mark in seen:
+                        continue
+                    if section == "replied" and not (item.get("contact") or item.get("phone")) and name != names[-1]:
+                        continue
+                    seen.add(mark)
+                    out[section].append({**item, "sheet": item.get("sheet") or name})
+        out["viewing"].sort(key=lambda i: -i.get("heat", 0))
+        return out
+
+    def _remember(self, kind: str, item: dict) -> str:
+        sid = short(f"{kind}|{item.get('sheet')}|{item.get('key')}")
+        self.items[sid] = {"kind": kind, "item": item}
+        return sid
+
+    def replies(self) -> None:
+        data = self._all_calls()
+        if data.get("message"):
+            self.send(data["message"])
+            return
+        items = data["replied"]
+        if not items:
+            self.send("No replies waiting. 👍", menu=True)
+            return
+        for i in items[:8]:
+            sid = self._remember("reply", i)
+            phone = f"\n📞 {i['phone']}" if i.get("phone") else ""
+            self.send(f"💬 {i['business']}{' - ' + i['contact'] if i.get('contact') else ''}{phone}\n{i.get('email', '')}\n\n\"{i.get('snippet', '')[:600]}\"",
+                      [[("✨ AI draft", f"ai:{sid}"), ("✏️ Write reply", f"wr:{sid}")],
+                       [("📞 Call back tomorrow", f"cb:{sid}"), ("🚫 Not interested", f"ni?:{sid}")],
+                       [("✓ Dealt with", f"done:{sid}")]])
+
+    def calls(self) -> None:
+        data = self._all_calls()
+        if data.get("message"):
+            self.send(data["message"])
+            return
+        items = data["callbacks"] + data["viewing"]
+        if not items:
+            self.send("Nobody new has opened their preview since your last calls.", menu=True)
+            return
+        for i in items[:CALLS_SHOWN]:
+            sid = self._remember("call", i)
+            why = (f"Call back {'(' + str(i['overdue']) + ' days overdue)' if i.get('overdue') else 'today'}"
+                   + (f' - "{i["note"]}"' if i.get("note") else "")) if "due" in i else \
+                f"{i.get('views', 0)} visit(s), {i.get('seconds', 0)}s on the page"
+            self.send(f"📞 {i['business']}{' - ' + i['contact'] if i.get('contact') else ''}\n"
+                      f"{i.get('phone') or 'no phone - check their site'}\n{why}\n{i.get('preview', '')}",
+                      [[("No answer", f"o:{sid}:No answer"), ("Call back tmrw", f"cb:{sid}")],
+                       [("👍 Interested", f"o:{sid}:Interested"), ("🚫 Not interested", f"ni?:{sid}")],
+                       [("🏆 Won", f"o:{sid}:Won"), ("🔎 Research", f"rs:{sid}")]])
+        if len(items) > CALLS_SHOWN:
+            self.send(f"...and {len(items) - CALLS_SHOWN} more on the panel's Calls tab.")
+
+    def emails(self) -> None:
+        import email_batches
+
+        p = self.panel
+        waiting = email_batches.remaining(p.OUTREACH, None)
+        pending = email_batches._rows(p.OUTREACH / email_batches.PENDING)[1]
+        lines = [f"{waiting} waiting to be emailed."]
+        if pending:
+            lines.append(f"Batch ready: {len(pending)} emails ({pending[0].get('batch', '')}).")
+        self.send("\n".join(lines), [[(f"Make batch of {BATCH_SIZE}", "run:batch"), ("👀 Preview", "preview")],
+                                     [(f"🚀 Send batch ({SEND_GAP_MIN} min apart)", "send?")],
+                                     [("Make follow-ups", "run:followups"), ("Send follow-ups", "sendf?")]])
+
+    def list_menu(self) -> None:
+        p = self.panel
+        names = sorted(p.sheets(), key=lambda n: (p.OUTREACH / n).stat().st_mtime, reverse=True)[:8]
+        self.lists = names
+        rows = []
+        for i, n in enumerate(names):
+            left = (p.progress(n) or {}).get("remaining") or 0
+            rows.append([(f"Run {n.removesuffix('.xlsx')}" + (f" ({left} to check)" if left else ""), f"list:{i}")])
+        self.send("Run the whole list on:" if rows else "No lists in outreach/ yet.", rows or None)
+
+    def autopilot(self) -> None:
+        import autopilot
+
+        if autopilot.is_running():
+            now = autopilot.now_doing()
+            self.send(f"Autopilot running ({now.get('minutes', 0)} min): {now.get('last', '')}", [[("⏹ Stop the autopilot", "apstop?")]])
+        else:
+            cfg = autopilot.load_config()
+            self.send(f"Autopilot is {'on, daily at ' + cfg.get('time', '') if cfg.get('enabled') else 'off'}.", [[("▶️ Run it now", "run:autopilot_now")]])
+
+    def scorecard(self) -> None:
+        import email_batches as eb
+        import scorecard
+
+        self.send("\n".join(scorecard.scorecard(self.panel.OUTREACH, eb.preview_views())))
+
+    def log(self) -> None:
+        job = self.panel.JOB.state()
+        tail = [ln for ln in job["lines"] if ln.strip()][-LOG_LINES:]
+        self.send("\n".join(tail) if tail else "Nothing has run since the panel started.")
+
+    def stop_job(self) -> None:
+        if not self.panel.JOB.running():
+            self.send("Nothing is running." + (" (The autopilot is - use 🤖 Autopilot to stop it.)" if self._autopilot_on() else ""))
+            return
+        self.panel.JOB.stop()
+        self.send("Stopping. Anything already sent stays sent.")
+
+    def _autopilot_on(self) -> bool:
+        import autopilot
+
+        return autopilot.is_running()
+
+    # ------------------------------------------------------------ buttons
+    def on_button(self, data: str) -> None:
+        verb, _, rest = data.partition(":")
+        if verb == "run":
+            self.start(rest)
+        elif verb == "list":
+            i = int(rest) if rest.isdigit() else -1
+            if 0 <= i < len(self.lists):
+                self.start("all", {"sheet": self.lists[i]})
+            else:
+                self.send("That list button is out of date - tap 🗂 Lists again.")
+        elif verb == "preview":
+            self.preview()
+        elif verb == "send?":
+            self.send(f"Send today's batch now, {SEND_GAP_MIN} min apart?", [[("Yes, send", "run:send_batch"), ("Cancel", "cancel")]])
+        elif verb == "sendf?":
+            self.send("Send the follow-ups now?", [[("Yes, send", "run:send_followups"), ("Cancel", "cancel")]])
+        elif verb == "apstop?":
+            self.send("Stop the autopilot run? Anything already sent stays sent.", [[("Yes, stop it", "apstop"), ("Cancel", "cancel")]])
+        elif verb == "apstop":
+            import autopilot
+
+            self.send(autopilot.stop())
+        elif verb == "cancel":
+            self.send("OK - nothing done.")
+        else:
+            self.on_item(verb, rest)
+
+    def on_item(self, verb: str, rest: str) -> None:
+        sid, _, extra = rest.partition(":")
+        entry = self.items.get(sid)
+        if not entry:
+            self.send("That button is out of date (the panel restarted) - tap 💬 Replies or 📞 Calls again.")
+            return
+        item = entry["item"]
+        body = {"sheet": item.get("sheet"), "key": item.get("key"), "business": item.get("business"),
+                "website": item.get("website"), "email": item.get("email")}
+        p = self.panel
+        if verb == "o":
+            out, _ = p.call_action({**body, "outcome": extra})
+            self.send(out.get("message") or out.get("error", ""))
+        elif verb == "cb":
+            out, _ = p.call_action({**body, "outcome": "Call back", "due": "tomorrow"})
+            self.send(out.get("message") or out.get("error", ""))
+        elif verb == "ni?":
+            self.send(f"{item['business']}: not interested - never contact them again?", [[("Yes", f"ni:{sid}"), ("Cancel", "cancel")]])
+        elif verb == "ni":
+            out, _ = p.call_action({**body, "outcome": "Not interested"})
+            self.send(out.get("message") or out.get("error", ""))
+        elif verb == "done":
+            import calls
+
+            calls.mark_reply_handled(p.OUTREACH, item["business"])
+            self.send(f"{item['business']}: marked as dealt with.")
+        elif verb == "rs":
+            out, _ = p.research_action({"business": item["business"], "website": item["website"], "area": item.get("area", "")})
+            self.send("\n".join(out.get("lines") or [out.get("error", "")]) + (f"\nReviews: {out['google']}" if out.get("google") else ""))
+        elif verb == "ai":
+            self.send("Writing a draft...")
+            out, _ = p.reply_ai_action({k: item.get(k, "") for k in ("business", "trade", "area", "website", "mobile_score", "subject", "message")})
+            if out.get("error"):
+                self.send(out["error"])
+                return
+            self.drafts[sid] = out["text"]
+            self.offer_draft(sid)
+        elif verb == "wr":
+            self.awaiting = sid
+            self.send(f"Type your reply to {item['business']} as your next message - you'll see it before it goes.")
+        elif verb == "edit":
+            self.awaiting = sid
+            self.send("Send the reply as you want it (copy the draft above, change it, send it here).")
+        elif verb == "discard":
+            self.drafts.pop(sid, None)
+            self.send("Draft thrown away.")
+        elif verb == "sendreply":
+            text = self.drafts.pop(sid, "")
+            if not text:
+                self.send("That draft has gone - make it again.")
+                return
+            out, _ = p.reply_send_action({**body, "to": item.get("email", ""), "text": text, "message_id": item.get("message_id", ""),
+                                          "subject": item.get("subject", ""), "name": "Telegram"})
+            self.send(out.get("message") or out.get("error", ""))
+
+    def offer_draft(self, sid: str) -> None:
+        item = self.items[sid]["item"]
+        self.send(f"To {item.get('email')}:\n\n{self.drafts[sid]}",
+                  [[("✅ Send it", f"sendreply:{sid}"), ("✏️ Edit", f"edit:{sid}"), ("🗑 Discard", f"discard:{sid}")]])
+
+    def preview(self) -> None:
+        import send_email
+
+        out = send_email.preview_batch(self.panel.OUTREACH, env={**self.panel.load_settings()})
+        if out.get("error"):
+            self.send(out["error"])
+            return
+        emails = out.get("emails") or []
+        for e in emails[:2]:
+            self.send(f"To {e.get('business')} <{e.get('email')}> from {e.get('from', '')}\nSubject: {e.get('subject')}\n\n{e.get('body', '')}")
+        skipped = [e for e in emails if e.get("skip")]
+        self.send(f"{len(emails)} in the batch" + (f", {len(skipped)} would be skipped" if skipped else "") + " - the panel's Preview emails shows them all.")
+
+    def start(self, action: str, extra: dict | None = None) -> None:
+        p = self.panel
+        body = {"action": action, "batch_size": BATCH_SIZE, "batch_scope": "all", "followup_size": BATCH_SIZE, "followup_days": 5,
+                "send_gap": SEND_GAP_MIN, "send_from": "", **(extra or {})}
+        if action not in ("batch", "followups", "send_batch", "send_followups", "autopilot_now", "all"):
+            self.send("That can only be done on the panel.")
+            return
+        settings = p.load_settings()
+        steps, error = p.build_steps(body, settings)
+        if steps is None:
+            self.send(error)
+            return
+        import autopilot
+
+        if autopilot.is_running() and action != "autopilot_now":
+            self.send("The autopilot is running, so this has to wait.", [[("⏹ Stop the autopilot", "apstop?")]])
+            return
+        label = p.ACTIONS[action]
+        error = p.JOB.start(label, steps, settings, keep_going=action in ("all", "batch"))
+        if error:
+            self.send(error)
+            return
+        p.JOB.from_phone = True
+        self.send(f"Started: {label}. I'll text you when it's done (📜 Log to look in on it).")
+        threading.Thread(target=self._report_when_done, daemon=True).start()
+
+    def _report_when_done(self) -> None:
+        job = self.panel.JOB
+        thread = job.thread
+        if thread is not None:
+            thread.join()
+        state = job.state()
+        tail = [ln.strip() for ln in state["lines"] if ln.strip() and not ln.startswith("> ")][-12:]
+        self.send(f"{state['label']}:\n" + "\n".join(tail))
+
+
+_BOT: Bot | None = None
+
+
+def start(panel) -> Bot | None:
+    """Starts the bot thread when Telegram is set up; None otherwise. Called once by the panel."""
+    global _BOT
+    settings = panel.load_settings()
+    token, chat = (settings.get("TELEGRAM_BOT_TOKEN") or "").strip(), (settings.get("TELEGRAM_CHAT_ID") or "").strip()
+    if not token or not chat or _BOT is not None:
+        return _BOT
+    _BOT = Bot(panel, token, chat)
+    threading.Thread(target=_BOT.run_forever, daemon=True).start()
+    return _BOT

@@ -55,6 +55,7 @@ CLIENT_SPEED = HERE / "client_speed.py"
 BACKUP = HERE / "backup.py"
 SENDING_HEALTH = HERE / "sending_health.py"
 DATA_REQUEST = HERE / "data_request.py"
+PANEL_STARTUP = HERE / "panel_startup.py"
 SITE_COPY = HERE / "site_copy.py"
 SITE_QA = HERE / "site_qa.py"
 
@@ -78,7 +79,7 @@ SECRET_KEYS = {"ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRE
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "66"
+PANEL_VERSION = "67"
 MAX_LOG_LINES = 5000
 
 
@@ -344,6 +345,8 @@ ACTIONS = {
     "batch": "Make email batch",
     "replies": "Check replies",
     "reply_watch_on": "Turn on the 15-minute reply check",
+    "startup_on": "Start the panel with Windows",
+    "startup_off": "Stop starting the panel with Windows",
     "reply_watch_off": "Turn off the 15-minute reply check",
     "followups": "Make follow-up batch",
     "followups_sent": "Mark follow-ups as sent",
@@ -497,6 +500,8 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
             return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first."
         return (lambda job: [(REPLIES, [])]), ""
+    if action in ("startup_on", "startup_off"):
+        return (lambda job: [(PANEL_STARTUP, ["--install" if action == "startup_on" else "--remove"])]), ""
     if action in ("reply_watch_on", "reply_watch_off"):
         if action == "reply_watch_on" and not (settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD")):
             return None, "Add MAIL_ADDRESS and MAIL_APP_PASSWORD in Settings first."
@@ -718,6 +723,7 @@ class Job:
             self.seq += 1
             self.label, self.started, self.exit_code, self.stopping = label, time.time(), None, False
             self.keep_going, self.failed_steps = keep_going, []
+            self.from_phone = False  # set by the Telegram bot, which texts the result itself
             self.thread = threading.Thread(target=self._run, args=(steps, env), daemon=True)
             self.thread.start()
             return ""
@@ -773,7 +779,7 @@ class Job:
         with self.lock:
             self.exit_code = code if not self.stopping else -1
             lines = list(self.lines)
-        if time.time() - self.started >= ALERT_AFTER_S:
+        if time.time() - self.started >= ALERT_AFTER_S and not getattr(self, "from_phone", False):
             phone_alert(self.label, code, self.stopping, time.time() - self.started, lines, env)
         with self.lock:
             self.seq += 1
@@ -1504,6 +1510,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if route == "/api/settings":
             save_settings(body)
+            import telegram_bot
+
+            telegram_bot.start(sys.modules[__name__])  # Telegram just set up: no restart needed
             from company_lookup import key_problem
 
             ch = load_settings()["COMPANIES_HOUSE_API_KEY"]
@@ -1604,6 +1613,10 @@ def main() -> None:
     if server is None:
         print(f"Port {args.port} is busy with something that isn't this panel - try --port 8766")
         return
+    import telegram_bot
+
+    if telegram_bot.start(sys.modules[__name__]):
+        print("Telegram controls on - only your TELEGRAM_CHAT_ID can use them.")
     print(f"Control panel running at {url}  (close this window to stop it)")
     print(f"Reading sheets from {OUTREACH}")
     if not args.no_browser:
