@@ -9,6 +9,7 @@ import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { PaybackCalculator } from '@/components/payback-calculator'
 import { SITE } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
 const PATH = '/guides/is-a-website-worth-it-for-tradesmen'
 const PUBLISHED = '2026-10-02'
@@ -16,12 +17,12 @@ const TITLE = 'Is a Website Worth It for a Tradesman? Work It Out With Your Own 
 const DESCRIPTION =
   'Whether a website pays for itself depends on one sum: the profit on a typical job against what the site costs. Put your own numbers in and see how many jobs it takes.'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo(PATH, {
   title: 'Is a Website Worth It for a Tradesman?',
   description: DESCRIPTION,
   alternates: { canonical: PATH },
   openGraph: { title: `${TITLE} | ${SITE.name}`, description: DESCRIPTION, url: PATH, type: 'article' },
-}
+})
 
 const FAQS: QA[] = [
   {
@@ -147,7 +148,7 @@ export default function WorthItGuidePage() {
         </div>
       </article>
 
-      <Faq items={FAQS} title="More questions on whether a website pays" />
+      <Faq items={FAQS} path={PATH} title="More questions on whether a website pays" />
       <CtaBand />
     </main>
   )

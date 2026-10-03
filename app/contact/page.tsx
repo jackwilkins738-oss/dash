@@ -8,13 +8,14 @@ import { BookCallButton, BookCallSection } from '@/components/book-call'
 import { Reveal } from '@/components/reveal'
 import { ReplyStatus } from '@/components/reply-status'
 import { SITE } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo('/contact', {
   title: 'Get a Quote for Your Trade Website',
   description:
     'Start your build. Send an enquiry, message on WhatsApp, or call directly. Reply within 2 hours, no sales call.',
   alternates: { canonical: '/contact' },
-}
+})
 
 const CHANNELS = [
   {

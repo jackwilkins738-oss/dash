@@ -8,6 +8,7 @@ import { JsonLd } from '@/components/json-ld'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { SITE } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
 const PATH = '/guides/checkatrade-or-your-own-website'
 const PUBLISHED = '2026-10-01'
@@ -15,12 +16,12 @@ const TITLE = 'Checkatrade or Your Own Website? Where Trade Leads Really Come Fr
 const DESCRIPTION =
   'A fair comparison of trade directories like Checkatrade, MyBuilder and Rated People against a website of your own - what each is good at, what you give up, and why most established trades end up with both.'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo(PATH, {
   title: 'Checkatrade vs Your Own Website for Tradesmen',
   description: DESCRIPTION,
   alternates: { canonical: PATH },
   openGraph: { title: `${TITLE} | ${SITE.name}`, description: DESCRIPTION, url: PATH, type: 'article' },
-}
+})
 
 // Deliberately no prices for the directories: they change, vary by trade and area, and a wrong figure
 // about someone else's business is worse than none. Readers are pointed to the directories themselves.
@@ -218,7 +219,7 @@ export default function CheckatradeVsWebsiteGuidePage() {
         </div>
       </article>
 
-      <Faq items={FAQS} title="More questions on directories and websites" />
+      <Faq items={FAQS} path={PATH} title="More questions on directories and websites" />
       <CtaBand />
     </main>
   )

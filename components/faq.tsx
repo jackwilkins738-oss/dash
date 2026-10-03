@@ -1,11 +1,14 @@
 import { JsonLd } from '@/components/json-ld'
 import { Reveal } from '@/components/reveal'
+import { withMoreFaqs } from '@/lib/seo'
 
 export type QA = { q: string; a: string }
 
 // Visible FAQ (native <details>, no JS) with FAQPage structured data built from the very same text,
-// so what Google reads always matches what a visitor sees.
-export function Faq({ items, title = 'Common questions', eyebrow = 'FAQ' }: { items: QA[]; title?: string; eyebrow?: string }) {
+// so what Google reads always matches what a visitor sees. `path` adds that page's questions from
+// the monthly SEO loop (content/seo.json) after its own.
+export function Faq({ items: own, title = 'Common questions', eyebrow = 'FAQ', path }: { items: QA[]; title?: string; eyebrow?: string; path?: string }) {
+  const items = withMoreFaqs(path, own)
   return (
     <section className="border-t border-border py-20 sm:py-24">
       <JsonLd

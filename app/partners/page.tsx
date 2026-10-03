@@ -5,12 +5,13 @@ import { PageHeader } from '@/components/page-header'
 import { ReferralLink } from '@/components/referral-link'
 import { Reveal } from '@/components/reveal'
 import { PARTNER, PRICES } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo('/partners', {
   title: 'Partner With Scalar Digital',
   description: `For accountants, bookkeepers, merchants and anyone who works with trades: recommend a website that wins them work, and get £${PARTNER.perBuild} for every client who signs.`,
   alternates: { canonical: '/partners' },
-}
+})
 
 const WHO = [
   { title: 'Accountants & bookkeepers', body: 'You see which trade clients are growing and which are stuck. A site that brings in work helps both.' },

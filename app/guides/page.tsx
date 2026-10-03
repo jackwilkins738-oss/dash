@@ -4,12 +4,13 @@ import { ArrowRight } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { Reveal } from '@/components/reveal'
+import { withSeo } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo('/guides', {
   title: 'Website Guides for UK Trades',
   description: 'Plain-English guides for tradespeople on website costs, what a trade website needs and how to choose who builds it.',
   alternates: { canonical: '/guides' },
-}
+})
 
 const GUIDES = [
   {

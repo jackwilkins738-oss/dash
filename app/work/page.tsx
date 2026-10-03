@@ -10,13 +10,14 @@ import { PageHeader, HeaderActions } from '@/components/page-header'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { Faq, type QA } from '@/components/faq'
 import { TRADES } from '@/lib/trades'
+import { withSeo } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo('/work', {
   title: 'Tradesman Website Prices, From £750',
   description:
     'Fixed-price, hand-coded websites for UK trades: a £750 landing page or a £2,500 five-page site with a private dashboard. Fast on a phone, and you own it outright.',
   alternates: { canonical: '/work' },
-}
+})
 
 const FAQS: QA[] = [
   {
@@ -84,7 +85,7 @@ export default function WorkPage() {
       </section>
 
       <CostCalculator />
-      <Faq items={FAQS} title="Website prices and what you get" eyebrow="Pricing FAQ" />
+      <Faq items={FAQS} path="/work" title="Website prices and what you get" eyebrow="Pricing FAQ" />
       <CtaBand />
     </main>
   )

@@ -4,13 +4,14 @@ import { Check } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { ReferralLink } from '@/components/referral-link'
 import { Reveal } from '@/components/reveal'
+import { withSeo } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo('/refer', {
   title: 'Refer a Business and Save',
   description:
     'Know a tradesperson who needs a better website? They get 15% off their build, and you get 10% off a future one.',
   alternates: { canonical: '/refer' },
-}
+})
 
 const STEPS = [
   { n: '01', title: 'Get your link', body: 'Type your name below and copy your personal link.' },

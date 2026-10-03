@@ -8,6 +8,7 @@ import { JsonLd } from '@/components/json-ld'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { SITE } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
 const PATH = '/guides/how-to-get-more-google-reviews'
 const PUBLISHED = '2026-09-28'
@@ -15,12 +16,12 @@ const TITLE = 'How to Get More Google Reviews as a Tradesperson (Without Breakin
 const DESCRIPTION =
   'A practical system for UK trades to get a steady flow of genuine Google reviews: when to ask, what to send, how to reply, and what Google’s rules and UK law say you mustn’t do.'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo(PATH, {
   title: 'How to Get More Google Reviews: Trades Guide',
   description: DESCRIPTION,
   alternates: { canonical: PATH },
   openGraph: { title: `${TITLE} | ${SITE.name}`, description: DESCRIPTION, url: PATH, type: 'article' },
-}
+})
 
 const FAQS: QA[] = [
   {
@@ -177,7 +178,7 @@ export default function GoogleReviewsGuide() {
         </div>
       </article>
 
-      <Faq items={FAQS} title="More questions on Google reviews" />
+      <Faq items={FAQS} path={PATH} title="More questions on Google reviews" />
       <CtaBand />
     </main>
   )

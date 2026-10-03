@@ -8,18 +8,19 @@ import { JsonLd } from '@/components/json-ld'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
 import { SITE, UPDATED } from '@/lib/site'
+import { withSeo } from '@/lib/seo'
 
 const PATH = '/guides/website-or-facebook-page-for-tradesmen'
 const TITLE = 'Website or Facebook Page? What Actually Wins Work for UK Tradespeople'
 const DESCRIPTION =
   'A straight comparison of running your trade business on a Facebook or Instagram page versus your own website - what each is genuinely good at, and where relying on one alone costs you jobs.'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo(PATH, {
   title: 'Website vs Facebook Page for Tradesmen',
   description: DESCRIPTION,
   alternates: { canonical: PATH },
   openGraph: { title: `${TITLE} | ${SITE.name}`, description: DESCRIPTION, url: PATH, type: 'article' },
-}
+})
 
 const COMPARISON = [
   {
@@ -215,7 +216,7 @@ export default function FacebookVsWebsiteGuidePage() {
         </div>
       </article>
 
-      <Faq items={FAQS} title="More questions on Facebook pages and websites" />
+      <Faq items={FAQS} path={PATH} title="More questions on Facebook pages and websites" />
       <CtaBand />
     </main>
   )

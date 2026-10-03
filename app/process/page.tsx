@@ -4,13 +4,14 @@ import { PageHeader, HeaderActions } from '@/components/page-header'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { CtaBand } from '@/components/cta-band'
 import { Reveal } from '@/components/reveal'
+import { withSeo } from '@/lib/seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeo('/process', {
   title: 'How a Trade Website Build Works',
   description:
     'How a hand-coded trade website gets built, start to finish: fixed price agreed up front, real progress along the way, and no retainer on your website once it ships.',
   alternates: { canonical: '/process' },
-}
+})
 
 const STEPS = [
   {
