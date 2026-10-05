@@ -408,6 +408,59 @@ class PushRun(unittest.TestCase):
         self.assertEqual(peak[0], 4, out)  # four at a time, never more
         self.assertIn("55/100, 1 issue - worst: there's no enquiry form on your homepage", out)
         self.assertIn("broken.co.uk: check failed (RuntimeError)", out)
+    def test_a_preview_page_without_its_speed_check_gets_one(self):
+        """Checked before under another spelling: the website is in the log, but this list's page never got
+        the check. The dashboard says so, and the site is checked again - keeping its last score meanwhile."""
+        from push_prospects import make_slug
+
+        make_sheet(self.dir / "leads.xlsx", [
+            {"Business": "KERR ROOFING LIMITED", "Website": "kerr.co.uk", "Status": "New", "Company type": "Ltd"},
+            {"Business": "Done Roofing", "Website": "done.co.uk", "Status": "New", "Company type": "Ltd"},
+        ])
+        with (self.dir / "teardown-log.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["website", "checked_at", "result", "mobile_score", "lcp_s", "top_issue", "issue_count"])
+            w.writerow(["kerr.co.uk", "2026-09-01", "ok", "38", "6.2", "", "0"])
+            w.writerow(["done.co.uk", "2026-09-01", "ok", "71", "2.9", "", "0"])
+        secret = "x" * 40
+        done = make_slug("Done Roofing", "done.co.uk", secret)
+        activity = {done: {"teardown_at": "2026-09-01T10:00:00Z"}}  # Kerr's page under this spelling has none
+        checked = []
+
+        def fake_teardown(domain, key):
+            checked.append(domain)
+            return {"v": 1, "checks": {}, "_mobile_score": 40, "_lcp_s": 5.0}
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": secret, "PAGESPEED_API_KEY": "k"}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, s, tenant: activity), \
+                mock.patch("site_teardown.teardown", fake_teardown), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "leads.xlsx"), "--teardown", "--limit", "5", "--dry-run"]):
+            import push_prospects
+
+            push_prospects.main()
+        self.assertEqual(checked, ["kerr.co.uk"], buf.getvalue())
+        self.assertIn("1 preview page(s) have no speed check on them yet", buf.getvalue())
+        with (self.dir / "teardown-log.csv").open(encoding="utf-8") as f:
+            log = {r["website"]: r for r in csv.DictReader(f)}
+        self.assertEqual((log["kerr.co.uk"]["result"], log["kerr.co.uk"]["mobile_score"]), ("recheck", "38"))  # dry run: not logged yet
+        self.assertEqual(log["done.co.uk"]["result"], "ok")
+
+    def test_an_older_dashboard_changes_nothing(self):
+        make_sheet(self.dir / "old.xlsx", [{"Business": "Kerr Roofing", "Website": "kerr.co.uk", "Status": "New", "Company type": "Ltd"}])
+        with (self.dir / "teardown-log.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["website", "checked_at", "result", "mobile_score", "lcp_s", "top_issue", "issue_count"])
+            w.writerow(["kerr.co.uk", "2026-09-01", "ok", "38", "6.2", "", "0"])
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40, "PAGESPEED_API_KEY": "k"}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, s, tenant: {"some-page-abc123": {"status": "new"}}), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "old.xlsx"), "--teardown", "--limit", "5", "--dry-run"]):
+            import push_prospects
+
+            push_prospects.main()
+        self.assertIn("Nothing left to speed check on this list.", buf.getvalue())
+
     def test_speed_check_with_nothing_left_is_not_a_failed_step(self):
         make_sheet(self.dir / "done.xlsx", [{"Business": "Fresh Roofing", "Website": "fresh.co.uk", "Status": "New", "Company type": "Ltd"}])
         buf = io.StringIO()
