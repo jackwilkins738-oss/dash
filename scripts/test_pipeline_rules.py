@@ -440,11 +440,52 @@ class PushRun(unittest.TestCase):
 
             push_prospects.main()
         self.assertEqual(checked, ["kerr.co.uk"], buf.getvalue())
-        self.assertIn("1 preview page(s) have no speed check on them yet", buf.getvalue())
+        self.assertIn("1 preview page(s) have no speed score on them yet", buf.getvalue())
+        self.assertIn("kerr.co.uk: 40/100", buf.getvalue())  # the fresh score, not the remembered 38
         with (self.dir / "teardown-log.csv").open(encoding="utf-8") as f:
             log = {r["website"]: r for r in csv.DictReader(f)}
         self.assertEqual((log["kerr.co.uk"]["result"], log["kerr.co.uk"]["mobile_score"]), ("recheck", "38"))  # dry run: not logged yet
         self.assertEqual(log["done.co.uk"]["result"], "ok")
+
+    def test_google_giving_no_score_is_said_and_tried_again(self):
+        make_sheet(self.dir / "ns.xlsx", [{"Business": "Slow Roofing", "Website": "slow.co.uk", "Status": "New", "Company type": "Ltd"},
+                                         {"Business": "Old Roofing", "Website": "old.co.uk", "Status": "New", "Company type": "Ltd"}])
+        with (self.dir / "teardown-log.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["website", "checked_at", "result", "mobile_score", "lcp_s", "top_issue", "issue_count"])
+            w.writerow(["old.co.uk", "2026-09-01", "ok", "", "", "", "0"])  # an earlier silent failure
+        checked = []
+
+        def fake_teardown(domain, key):
+            checked.append(domain)
+            return {"v": 1, "checks": {"tapToCall": False}, "_psi_error": "Google's speed test quota is used up for today"}
+
+        class Res(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        import json as _json
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40, "PAGESPEED_API_KEY": "k"}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, s, tenant: {}), \
+                mock.patch("site_teardown.teardown", fake_teardown), \
+                mock.patch("google_extras.add_to", lambda *a, **k: None), \
+                mock.patch("urllib.request.urlopen", lambda req, timeout=0: Res(_json.dumps({"upserted": 2, "rejected": []}).encode())), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "ns.xlsx"), "--teardown", "--limit", "5"]):
+            import push_prospects
+
+            push_prospects.main()
+        out = buf.getvalue()
+        self.assertEqual(sorted(checked), ["old.co.uk", "slow.co.uk"], out)  # the old silent one is retried too
+        self.assertIn("no score (Google's speed test quota is used up for today)", out)
+        self.assertIn("WARNING: 2 site(s) got no speed score - Google's speed test quota is used up for today", out)
+        with (self.dir / "teardown-log.csv").open(encoding="utf-8") as f:
+            log = {r["website"]: r["result"] for r in csv.DictReader(f)}
+        self.assertEqual(log, {"old.co.uk": "failed", "slow.co.uk": "failed"})  # Retry failed picks them up
 
     def test_an_older_dashboard_changes_nothing(self):
         make_sheet(self.dir / "old.xlsx", [{"Business": "Kerr Roofing", "Website": "kerr.co.uk", "Status": "New", "Company type": "Ltd"}])

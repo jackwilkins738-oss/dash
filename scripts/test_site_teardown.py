@@ -182,3 +182,15 @@ class Filmstrip(unittest.TestCase):
         self.assertIn("screenshot", out)
         self.assertEqual(filmstrip({}), {})
         self.assertIsNone(shrink("data:image/png;base64,bm90IGFuIGltYWdl", 120, 55))
+
+
+class PsiErrors(unittest.TestCase):
+    def test_reasons_in_plain_words(self):
+        from site_teardown import psi_error
+
+        body = lambda m: '{"error": {"message": "%s"}}' % m  # noqa: E731
+        self.assertIn("isn't valid", psi_error(400, body("API key not valid. Please pass a valid API key.")))
+        self.assertIn("quota is used up", psi_error(429, body("Quota exceeded for quota metric")))
+        self.assertIn("switched off", psi_error(403, body("PageSpeed Insights API has not been used in project 1 before or it is disabled")))
+        self.assertIn("restricted", psi_error(403, body("Requests from referer <empty> are blocked.")))
+        self.assertEqual(psi_error(500, "not json"), "Google's speed test said: HTTP 500")
