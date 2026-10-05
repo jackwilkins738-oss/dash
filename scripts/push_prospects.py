@@ -95,6 +95,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from google_extras import rating_from_sheet  # same folder
+
 try:
     import openpyxl
 except ImportError:
@@ -380,6 +382,8 @@ def main() -> None:
                     "_key": overrides.row_key(row),
                     "_address": address_of(row) or (found.get("address") or "").strip(),
                     "_phone": str(row.get("Phone") or "").strip() or (found.get("phone") or "").strip(),
+                    # A Google Maps list carries their rating already - no need to ask Google again.
+                    "_google": rating_from_sheet(row.get("Google rating"), row.get("Google reviews")),
                 }
             )
         return out, skipped, closed
@@ -1031,6 +1035,14 @@ def main() -> None:
                     + (f" - worst: {issues[0]}" if issues else ""),
                     flush=True,
                 )
+
+        # Their Google rating and their local competitors' speed, for the preview page (google_extras.py).
+        # Not on a dry run: those are paid Google searches, for pages that aren't being updated.
+        if not args.dry_run:
+            import google_extras
+
+            places_key = (os.environ.get("GOOGLE_PLACES_API_KEY") or psi_key).strip()
+            google_extras.add_to(selected, args.sheet.parent, places_key, psi_key)
 
     # Rewritten after the teardown, so new scores reach the Mailmeteor file.
     if args.teardown:

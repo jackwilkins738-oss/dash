@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation'
 import { PageHeader, HeaderActions } from '@/components/page-header'
 import { SiteShowcase } from '@/components/site-showcase'
 import { SpeedCheck } from '@/components/speed-check'
-import { Pricing } from '@/components/pricing'
 import { StartQuote } from '@/components/start-quote'
 import { CtaBand } from '@/components/cta-band'
 import { BookCallBand } from '@/components/book-call'
@@ -20,6 +19,7 @@ import { RebuiltPreview } from '@/components/rebuilt-preview'
 import { QuickReply } from '@/components/quick-reply'
 import { LoadFilmstrip, TodayPhone } from '@/components/load-filmstrip'
 import { PRICES } from '@/lib/site'
+import { reviewsView, rivalsView, stars } from '@/lib/preview-extras'
 import { SITE } from '@/lib/site'
 
 // A private page for one business Scalar is reaching out to: their real
@@ -92,6 +92,9 @@ export default async function ProspectPreviewPage({ params }: Props) {
   const raceCopy = scene ? { eyebrow: scene.eyebrow, headline: scene.headline, cta: scene.cta } : undefined
   const showRace =
     SCALAR_BUILD.lcpMs != null && theirLcpMs != null && p.website != null && theirLcpMs - SCALAR_BUILD.lcpMs >= MIN_RACE_GAP_MS
+  // Their Google reviews and the local firms they're up against - each only when it's real and it helps.
+  const reviews = p.website ? reviewsView(p.teardown) : null
+  const rivals = p.website ? rivalsView(p.teardown, p.mobile_score, p.business_name) : null
   const checkedOn = checkedAt
     ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).format(checkedAt)
     : null
@@ -171,6 +174,91 @@ export default async function ProspectPreviewPage({ params }: Props) {
           </div>
         </div>
       </section>
+
+      {(rivals || reviews) && (
+        <section id="google" className="scroll-mt-20 border-t border-border py-20 sm:py-24">
+          <div className="mx-auto max-w-6xl px-5 sm:px-8">
+            <Reveal>
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">You on Google</span>
+              <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+                {rivals
+                  ? `${rivals.ahead === 1 ? 'One firm' : `${rivals.ahead} firms`} near the top of Google Maps ${rivals.ahead === 1 ? 'loads' : 'load'} faster than you.`
+                  : 'Your reviews are doing half the job.'}
+              </h2>
+            </Reveal>
+            <div className={`mt-10 grid gap-6 ${rivals && reviews ? 'lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]' : ''}`}>
+              {rivals && (
+                <Reveal className="rounded-2xl border border-border bg-card/50 p-7 sm:p-9">
+                  <p className="text-sm text-muted-foreground">
+                    Top results on Google Maps for <span className="font-semibold text-foreground">&ldquo;{rivals.query}&rdquo;</span>
+                    {rivals.position ? (
+                      <>
+                        {' '}
+                        - you came <span className="font-semibold text-foreground">#{rivals.position}</span>
+                      </>
+                    ) : null}
+                    . Google&apos;s mobile speed score for each:
+                  </p>
+                  <ul className="mt-6 space-y-4">
+                    {rivals.rows.map((r) => (
+                      <li key={`${r.name}-${r.you ? 'you' : 'them'}`}>
+                        <div className="flex items-baseline justify-between gap-4 text-sm">
+                          <span className={r.you ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
+                            {r.you ? `${r.name} (you)` : r.name}
+                          </span>
+                          <span className={`font-mono tabular-nums ${r.you ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>
+                            {r.score}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-2 rounded-full bg-border/60" aria-hidden="true">
+                          <div
+                            className={`h-2 rounded-full ${r.you ? 'bg-brass' : 'bg-blueprint/60'}`}
+                            style={{ width: `${Math.max(r.score, 3)}%` }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-6 border-t border-border pt-5 text-sm leading-relaxed text-foreground/90">
+                    When someone nearby searches on their phone, the firms whose sites load first get the first look.
+                    A Scalar build is made for <span className="font-semibold text-blueprint">90+</span>.
+                  </p>
+                  <p className="mt-4 font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-muted-foreground/70">
+                    Measured with Google PageSpeed Insights (mobile)
+                    {rivals.checkedAt
+                      ? ` in ${new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${rivals.checkedAt}T12:00:00Z`))}`
+                      : ''}
+                    .
+                    Scores move a little from run to run.
+                  </p>
+                </Reveal>
+              )}
+              {reviews && (
+                <Reveal className="rounded-2xl border border-border bg-card/50 p-7 sm:p-9">
+                  <p className="font-mono text-2xl tracking-[0.15em] text-brass" aria-hidden="true">
+                    {stars(reviews.rating)}
+                  </p>
+                  <p className="mt-3 font-display text-3xl font-bold">
+                    {reviews.rating.toFixed(1)}{' '}
+                    <span className="text-lg font-semibold text-muted-foreground">
+                      from {reviews.reviews.toLocaleString('en-GB')} Google reviews
+                    </span>
+                  </p>
+                  <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
+                    {reviews.shownOnSite === false
+                      ? `That's the strongest thing ${p.business_name} has - and your homepage doesn't show any of it. Most people check reviews before they ring.`
+                      : `That's the strongest thing ${p.business_name} has, and most people check reviews before they ring.`}
+                  </p>
+                  <p className="mt-4 text-sm text-foreground/90">
+                    <span className="font-semibold">In a Scalar build:</span> your rating and your best reviews sit on
+                    every page, right next to the call button.
+                  </p>
+                </Reveal>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {frames.length > 0 && p.website && (
         <section id="loading" className="scroll-mt-20 border-t border-border py-20 sm:py-24">
@@ -365,7 +453,6 @@ export default async function ProspectPreviewPage({ params }: Props) {
 
       <BookCallBand contactHref={contactHref} firmName={p.business_name} />
       {p.website && <SpeedCheck initialUrl={p.website} />}
-      <Pricing />
       <CtaBand />
       <div data-print="only" className="border-t border-border px-5 py-6 text-sm">
         <p className="font-semibold">Questions, or want to go ahead?</p>

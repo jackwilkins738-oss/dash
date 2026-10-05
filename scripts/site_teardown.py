@@ -266,6 +266,14 @@ def same_origin_scripts(html: str, base_url: str, limit: int = 6) -> list[str]:
     return bodies
 
 
+REVIEWS_SHOWN = re.compile(
+    r"aggregaterating|trustindex|elfsight|reviews\.io|trustpilot|featurable|reviewsonmywebsite|grwapi|"
+    r"google-reviews|googlereviews|widget\.checkatrade|checkatrade\.com/[^\"']*(?:widget|badge)|ratedpeople\.com/[^\"']*widget|"
+    r"\u2605{3,}|(?:&#9733;|&#x2605;){3,}|>\s*(?:our\s+|customer\s+|client\s+)?(?:reviews|testimonials)\s*<",
+    re.I,
+)
+
+
 def analyse_html(html: str, final_url: str | None, script_bodies: list[str] | None = None) -> dict:
     out: dict = {"checks": {}}
     checks = out["checks"]
@@ -287,6 +295,9 @@ def analyse_html(html: str, final_url: str | None, script_bodies: list[str] | No
         )
         embedded_form = bool(re.search(r"typeform\.com|jotform|formspree|wpforms|contact-form-7|gravityforms|hsforms", html, re.I))
         checks["contactForm"] = has_form or embedded_form
+        # Reviews on the homepage: a review widget, rating markup, a row of stars, or a Reviews /
+        # Testimonials heading or link. Only "none of these anywhere" counts as not showing them.
+        checks["showsReviews"] = bool(REVIEWS_SHOWN.search(html) or REVIEWS_SHOWN.search(scripts))
 
     checks["localSchema"] = any(LOCAL_TYPES.search(t) for t in _ld_types(html))
 

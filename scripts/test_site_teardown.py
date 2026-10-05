@@ -28,11 +28,18 @@ class AnalyseHtml(unittest.TestCase):
                 "tapToCall": True,
                 "whatsapp": True,
                 "contactForm": True,
+                "showsReviews": False,
                 "localSchema": True,
                 "https": True,
                 "secureAssets": True,
             },
         )
+
+    def test_sees_reviews_on_the_homepage(self):
+        for shown in ('<h2>What our customers say</h2><h3>Reviews</h3>', '<div class="trustindex-widget"></div>',
+                      '<span>\u2605\u2605\u2605\u2605\u2605</span>', '<a href="/testimonials">Testimonials</a>'):
+            self.assertTrue(analyse_html(page(shown), "https://example.com/")["checks"]["showsReviews"], shown)
+        self.assertFalse(analyse_html(page("<p>We review every job before we leave.</p>"), "https://example.com/")["checks"]["showsReviews"])
 
     def test_reports_missing_links_and_form_on_a_content_page(self):
         checks = analyse_html(page("<p>Call us on 01483 000000</p>"), "https://example.com/")["checks"]
