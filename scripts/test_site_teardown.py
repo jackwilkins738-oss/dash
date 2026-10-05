@@ -28,11 +28,18 @@ class AnalyseHtml(unittest.TestCase):
                 "tapToCall": True,
                 "whatsapp": True,
                 "contactForm": True,
+                "showsReviews": False,
                 "localSchema": True,
                 "https": True,
                 "secureAssets": True,
             },
         )
+
+    def test_sees_reviews_on_the_homepage(self):
+        for shown in ('<h2>What our customers say</h2><h3>Reviews</h3>', '<div class="trustindex-widget"></div>',
+                      '<span>\u2605\u2605\u2605\u2605\u2605</span>', '<a href="/testimonials">Testimonials</a>'):
+            self.assertTrue(analyse_html(page(shown), "https://example.com/")["checks"]["showsReviews"], shown)
+        self.assertFalse(analyse_html(page("<p>We review every job before we leave.</p>"), "https://example.com/")["checks"]["showsReviews"])
 
     def test_reports_missing_links_and_form_on_a_content_page(self):
         checks = analyse_html(page("<p>Call us on 01483 000000</p>"), "https://example.com/")["checks"]
@@ -175,3 +182,15 @@ class Filmstrip(unittest.TestCase):
         self.assertIn("screenshot", out)
         self.assertEqual(filmstrip({}), {})
         self.assertIsNone(shrink("data:image/png;base64,bm90IGFuIGltYWdl", 120, 55))
+
+
+class PsiErrors(unittest.TestCase):
+    def test_reasons_in_plain_words(self):
+        from site_teardown import psi_error
+
+        body = lambda m: '{"error": {"message": "%s"}}' % m  # noqa: E731
+        self.assertIn("isn't valid", psi_error(400, body("API key not valid. Please pass a valid API key.")))
+        self.assertIn("quota is used up", psi_error(429, body("Quota exceeded for quota metric")))
+        self.assertIn("switched off", psi_error(403, body("PageSpeed Insights API has not been used in project 1 before or it is disabled")))
+        self.assertIn("restricted", psi_error(403, body("Requests from referer <empty> are blocked.")))
+        self.assertEqual(psi_error(500, "not json"), "Google's speed test said: HTTP 500")

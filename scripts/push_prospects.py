@@ -95,6 +95,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from google_extras import rating_from_sheet  # same folder
+
 try:
     import openpyxl
 except ImportError:
@@ -370,6 +372,7 @@ def main() -> None:
                     "mobile_score": number(row.get("Mobile score")),
                     "lcp_s": number(row.get("LCP (s)")),
                     "channel": channel,
+                    "_sheet_score": number(row.get("Mobile score")) is not None,
                     "_sheet_trade": bool(row.get("Trade")),
                     "_sheet_type": bool(sheet_type),
                     "_email": email,
@@ -380,6 +383,8 @@ def main() -> None:
                     "_key": overrides.row_key(row),
                     "_address": address_of(row) or (found.get("address") or "").strip(),
                     "_phone": str(row.get("Phone") or "").strip() or (found.get("phone") or "").strip(),
+                    # A Google Maps list carries their rating already - no need to ask Google again.
+                    "_google": rating_from_sheet(row.get("Google rating"), row.get("Google reviews")),
                 }
             )
         return out, skipped, closed
@@ -493,19 +498,21 @@ def main() -> None:
         print(f"Couldn't check which previews are live ({e}) - the Mailmeteor file isn't filtered this time.")
 
     def mark_unchecked_pages() -> None:
-        """A speed check is remembered by website, but shown on a preview page - one per firm name. A list
-        that spells a firm differently ("Kerr Roofing Ltd" / "KERR ROOFING LIMITED") makes a new page, which
-        never got the check. When the dashboard says a page has none, its website is checked again."""
-        if not (live_known and any("teardown_at" in r for r in activity.values())):
-            return  # a dashboard from before it reported this - nothing to go on
-        stale = [p for p in prospects if (log.get(p["website"]) or {}).get("result") == "ok"
-                 and not (activity.get(p["slug"]) or {}).get("teardown_at")]
+        """Websites logged as checked whose preview page has no score are checked again:
+          - a speed check logged with no score (Google's test failed, and before v76 that went unsaid);
+          - a page the check never reached. A check is remembered by website, but shown on a preview page -
+            one per firm name - so a list that spells a firm differently ("Kerr Roofing Ltd" / "KERR ROOFING
+            LIMITED") makes a new page that never got it. Needs the dashboard to say which pages have one."""
+        ok = [p for p in prospects if (log.get(p["website"]) or {}).get("result") == "ok"]
+        stale = [p for p in ok if log[p["website"]].get("mobile_score") is None]
+        if live_known and any("teardown_at" in r for r in activity.values()):
+            stale += [p for p in ok if p not in stale and not (activity.get(p["slug"]) or {}).get("teardown_at")]
         for p in stale:
             log[p["website"]]["result"] = "recheck"
         if stale:
             save_log()
-            print(f"{len(stale)} preview page(s) have no speed check on them yet (checked before under another "
-                  "name or list) - they're checked again with the rest.")
+            print(f"{len(stale)} preview page(s) have no speed score on them yet (Google gave none, or the check "
+                  "was made under another name or list) - they're checked again with the rest.")
 
     mark_unchecked_pages()
 
@@ -1016,8 +1023,16 @@ def main() -> None:
                 # Google's headline score and LCP fill the prospect's own fields
                 # when the sheet has none (new lists); the sheet's figures win.
                 score, lcp = result.pop("_mobile_score", None), result.pop("_lcp_s", None)
-                if p.get("mobile_score") is None and score is not None:
+                psi_problem = result.pop("_psi_error", None)
+                if score is None:
+                    # Their homepage was checked, but Google gave no score - the page still gets its
+                    # findings, and the site is logged as not checked so it's tried again.
+                    p["_no_score"] = psi_problem or "Google's test finished without a score"
+                # A fresh measurement replaces a remembered one; only the sheet's own figures win over it.
+                if score is not None and (p.get("mobile_score") is None or not p.get("_sheet_score")):
                     p["mobile_score"] = score
+                    if lcp is not None:
+                        p["lcp_s"] = lcp
                 if p.get("lcp_s") is None and lcp is not None:
                     p["lcp_s"] = lcp
                 p["teardown"] = result
@@ -1025,12 +1040,21 @@ def main() -> None:
                 issues = all_issues(result, datetime.now(timezone.utc).year)
                 p["_top_issue"] = issues[0] if issues else ""
                 p["_issue_count"] = len(issues)
-                score_txt = f"{int(p['mobile_score'])}/100" if p.get("mobile_score") is not None else "no score"
+                score_txt = (f"{int(p['mobile_score'])}/100" if not p.get("_no_score") and p.get("mobile_score") is not None
+                             else f"no score ({p['_no_score']})")
                 print(
                     f"[{i}/{len(selected)}] {p['website']}: {score_txt}, {len(issues)} issue{'s' if len(issues) != 1 else ''}"
                     + (f" - worst: {issues[0]}" if issues else ""),
                     flush=True,
                 )
+
+        # Their Google rating and their local competitors' speed, for the preview page (google_extras.py).
+        # Not on a dry run: those are paid Google searches, for pages that aren't being updated.
+        if not args.dry_run:
+            import google_extras
+
+            places_key = (os.environ.get("GOOGLE_PLACES_API_KEY") or psi_key).strip()
+            google_extras.add_to(selected, args.sheet.parent, places_key, psi_key)
 
     # Rewritten after the teardown, so new scores reach the Mailmeteor file.
     if args.teardown:
@@ -1142,8 +1166,17 @@ def main() -> None:
     if args.teardown:
         now = datetime.now(timezone.utc).isoformat()
         ok = failed = 0
+        no_score: dict[str, int] = {}
         for p in selected:
-            if p.get("teardown_at"):
+            if p.get("teardown_at") and p.get("_no_score"):
+                no_score[p["_no_score"]] = no_score.get(p["_no_score"], 0) + 1
+                before = log.get(p["website"]) or {}
+                log[p["website"]] = {
+                    "checked_at": p["teardown_at"], "result": "failed", "mobile_score": before.get("mobile_score"),
+                    "lcp_s": before.get("lcp_s"), "top_issue": p.get("_top_issue", ""), "issue_count": p.get("_issue_count", ""),
+                }
+                failed += 1
+            elif p.get("teardown_at"):
                 log[p["website"]] = {
                     "checked_at": p["teardown_at"],
                     "result": "ok",
@@ -1163,6 +1196,9 @@ def main() -> None:
         save_log()
         remaining = sum(1 for p in prospects if (log.get(p["website"]) or {}).get("result") not in ("ok", "failed"))
         print(f"Logged {ok} checked, {failed} couldn't be checked; {remaining} still to check.")
+        for why, n in sorted(no_score.items(), key=lambda kv: -kv[1]):
+            print(f"WARNING: {n} site(s) got no speed score - {why}. Their previews show the findings but no score;\n"
+                  "         fix that, then press Retry failed speed checks.")
 
     if args.verify_links:
         verify_links()

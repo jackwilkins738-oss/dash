@@ -49,11 +49,11 @@ class PlacesError(Exception):
     pass
 
 
-def search(query: str, key: str, post=None) -> list[dict]:
-    """Every result for one text search (up to 60), as Google returns them."""
+def search(query: str, key: str, post=None, pages: int = PAGES) -> list[dict]:
+    """Every result for one text search (up to 60), as Google returns them - or just the first page(s)."""
     post = post or _post
     out, token = [], ""
-    for _ in range(PAGES):
+    for _ in range(pages):
         body = {"textQuery": query, "regionCode": "gb", "languageCode": "en-GB", "pageSize": 20}
         if token:
             body["pageToken"] = token

@@ -72,6 +72,25 @@ def _audit_pass(audits: dict, *ids: str) -> bool | None:
     return None
 
 
+def psi_error(code: int, body: str) -> str:
+    """Google's own reason, in a line (its messages never contain the key)."""
+    try:
+        message = (json.loads(body).get("error") or {}).get("message") or ""
+    except ValueError:
+        message = ""
+    message = re.sub(r"\s+", " ", message).strip()
+    low = message.lower()
+    if "api key not valid" in low or "api_key_invalid" in low:
+        return "Google says the PAGESPEED_API_KEY isn't valid - check it in Settings"
+    if code == 429 or "quota" in low:
+        return "Google's speed test quota is used up for today - it resets at midnight Pacific time"
+    if "has not been used" in low or "is disabled" in low or "service_disabled" in low:
+        return "the PageSpeed Insights API is switched off for this key's Google Cloud project - enable it there"
+    if "referer" in low or "referrer" in low or "blocked" in low:
+        return "the key is restricted (websites/IPs) so the panel can't use it - allow PageSpeed Insights API without that restriction"
+    return f"Google's speed test said: {message[:160] or f'HTTP {code}'}"
+
+
 def run_pagespeed(url: str, api_key: str, timeout: int = 180) -> dict:
     """Checks from Google's mobile test. Empty dict if the test couldn't run."""
     params = [("url", url), ("strategy", "mobile"), ("key", api_key)]
@@ -80,8 +99,11 @@ def run_pagespeed(url: str, api_key: str, timeout: int = 180) -> dict:
     try:
         with urllib.request.urlopen(endpoint, timeout=timeout) as res:
             data = json.loads(res.read())
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
-        return {}
+    except urllib.error.HTTPError as e:
+        # Say why - a bad key, a used-up quota or a site Google couldn't load all look the same otherwise.
+        return {"_psi_error": psi_error(e.code, e.read(2000).decode("utf-8", errors="replace"))}
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as e:
+        return {"_psi_error": f"couldn't reach Google's speed test ({type(e).__name__})"}
 
     lh = data.get("lighthouseResult") or {}
     cats = lh.get("categories") or {}
@@ -266,6 +288,14 @@ def same_origin_scripts(html: str, base_url: str, limit: int = 6) -> list[str]:
     return bodies
 
 
+REVIEWS_SHOWN = re.compile(
+    r"aggregaterating|trustindex|elfsight|reviews\.io|trustpilot|featurable|reviewsonmywebsite|grwapi|"
+    r"google-reviews|googlereviews|widget\.checkatrade|checkatrade\.com/[^\"']*(?:widget|badge)|ratedpeople\.com/[^\"']*widget|"
+    r"\u2605{3,}|(?:&#9733;|&#x2605;){3,}|>\s*(?:our\s+|customer\s+|client\s+)?(?:reviews|testimonials)\s*<",
+    re.I,
+)
+
+
 def analyse_html(html: str, final_url: str | None, script_bodies: list[str] | None = None) -> dict:
     out: dict = {"checks": {}}
     checks = out["checks"]
@@ -287,6 +317,9 @@ def analyse_html(html: str, final_url: str | None, script_bodies: list[str] | No
         )
         embedded_form = bool(re.search(r"typeform\.com|jotform|formspree|wpforms|contact-form-7|gravityforms|hsforms", html, re.I))
         checks["contactForm"] = has_form or embedded_form
+        # Reviews on the homepage: a review widget, rating markup, a row of stars, or a Reviews /
+        # Testimonials heading or link. Only "none of these anywhere" counts as not showing them.
+        checks["showsReviews"] = bool(REVIEWS_SHOWN.search(html) or REVIEWS_SHOWN.search(scripts))
 
     checks["localSchema"] = any(LOCAL_TYPES.search(t) for t in _ld_types(html))
 

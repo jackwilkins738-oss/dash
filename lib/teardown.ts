@@ -23,7 +23,8 @@ export type Teardown = {
       | 'pageTitle'
       | 'metaDescription'
       | 'https'
-      | 'secureAssets',
+      | 'secureAssets'
+      | 'showsReviews',
       boolean
     >
   >
@@ -46,6 +47,10 @@ export type Teardown = {
   copyrightYear?: number
   platform?: 'wordpress' | 'wix' | 'squarespace' | 'godaddy' | 'webflow' | 'weebly' | 'duda' | 'shopify'
   wpPluginCount?: number
+  /** Their Google rating (checked by the dashboard: 1-5, from a result whose website is theirs). */
+  google?: { rating: number; reviews: number }
+  /** Top firms on Google Maps for their trade and town, each with Google's mobile score (2-3 of them). */
+  rivals?: { query: string; position?: number; checkedAt?: string; items: { name: string; score: number }[] }
 }
 
 export type Frame = { t: number; img: string }
