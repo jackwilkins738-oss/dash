@@ -446,7 +446,8 @@ def main() -> None:
         fetched = 0
         for p in prospects:
             entry = log.get(p["website"])
-            if not entry or entry["result"] != "ok":
+            # "recheck" keeps its last score until the new check lands (see mark_unchecked_pages).
+            if not entry or entry["result"] not in ("ok", "recheck"):
                 continue
             need_score = p.get("mobile_score") is None and entry["mobile_score"] is None
             if need_score or entry.get("top_issue") is None:
@@ -490,6 +491,23 @@ def main() -> None:
         live_known = True
     except DashboardMissing as e:
         print(f"Couldn't check which previews are live ({e}) - the Mailmeteor file isn't filtered this time.")
+
+    def mark_unchecked_pages() -> None:
+        """A speed check is remembered by website, but shown on a preview page - one per firm name. A list
+        that spells a firm differently ("Kerr Roofing Ltd" / "KERR ROOFING LIMITED") makes a new page, which
+        never got the check. When the dashboard says a page has none, its website is checked again."""
+        if not (live_known and any("teardown_at" in r for r in activity.values())):
+            return  # a dashboard from before it reported this - nothing to go on
+        stale = [p for p in prospects if (log.get(p["website"]) or {}).get("result") == "ok"
+                 and not (activity.get(p["slug"]) or {}).get("teardown_at")]
+        for p in stale:
+            log[p["website"]]["result"] = "recheck"
+        if stale:
+            save_log()
+            print(f"{len(stale)} preview page(s) have no speed check on them yet (checked before under another "
+                  "name or list) - they're checked again with the rest.")
+
+    mark_unchecked_pages()
 
     def write_outputs() -> None:
         with out.open("w", newline="", encoding="utf-8") as f:
@@ -734,7 +752,7 @@ def main() -> None:
         before = len(selected)
         # Failed sites are skipped too - otherwise every batch would retry
         # the same unreachable sites and never move on.
-        selected = [p for p in selected if p["website"] not in log]
+        selected = [p for p in selected if (log.get(p["website"]) or {}).get("result") not in ("ok", "failed")]
         if before != len(selected):
             failed = sum(1 for p in prospects if log.get(p["website"], {}).get("result") == "failed")
             print(
@@ -1136,12 +1154,14 @@ def main() -> None:
                 }
                 ok += 1
             elif p.get("_teardown_failed"):
+                before = log.get(p["website"]) or {}  # a re-check that fails keeps the last score it had
                 log[p["website"]] = {
-                    "checked_at": now, "result": "failed", "mobile_score": None, "lcp_s": None, "top_issue": "", "issue_count": "",
+                    "checked_at": now, "result": "failed", "mobile_score": before.get("mobile_score"),
+                    "lcp_s": before.get("lcp_s"), "top_issue": before.get("top_issue") or "", "issue_count": before.get("issue_count", ""),
                 }
                 failed += 1
         save_log()
-        remaining = sum(1 for p in prospects if p["website"] not in log)
+        remaining = sum(1 for p in prospects if (log.get(p["website"]) or {}).get("result") not in ("ok", "failed"))
         print(f"Logged {ok} checked, {failed} couldn't be checked; {remaining} still to check.")
 
     if args.verify_links:

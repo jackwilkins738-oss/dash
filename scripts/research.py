@@ -128,7 +128,7 @@ def speed(outreach: Path, website: str) -> list[str]:
         return []
     with path.open(encoding="utf-8") as f:
         row = next((r for r in csv.DictReader(f) if r.get("website") == website), None)
-    if not row or row.get("result") != "ok":
+    if not row or row.get("result") not in ("ok", "recheck"):
         return []
     bits = []
     if row.get("mobile_score"):
