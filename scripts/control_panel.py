@@ -82,7 +82,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "80"
+PANEL_VERSION = "81"
 MAX_LOG_LINES = 5000
 
 
@@ -96,6 +96,7 @@ def outreach_dir() -> Path:
 
 OUTREACH = outreach_dir()
 SETTINGS_FILE = OUTREACH / "panel.env"
+RUN_LOG = OUTREACH / "last-run-log.txt"
 
 
 # ---------------------------------------------------------------- mailmeteor
@@ -736,6 +737,12 @@ class Job:
         with self.lock:
             self.seq += 1
             self.lines.append(line)
+            # Every line of the latest run, untrimmed, for "Check a preview link" (check_preview.py).
+            try:
+                with RUN_LOG.open("a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+            except OSError:
+                pass
             if len(self.lines) > MAX_LOG_LINES:
                 del self.lines[: len(self.lines) - MAX_LOG_LINES]
 
@@ -752,6 +759,10 @@ class Job:
             env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
             env.update({k: v for k, v in settings.items() if v})
             self.lines = [f"> {label}"]
+            try:
+                RUN_LOG.write_text(f"{time.strftime('%Y-%m-%d %H:%M')} > {label}\n", encoding="utf-8")
+            except OSError:
+                pass
             self.seq += 1
             self.label, self.started, self.exit_code, self.stopping = label, time.time(), None, False
             self.keep_going, self.failed_steps = keep_going, []

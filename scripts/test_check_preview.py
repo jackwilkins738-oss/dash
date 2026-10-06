@@ -98,6 +98,27 @@ class Diagnose(unittest.TestCase):
         self.assertIn("no page with this link", out)
 
 
+class LastRun(unittest.TestCase):
+    def test_keeps_how_it_went_and_this_firm(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "last-run-log.txt").write_text("\n".join([
+                "2026-10-06 09:00 > Run the whole list", "> python push_prospects.py --sheet x", "",
+                "Speed checking 10 sites, 4 at a time ...", "[1/10] other.co.uk: 55/100, 1 issue",
+                "[2/10] churchillroofingsouth.co.uk: 33/100, 2 issues", "Traceback (most recent call last):",
+                "urllib.error.HTTPError: HTTP Error 500", "Some chatter", "Done."]), encoding="utf-8")
+            out = cp.last_run(Path(d), "churchillroofingsouth.co.uk", "Churchill Roofing South")
+        text = "\n".join(out)
+        self.assertIn("Last run: 2026-10-06 09:00 > Run the whole list", text)
+        self.assertIn("churchillroofingsouth.co.uk: 33/100", text)
+        self.assertIn("HTTPError: HTTP Error 500", text)
+        self.assertNotIn("other.co.uk", text)
+        self.assertNotIn("Some chatter", text)
+
+    def test_no_saved_log(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIn("no saved log yet", cp.last_run(Path(d), "x.co.uk", "X")[0])
+
+
 class Panel(unittest.TestCase):
     def test_check_preview_action(self):
         import control_panel as panel
