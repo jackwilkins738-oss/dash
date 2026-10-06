@@ -476,6 +476,11 @@ Scalar Digital · 07401 696272</textarea>
       <p class="hint">Scorecard: sent → opened → replied → quoted → won, the money, and letters. Excel: every firm from every list, with your Notes kept. Close the workbook before exporting.</p>
     </div>
     <div class="card">
+      <h2>Check a preview link</h2>
+      <div class="row"><input type="text" id="pv-link" placeholder="Paste a preview link, e.g. https://www.scalardigital.co.uk/for/kerr-roofing-a1b2c3" style="flex:1"><button data-action="check_preview">Check</button></div>
+      <p class="hint">Missing a score or findings? This shows what the dashboard, your sheets and the speed log each have for that page, and says what's wrong. Changes nothing.</p>
+    </div>
+    <div class="card">
       <h2>Data requests (UK GDPR)</h2>
       <div class="row"><input type="text" id="dr-who" placeholder="Their email or website, e.g. kerrroofing.co.uk" style="flex:1"></div>
       <div class="row"><button data-action="dr_find">Find</button><button data-action="dr_export">Export what we hold</button><button class="danger" data-action="dr_erase">Erase everywhere</button></div>
@@ -699,7 +704,7 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   const r = await runOrStopAutopilot({ action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
     batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "", send_gap: $("send-gap").value, send_from: $("send-from").value,
     launch_old: $("launch-old").value, launch_new: $("launch-new").value,
-    golive_domain: $("golive-domain").value, dr_who: $("dr-who").value,
+    golive_domain: $("golive-domain").value, dr_who: $("dr-who").value, preview_link: $("pv-link").value,
     publish_folder: $("publish-folder").value, publish_account: $("publish-account").value, publish_project: $("publish-project").value,
     build_draft: $("build-draft").checked });
   if (r.error) $("run-msg").textContent = r.error;
