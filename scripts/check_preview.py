@@ -97,6 +97,25 @@ def live_page(slug: str, fetch=None) -> dict | None:
     return {"score": "/ 100 on mobile" in html, "findings": 'id="findings"' in html}
 
 
+TROUBLE = re.compile(r"Traceback|Error|error:|WARNING|failed|Import failed|Stopped|exit code|couldn't|still not speed checked|"
+                     r"Nothing left|Skipping|left out|List done|Speed checking|Pushed|Logged", re.I)
+
+
+def last_run(outreach: Path, domain: str | None, business: str | None, most: int = 40) -> list[str]:
+    """From the panel's latest run (outreach/last-run-log.txt): its title, the lines that say how it went,
+    and every line naming this firm - so one paste shows where it dropped out."""
+    path = outreach / "last-run-log.txt"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ["Last run: no saved log yet (v81+ saves one - run the list again, then check)."]
+    names = [n.lower() for n in (domain, business) if n]
+    keep = [ln for ln in lines[1:] if ln.strip() and (TROUBLE.search(ln) or any(n in ln.lower() for n in names))]
+    tail = keep[-most:]
+    return [f"Last run: {lines[0] if lines else '?'}", *(f"  | {ln[:200]}" for ln in tail)] + \
+        ([f"  | ... {len(keep) - most} earlier lines not shown"] if len(keep) > most else [])
+
+
 def log_row(outreach: Path, domain: str) -> dict | None:
     path = outreach / "teardown-log.csv"
     if not path.exists():
@@ -189,6 +208,9 @@ def main(argv: list[str] | None = None) -> int:
     domain = matches[0]["domain"] if matches else (row or {}).get("website")
     for line in diagnose(slug, row, matches, log_row(args.outreach, domain) if domain else None, date.today().year,
                          live_page(slug)):
+        print(line)
+    print("")
+    for line in last_run(args.outreach, domain, matches[0]["business"] if matches else (row or {}).get("business_name")):
         print(line)
     return 0
 
