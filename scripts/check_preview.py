@@ -58,7 +58,7 @@ def sheet_matches(outreach: Path, slug: str, secret: str) -> list[dict]:
 
     out = []
     for path in sorted(outreach.glob("*.xlsx")):
-        if path.name.startswith("~$") or path.name.endswith(".tmp.xlsx"):
+        if path.name.startswith("~$") or path.name.endswith(".tmp.xlsx") or path.name == "outreach-results.xlsx":
             continue
         try:
             wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
@@ -152,7 +152,9 @@ def diagnose(slug: str, row: dict | None, matches: list[dict], log: dict | None,
             elif log and log.get("result") == "failed":
                 problems.append("The last speed check failed - press Retry failed speed checks (the log line says why).")
             elif not log:
-                problems.append("Never speed checked - press Run the whole list on the sheet.")
+                where = f" on {matches[0]['sheet']}" if matches else ""
+                problems.append(f"Never speed checked - pick the list{where} and press Run the whole list; it checks "
+                                "every site in batches until done. (From v79, no email goes out before its check.)")
             else:
                 problems.append("No score anywhere yet - Run the whole list re-checks it (v76+).")
         if not row.get("teardown_at"):

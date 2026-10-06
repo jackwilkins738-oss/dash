@@ -487,6 +487,30 @@ class PushRun(unittest.TestCase):
             log = {r["website"]: r["result"] for r in csv.DictReader(f)}
         self.assertEqual(log, {"old.co.uk": "failed", "slow.co.uk": "failed"})  # Retry failed picks them up
 
+    def test_no_email_goes_out_before_the_speed_check(self):
+        from push_prospects import make_slug
+
+        secret = "x" * 40
+        make_sheet(self.dir / "wait.xlsx", [
+            {"Business": "Checked Roofing", "Website": "checked.co.uk", "Status": "New", "Email": "a@checked.co.uk", "Company type": "Ltd"},
+            {"Business": "Waiting Roofing", "Website": "waiting.co.uk", "Status": "New", "Email": "a@waiting.co.uk", "Company type": "Ltd"},
+        ])
+        with (self.dir / "teardown-log.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["website", "checked_at", "result", "mobile_score", "lcp_s", "top_issue", "issue_count"])
+            w.writerow(["checked.co.uk", "2026-10-01", "ok", "41", "5.0", "", "0"])
+        live = {make_slug("Checked Roofing", "checked.co.uk", secret): {}, make_slug("Waiting Roofing", "waiting.co.uk", secret): {}}
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": secret, "PAGESPEED_API_KEY": "k"}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, s, tenant: live), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "wait.xlsx"), "--dry-run"]):
+            import push_prospects
+
+            push_prospects.main()
+        with (self.dir / "mailmeteor-wait.csv").open(encoding="utf-8") as f:
+            self.assertEqual([r["business"] for r in csv.DictReader(f)], ["Checked Roofing"])
+        self.assertIn("1 email firms left out of mailmeteor-wait.csv until their speed check has run", buf.getvalue())
+
     def test_an_older_dashboard_changes_nothing(self):
         make_sheet(self.dir / "old.xlsx", [{"Business": "Kerr Roofing", "Website": "kerr.co.uk", "Status": "New", "Company type": "Ltd"}])
         with (self.dir / "teardown-log.csv").open("w", newline="", encoding="utf-8") as f:

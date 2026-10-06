@@ -532,6 +532,12 @@ def main() -> None:
                 )
         mm = out.parent / f"mailmeteor{suffix}.csv"
         not_live = {p["slug"] for p in prospects if p["channel"] == "email" and live_known and p["slug"] not in live}
+        # Not until their speed check has run: an email linking to a preview with no score and no findings
+        # wastes the firm. They're added by the run that checks them.
+        # (Only when speed checks can run at all - without PAGESPEED_API_KEY nothing would ever be sendable.)
+        unchecked = {p["slug"] for p in prospects if p["channel"] == "email" and p["slug"] not in not_live
+                     and os.environ.get("PAGESPEED_API_KEY") and not speed_checked(p)}
+        not_live |= unchecked
         # {{first_line}} from their homepage (first_line.py): the file is written straight away with the
         # lines already made, THEN new ones are made (time-limited) and the file rewritten - so a slow
         # homepage, an AI hiccup or pressing Stop never costs you the Mailmeteor file.
@@ -549,11 +555,19 @@ def main() -> None:
         if made is not None and made != before:
             write_mm(mm, not_live, made)
         print(f"Wrote {out.name} and {mm.name}")
-        if not_live:
+        if not_live - unchecked:
             print(
-                f"  {len(not_live)} email firms left out of {mm.name}: their preview page isn't on your dashboard yet, "
+                f"  {len(not_live - unchecked)} email firms left out of {mm.name}: their preview page isn't on your dashboard yet, "
                 f"so the link would 404. Push (Dry run off), and they're added."
             )
+        if unchecked:
+            print(f"  {len(unchecked)} email firms left out of {mm.name} until their speed check has run - their preview "
+                  "would show no score. Run the whole list finishes them and adds them.")
+
+    def speed_checked(p: dict) -> bool:
+        """Checked (this run or before) or scored in the sheet - so their preview has something to show."""
+        return bool(p.get("teardown_at") or p.get("_teardown_failed") or p.get("_sheet_score")
+                    or (log.get(p["website"]) or {}).get("result") in ("ok", "failed"))
 
     def write_mm(mm: Path, not_live: set, first_lines: dict) -> None:
         with mm.open("w", newline="", encoding="utf-8") as f:
