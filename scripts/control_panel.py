@@ -40,6 +40,7 @@ from urllib.parse import urlparse
 HERE = Path(__file__).resolve().parent
 PUSH = HERE / "push_prospects.py"
 FIND = HERE / "find_prospects.py"
+SCOUT = HERE / "area_scout.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
@@ -80,7 +81,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "76"
+PANEL_VERSION = "77"
 MAX_LOG_LINES = 5000
 
 
@@ -338,6 +339,7 @@ def output_files() -> list[dict]:
 ACTIONS = {
     "find": "Find new prospects",
     "count": "Count matching firms",
+    "scout": "Scout areas",
     "all": "Run the whole list",
     "retry": "Retry failed speed checks",
     "links": "Refresh preview links + Mailmeteor CSV",
@@ -632,6 +634,18 @@ def build_steps(body: dict, settings: dict[str, str]):
         return (lambda job: [*replies_first(settings), (BATCHES, args)]), ""
     if action == "install_segno":
         return (lambda job: [("pip", ["install", "segno"])]), ""
+    if action == "scout":
+        from find_prospects import TRADES
+
+        trades = [t for t in body.get("trades") or [] if t in TRADES]
+        if not trades:
+            return None, "Tick at least one trade."
+        areas = str(body.get("areas") or "").strip()
+        if areas and not SAFE_TEXT.match(areas):
+            return None, "Areas can only have letters, numbers, spaces and commas."
+        if not (settings.get("GOOGLE_PLACES_API_KEY") or settings.get("PAGESPEED_API_KEY")):
+            return None, "Add GOOGLE_PLACES_API_KEY in Settings first (a Google Cloud key with Places API (New) enabled)."
+        return (lambda job: [(SCOUT, ["--trades", ",".join(trades), *(["--areas", areas] if areas else [])])]), ""
     if action in ("find", "count"):
         args, error = build_find_args(body, settings)
         if args is None:
