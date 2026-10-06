@@ -93,8 +93,10 @@ export default async function ProspectPreviewPage({ params }: Props) {
   const showRace =
     SCALAR_BUILD.lcpMs != null && theirLcpMs != null && p.website != null && theirLcpMs - SCALAR_BUILD.lcpMs >= MIN_RACE_GAP_MS
   // Their Google reviews and the local firms they're up against - each only when it's real and it helps.
-  const reviews = p.website ? reviewsView(p.teardown) : null
-  const rivals = p.website ? rivalsView(p.teardown, p.mobile_score, p.business_name) : null
+  const reviews = reviewsView(p.teardown)
+  const rivals = rivalsView(p.teardown, p.mobile_score, p.business_name)
+  // Their measured score and findings show even if the dashboard lost the web address - "your website" stands in.
+  const siteName = p.website ?? 'your website'
   const checkedOn = checkedAt
     ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).format(checkedAt)
     : null
@@ -120,9 +122,9 @@ export default async function ProspectPreviewPage({ params }: Props) {
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
           <div className="grid items-center gap-12 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <Reveal>
-              {p.website && band && p.mobile_score != null ? (
+              {band && p.mobile_score != null ? (
                 <div className="rounded-2xl border border-border bg-card/50 p-7 sm:p-9">
-                  <p className="font-mono text-xs text-muted-foreground">{p.website} today</p>
+                  <p className="font-mono text-xs text-muted-foreground">{p.website ?? 'Your website'} today</p>
                   <div className="mt-5 flex items-end gap-3">
                     <span className={`font-mono text-6xl font-bold tabular-nums ${band.tone}`}>{p.mobile_score}</span>
                     <span className="mb-2 font-mono text-sm text-muted-foreground">/ 100 on mobile</span>
@@ -351,7 +353,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
         />
       )}
 
-      {findings.length > 0 && p.website && (
+      {findings.length > 0 && (
         <section id="findings" className="scroll-mt-20 border-t border-border py-20 sm:py-24">
           <div className="mx-auto max-w-4xl px-5 sm:px-8">
             <Reveal>
@@ -359,7 +361,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
                 What we found
               </span>
               <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-                {findings.length === 1 ? 'One thing' : `${findings.length} things`} on {p.website} worth fixing.
+                {findings.length === 1 ? 'One thing' : `${findings.length} things`} on {siteName} worth fixing.
               </h2>
               <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
                 Checked on {checkedOn} with Google&apos;s own mobile test and a look at your public homepage

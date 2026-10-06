@@ -41,6 +41,7 @@ HERE = Path(__file__).resolve().parent
 PUSH = HERE / "push_prospects.py"
 FIND = HERE / "find_prospects.py"
 SCOUT = HERE / "area_scout.py"
+CHECK_PREVIEW = HERE / "check_preview.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
@@ -81,7 +82,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "77"
+PANEL_VERSION = "78"
 MAX_LOG_LINES = 5000
 
 
@@ -371,6 +372,7 @@ ACTIONS = {
     "publish_preview": "Publish a preview for the client",
     "scorecard": "Scorecard",
     "insights": "Insights (deep dive)",
+    "check_preview": "Check a preview link",
     "dr_find": "Data request: find",
     "dr_export": "Data request: export",
     "dr_erase": "Data request: erase",
@@ -558,6 +560,13 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not settings.get("MAIL_ADDRESS"):
             return None, "Add MAIL_ADDRESS in Settings first - it's your sending domain that gets checked."
         return (lambda job: [(SENDING_HEALTH, [])]), ""
+    if action == "check_preview":
+        from check_preview import slug_from
+
+        slug = slug_from(str(body.get("preview_link") or ""))
+        if not slug:
+            return None, "Paste a preview link, e.g. https://www.scalardigital.co.uk/for/kerr-roofing-a1b2c3."
+        return (lambda job: [(CHECK_PREVIEW, ["--link", slug])]), ""
     if action in ("dr_find", "dr_export", "dr_erase"):
         who = str(body.get("dr_who") or "").strip().lower()
         if not (re.fullmatch(r"[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}", who) or re.fullmatch(r"(https?://)?[a-z0-9.-]+\.[a-z]{2,}/?", who)):
