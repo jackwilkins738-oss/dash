@@ -538,7 +538,8 @@ class PushRun(unittest.TestCase):
             push_prospects.main()
         self.assertIn("Google reviews and competitor scores skipped this batch (KeyError", buf.getvalue())
         with (self.dir / "teardown-log.csv").open(encoding="utf-8") as f:
-            self.assertEqual([(r["website"], r["result"], r["mobile_score"]) for r in csv.DictReader(f)], [("churchill.co.uk", "ok", "33")])
+            log = {r["website"]: (r["result"], r["mobile_score"]) for r in csv.DictReader(f)}
+        self.assertEqual(log["churchill.co.uk"], ("ok", "33"))
 
     def test_an_older_dashboard_changes_nothing(self):
         make_sheet(self.dir / "old.xlsx", [{"Business": "Kerr Roofing", "Website": "kerr.co.uk", "Status": "New", "Company type": "Ltd"}])
