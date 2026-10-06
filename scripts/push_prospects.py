@@ -1068,7 +1068,11 @@ def main() -> None:
             import google_extras
 
             places_key = (os.environ.get("GOOGLE_PLACES_API_KEY") or psi_key).strip()
-            google_extras.add_to(selected, args.sheet.parent, places_key, psi_key)
+            try:
+                google_extras.add_to(selected, args.sheet.parent, places_key, psi_key)
+            except Exception as e:  # noqa: BLE001 - a bonus; it must never cost the speed checks themselves
+                print(f"Google reviews and competitor scores skipped this batch ({type(e).__name__}: {e}) - "
+                      "the speed checks are saved as normal.")
 
     # Rewritten after the teardown, so new scores reach the Mailmeteor file.
     if args.teardown:

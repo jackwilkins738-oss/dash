@@ -511,6 +511,35 @@ class PushRun(unittest.TestCase):
             self.assertEqual([r["business"] for r in csv.DictReader(f)], ["Checked Roofing"])
         self.assertIn("1 email firms left out of mailmeteor-wait.csv until their speed check has run", buf.getvalue())
 
+    def test_a_google_extras_crash_never_loses_the_speed_checks(self):
+        import json as _json
+
+        make_sheet(self.dir / "gx.xlsx", [{"Business": "Churchill Roofing", "Website": "churchill.co.uk", "Status": "New", "Company type": "Ltd"}])
+
+        class Res(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def boom(*a, **k):
+            raise KeyError("displayName")
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40, "PAGESPEED_API_KEY": "k"}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, s, tenant: {}), \
+                mock.patch("site_teardown.teardown", lambda dom, key: {"v": 1, "checks": {}, "_mobile_score": 33}), \
+                mock.patch("google_extras.add_to", boom), \
+                mock.patch("urllib.request.urlopen", lambda req, timeout=0: Res(_json.dumps({"upserted": 1, "rejected": []}).encode())), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "gx.xlsx"), "--teardown", "--limit", "10"]):
+            import push_prospects
+
+            push_prospects.main()
+        self.assertIn("Google reviews and competitor scores skipped this batch (KeyError", buf.getvalue())
+        with (self.dir / "teardown-log.csv").open(encoding="utf-8") as f:
+            self.assertEqual([(r["website"], r["result"], r["mobile_score"]) for r in csv.DictReader(f)], [("churchill.co.uk", "ok", "33")])
+
     def test_an_older_dashboard_changes_nothing(self):
         make_sheet(self.dir / "old.xlsx", [{"Business": "Kerr Roofing", "Website": "kerr.co.uk", "Status": "New", "Company type": "Ltd"}])
         with (self.dir / "teardown-log.csv").open("w", newline="", encoding="utf-8") as f:
