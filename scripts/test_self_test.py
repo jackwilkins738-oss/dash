@@ -42,6 +42,12 @@ class Checks(unittest.TestCase):
         self.assertEqual(got["Voice notes"], (st.OPTIONAL, "not installed - Settings -> Install voice notes"))
         self.assertEqual(got["Telegram"][0], st.OPTIONAL)
 
+    def test_quote_chaser_names_the_missing_migration(self):
+        got = self.run_with({"PROSPECTS_API_SECRET": "x" * 40}, {"/activity": (200, {}), "/quotes": (200, {"quotes": [], "warning": "Run migration 057"})})
+        self.assertEqual(got["Quote chaser"], (st.BAD, "Run migration 057 (Supabase -> SQL Editor)"))
+        got = self.run_with({"PROSPECTS_API_SECRET": "x" * 40}, {"/activity": (200, {}), "/quotes": (500, {"error": "column quotes.view_count does not exist"})})
+        self.assertIn("column quotes.view_count does not exist", got["Quote chaser"][1])
+
 
 if __name__ == "__main__":
     unittest.main()
