@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { reviewsView, rivalsView, stars, videoSrc } from './preview-extras.ts'
+import { isVideoFile, reviewsView, rivalsView, stars, videoSrc } from './preview-extras.ts'
 import type { Teardown } from './teardown.ts'
 
 const t = (extra: Partial<Teardown>): Teardown => ({ v: 1, checks: {}, ...extra })
@@ -60,6 +60,10 @@ describe('videoSrc', () => {
     assert.equal(videoSrc('https://www.loom.com/embed/0123456789abcdef0123456789abcdef'), 'https://www.loom.com/embed/0123456789abcdef0123456789abcdef')
     assert.equal(videoSrc('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'), 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ')
     assert.equal(videoSrc('https://player.vimeo.com/video/123456789'), 'https://player.vimeo.com/video/123456789')
+    const own = 'https://wfyzsnyfliohevpjpuib.supabase.co/storage/v1/object/public/preview-videos/kerr-1a2b3c4d.mp4'
+    assert.equal(videoSrc(own), own)
+    assert.equal(isVideoFile(own), true)
+    assert.equal(videoSrc(own.replace('wfyzsnyfliohevpjpuib', 'someoneelsesproject1')), null)
     for (const bad of ['https://evil.io/embed/x', 'https://www.loom.com/embed/0123456789abcdef0123456789abcdef?x=1', '', null, undefined]) {
       assert.equal(videoSrc(bad), null)
     }

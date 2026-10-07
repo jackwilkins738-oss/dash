@@ -45,6 +45,7 @@ CHECK_PREVIEW = HERE / "check_preview.py"
 SET_VIDEO = HERE / "set_video.py"
 CARDS = HERE / "cards.py"
 SITE_CHECK = HERE / "site_check.py"
+AUTO_VIDEO = HERE / "auto_video.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
@@ -85,7 +86,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "90"
+PANEL_VERSION = "91"
 MAX_LOG_LINES = 5000
 
 
@@ -381,6 +382,8 @@ ACTIONS = {
     "insights": "Insights (deep dive)",
     "check_preview": "Check a preview link",
     "set_video": "Add a video to a preview",
+    "auto_video": "Make a walkthrough video",
+    "install_video": "Install video maker",
     "dr_find": "Data request: find",
     "dr_export": "Data request: export",
     "dr_erase": "Data request: erase",
@@ -687,6 +690,15 @@ def build_steps(body: dict, settings: dict[str, str]):
         return (lambda job: [("pip", ["install", "segno"])]), ""
     if action == "install_voice":
         return (lambda job: [("pip", ["install", "faster-whisper"])]), ""
+    if action == "install_video":
+        return (lambda job: [("pip", ["install", "playwright", "imageio-ffmpeg"]), ("pip-module", ["playwright", "install", "chromium"])]), ""
+    if action == "auto_video":
+        from check_preview import slug_from
+
+        slug = slug_from(str(body.get("video_preview") or ""))
+        if not slug:
+            return None, "Paste their preview link, e.g. https://www.scalardigital.co.uk/for/kerr-roofing-a1b2c3."
+        return (lambda job: [(AUTO_VIDEO, ["--link", slug])]), ""
     if action == "scout":
         from find_prospects import TRADES
 
@@ -824,6 +836,8 @@ class Job:
                 script, args = step if isinstance(step, tuple) else (PUSH, step)
                 if script == "pip":
                     argv, shown = [sys.executable, "-m", "pip", *args], "pip " + " ".join(args)
+                elif script == "pip-module":  # a module's own installer, e.g. playwright install chromium
+                    argv, shown = [sys.executable, "-m", *args], "-m " + " ".join(args)
                 else:
                     argv, shown = [sys.executable, "-u", str(script), *args], script.name + " " + " ".join(a if " " not in a else repr(a) for a in args)
                 self.note(f"> python {shown}")
@@ -1555,7 +1569,7 @@ class Handler(BaseHTTPRequestHandler):
                                    "autopilot": autopilot.now_doing()}, 409)
             finder = body["action"] in ("find", "count")
             label = ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") and not finder else "")
-            error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] not in ("install_segno", "install_voice"),
+            error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] not in ("install_segno", "install_voice", "install_video"),
                               keep_going=body["action"] in ("all", "prepare", "batch"))
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
         if route == "/api/autopilot":
