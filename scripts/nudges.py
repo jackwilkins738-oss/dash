@@ -72,7 +72,7 @@ def candidates(data: dict, outreach: Path, now: datetime | None = None) -> list[
         if (item.get("views", 0) < MIN_VIEWS or not viewed or (now.date() - viewed).days > FRESH_DAYS
                 or item.get("calls") or item.get("website") in replied or item.get("website") in done or not row):
             continue
-        last_email = max(filter(None, (_day(row.get("sent", "")), _day(row.get("followup_sent", "")))), default=None)
+        last_email = max(filter(None, (_day(row.get(c, "")) for c in ("sent", "followup_sent", "final_sent"))), default=None)
         if not last_email or (now.date() - last_email).days < QUIET_DAYS:
             continue
         out.append({**item, "sent": row})

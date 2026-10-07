@@ -127,6 +127,29 @@ class Panel(unittest.TestCase):
         self.assertEqual((err, list(make(None))), ("", [(panel.CHECK_PREVIEW, ["--link", "chemplas-a76f9c"])]))
         self.assertIn("Paste a preview link", panel.build_steps({"action": "check_preview", "preview_link": "; rm"}, {})[1])
 
+    def test_set_video_action(self):
+        import control_panel as panel
+
+        body = {"action": "set_video", "video_preview": "https://www.scalardigital.co.uk/for/kerr-a1b2c3?src=email",
+                "video_url": "https://www.loom.com/share/0123456789abcdef0123456789abcdef"}
+        make, err = panel.build_steps(body, {})
+        self.assertEqual(list(make(None)), [(panel.SET_VIDEO, ["--link", "kerr-a1b2c3", "--video", body["video_url"]])])
+        self.assertIn("Loom, YouTube or Vimeo", panel.build_steps({**body, "video_url": "https://evil.io/x"}, {})[1])
+        self.assertEqual(list(panel.build_steps({**body, "video_url": ""}, {})[0](None))[0][1][-1], "")  # blank takes it off
+
+
+class SetVideo(unittest.TestCase):
+    def test_sends_the_link_and_reports_errors(self):
+        import set_video
+
+        seen = []
+        out = set_video.set_video("https://api", "s", "kerr-a1b2c3", "https://youtu.be/dQw4w9WgXcQ",
+                                  lambda url, body: seen.append((url, body)) or {"ok": True, "video_url": "x"})
+        self.assertEqual(seen, [("https://api/api/prospects/kerr-a1b2c3", {"video_url": "https://youtu.be/dQw4w9WgXcQ"})])
+        self.assertTrue(out["ok"])
+        self.assertTrue(set_video.looks_like_video("https://vimeo.com/123456789"))
+        self.assertFalse(set_video.looks_like_video("http://youtu.be/x"))
+
 
 if __name__ == "__main__":
     unittest.main()

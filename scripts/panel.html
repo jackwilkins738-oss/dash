@@ -202,7 +202,7 @@
         <button class="primary" data-action="send_followups">Send follow-ups</button>
         <span class="dim">uses the same min apart and inbox as above - a follow-up always goes from the inbox that sent the first email</span>
       </div>
-      <p class="hint">One short second email to anyone who hasn't replied or opened their preview - never a third. Mailmeteor: import <b>mailmeteor-followup-&lt;date&gt;.csv</b>, send, then <button class="link" data-action="followups_sent">mark follow-ups as sent</button>.</p>
+      <p class="hint">One short second email to anyone who hasn't replied or opened their preview, then about a week later one polite closing email ("I won't chase again") to anyone still silent - never a fourth. The closing email only goes from the panel's Send. Mailmeteor: import <b>mailmeteor-followup-&lt;date&gt;.csv</b>, send, then <button class="link" data-action="followups_sent">mark follow-ups as sent</button>.</p>
     </div>
 
     <div class="card">
@@ -481,6 +481,12 @@ Scalar Digital · 07401 696272</textarea>
       <p class="hint">Missing a score or findings? This shows what the dashboard, your sheets and the speed log each have for that page, and says what's wrong. Changes nothing.</p>
     </div>
     <div class="card">
+      <h2>Add a video to a preview</h2>
+      <div class="row"><input type="text" id="vid-preview" placeholder="Their preview link" style="flex:1"></div>
+      <div class="row"><input type="text" id="vid-url" placeholder="Your Loom / YouTube / Vimeo link (blank takes it off)" style="flex:1"><button data-action="set_video">Save</button></div>
+      <p class="hint">For firms that opened their preview twice or more: record 60-90 seconds on Loom scrolling their preview and saying what you'd fix first. It shows at the top of their page. Then send the nudge, or ring.</p>
+    </div>
+    <div class="card">
       <h2>Data requests (UK GDPR)</h2>
       <div class="row"><input type="text" id="dr-who" placeholder="Their email or website, e.g. kerrroofing.co.uk" style="flex:1"></div>
       <div class="row"><button data-action="dr_find">Find</button><button data-action="dr_export">Export what we hold</button><button class="danger" data-action="dr_erase">Erase everywhere</button></div>
@@ -704,7 +710,7 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   const r = await runOrStopAutopilot({ action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
     batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "", send_gap: $("send-gap").value, send_from: $("send-from").value,
     launch_old: $("launch-old").value, launch_new: $("launch-new").value,
-    golive_domain: $("golive-domain").value, dr_who: $("dr-who").value, preview_link: $("pv-link").value,
+    golive_domain: $("golive-domain").value, dr_who: $("dr-who").value, preview_link: $("pv-link").value, video_preview: $("vid-preview").value, video_url: $("vid-url").value,
     publish_folder: $("publish-folder").value, publish_account: $("publish-account").value, publish_project: $("publish-project").value,
     build_draft: $("build-draft").checked });
   if (r.error) $("run-msg").textContent = r.error;
@@ -794,6 +800,7 @@ function callRow(i, section) {
       ${i.preview ? `<a href="${esc(i.preview)}" target="_blank" rel="noopener">their preview ↗</a>` : ""}
       <a href="https://${esc(i.website)}" target="_blank" rel="noopener">${esc(i.website)} ↗</a></div>
     <div class="why">${seen}${last}</div>
+    ${i.script && i.script.length ? `<details class="why"><summary>Call script</summary>${i.script.map((l) => `<div>${esc(l)}</div>`).join("")}</details>` : ""}
     <div class="btns">${(callData.outcomes || []).map((o) => `<button data-outcome="${esc(o)}" ${o === "Not interested" ? 'class="danger"' : o === "Interested" || o === "Won" ? 'class="primary"' : ""}>${esc(o)}</button>`).join("")}
       <input type="text" placeholder="note (optional)" data-note></div>
     <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><label class="hint" title="One of the first three Scalar builds: 24 months' free dashboard, the speed guarantee, first in the queue - for a case study, video and review"><input type="checkbox" data-founding> founding client</label><button data-draft>Draft their site</button><button data-research title="Company age and directors, what their site says, their speed check - before you dial">🔎 Research</button></div>
@@ -974,13 +981,20 @@ async function callOutcome(b, dueIn) {
   const list = callData[card.dataset.sec] || [];
   const item = list.find((x) => x.key === card.dataset.key);
   const outcome = dueIn ? "Call back" : b.dataset.outcome;
-  if (outcome === "Not interested" && !confirm(`${item.business}: not interested? They won't be contacted again, from any list.`)) return;
+  let reason = "";
+  if (outcome === "Not interested") {
+    const reasons = callData.reasons || [];
+    const pick = prompt(`${item.business}: not interested - they won't be contacted again, from any list.\nWhy? Type a number:\n`
+      + reasons.map((r, n) => `${n + 1} ${r}`).join("\n"), String(reasons.length));
+    if (!pick) return;
+    reason = reasons[Number(pick) - 1] || "Other";
+  }
   let due = dueIn || "";
   if (outcome === "Call back" && !due) {
     due = prompt(`Call ${item.business} back when?\n3d = 3 days, 2w = 2 weeks, 3m = 3 months, tomorrow, or a date (2026-11-03)`, "3d");
     if (!due) return;
   }
-  const r = await post("/api/calls", { sheet: sheetOf(item), key: item.key, business: item.business, outcome, due,
+  const r = await post("/api/calls", { sheet: sheetOf(item), key: item.key, business: item.business, outcome, due, reason,
     note: card.querySelector("[data-note]").value, website: item.website, email: item.email });
   $("calls-toast").style.color = r.error ? "var(--bad)" : "var(--ok)";
   $("calls-toast").textContent = r.error || r.message;

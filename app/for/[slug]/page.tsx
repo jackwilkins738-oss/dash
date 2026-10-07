@@ -16,10 +16,12 @@ import { teardownFindings, teardownPasses, usableFrames } from '@/lib/teardown'
 import { PrintButton } from '@/components/print-button'
 import { PreviewOptOut } from '@/components/preview-optout'
 import { FoundingOffer } from '@/components/founding-offer'
+import { Founder } from '@/components/founder'
+import { PreviewVideo } from '@/components/preview-video'
 import { QuickReply } from '@/components/quick-reply'
 import { LoadFilmstrip } from '@/components/load-filmstrip'
 import { PRICES } from '@/lib/site'
-import { reviewsView, rivalsView, stars } from '@/lib/preview-extras'
+import { reviewsView, rivalsView, stars, videoSrc } from '@/lib/preview-extras'
 import { SITE } from '@/lib/site'
 
 // A private page for one business Scalar is reaching out to: their real
@@ -96,6 +98,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
   const rivals = rivalsView(p.teardown, p.mobile_score, p.business_name)
   // Their measured score and findings show even if the dashboard lost the web address - "your website" stands in.
   const siteName = p.website ?? 'your website'
+  const video = videoSrc(p.video_url)
   const checkedOn = checkedAt
     ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).format(checkedAt)
     : null
@@ -114,8 +117,14 @@ export default async function ProspectPreviewPage({ params }: Props) {
         body={`A concept of a Scalar build for ${tradePhrase(p)}${
           p.website ? `, next to where ${p.website} stands on Google’s own speed test today` : ''
         }. Nothing to sign up for — have a look around.`}
-        actions={<HeaderActions primaryHref={contactHref} secondary={{ href: '#preview', label: 'See the preview' }} />}
+        actions={
+          <HeaderActions
+            primaryHref={contactHref}
+            secondary={video ? { href: '#video', label: 'Watch my walkthrough' } : { href: '#preview', label: 'See the preview' }}
+          />
+        }
       />
+      {video && <PreviewVideo src={video} firmName={p.business_name} />}
 
       <section id="preview" className="scroll-mt-20 py-20 sm:py-24">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
@@ -383,6 +392,23 @@ export default async function ProspectPreviewPage({ params }: Props) {
           <Reveal className="mt-6">
             <FoundingOffer href={`${contactHref}&founding=1`} />
           </Reveal>
+          <Reveal className="mt-12">
+            <h3 className="font-display text-2xl font-bold tracking-tight">What happens next</h3>
+            <ol className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ['A short call', 'Fifteen minutes on what work you want more of. If it isn’t a fit, I’ll say so.'],
+                ['A fixed price in writing', 'Within 2 hours of the call. It doesn’t move once we start.'],
+                ['One page of details', 'Your services, areas and some photos of your work. I write the rest.'],
+                ['You check it on your phone', 'Nothing goes live until you’ve seen it and said yes. Then it’s yours outright.'],
+              ].map(([title, body], i) => (
+                <li key={title} className="rounded-2xl border border-border bg-card/50 p-5">
+                  <span className="font-mono text-xs text-blueprint">0{i + 1}</span>
+                  <span className="mt-2 block font-semibold">{title}</span>
+                  <span className="mt-1.5 block text-sm leading-relaxed text-muted-foreground">{body}</span>
+                </li>
+              ))}
+            </ol>
+          </Reveal>
           <dl className="mt-12 divide-y divide-border border-y border-border">
             {[
               ['Is the price fixed?', `Yes. £${PRICES.landing.toLocaleString('en-GB')} or £${PRICES.build.toLocaleString('en-GB')}, agreed before anything starts, and it doesn't move. No monthly fee on the website itself.`],
@@ -403,6 +429,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
         </div>
       </section>
 
+      <Founder />
       <BookCallBand contactHref={contactHref} firmName={p.business_name} />
       {p.website && <SpeedCheck initialUrl={p.website} />}
       <CtaBand />

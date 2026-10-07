@@ -917,8 +917,16 @@ class FollowUps(unittest.TestCase):
             self.assertEqual(eb.mark_followups_sent(d, date(2026, 9, 28)), 2)
             later, _, _ = eb.make_followups(d, 20, 5, check=lambda u: None, views=views, today=date(2026, 10, 30))
             with later.open(encoding="utf-8") as f:
-                # The one that was too recent, and the viewer nobody rang in 10 days - never a third email.
-                self.assertEqual(sorted(r["email"] for r in csv.DictReader(f)), ["recent@x.co.uk", "viewer@x.co.uk"])
+                # The one that was too recent and the viewer nobody rang in 10 days get their follow-up; the two
+                # followed up a month ago get the closing email - and after that, nothing.
+                got = {r["email"]: r["stage"] for r in csv.DictReader(f)}
+            self.assertEqual(got, {"recent@x.co.uk": "followup", "viewer@x.co.uk": "followup",
+                                   "ooo@x.co.uk": "final", "quiet@x.co.uk": "final"})
+            self.assertEqual(eb.mark_followups_sent(d, date(2026, 10, 30)), 4)
+            sent = {r["email"]: r for r in csv.DictReader((d / eb.SENT).open(encoding="utf-8"))}
+            self.assertEqual((sent["quiet@x.co.uk"]["followup_sent"], sent["quiet@x.co.uk"]["final_sent"]), ("2026-09-28", "2026-10-30"))
+            self.assertEqual(sent["recent@x.co.uk"]["final_sent"], "")
+            self.assertIsNone(eb.make_followups(d, 20, 5, check=lambda u: None, views=views, today=date(2026, 11, 3))[0])
             # A later first-email batch keeps the follow-up dates.
             with (d / eb.PENDING).open("w", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)

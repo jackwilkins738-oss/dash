@@ -29,8 +29,11 @@ PENDING = "mailmeteor-batch-pending.csv"
 FOLLOWUP_PENDING = "mailmeteor-followup-pending.csv"
 SENT = "emails-sent.csv"
 SENT_FIELDS = ["email", "business", "preview_url", "batch", "sent", "followup_sent", "message_id", "subject", "variant",
-               "sent_from", "sent_at"]
+               "sent_from", "sent_at", "final_sent"]
 FOLLOWUP_AFTER_DAYS = 5
+# The last, closing-the-file email: this long after the follow-up (about two weeks after the first
+# email), to anyone still silent who never opened their preview and was never rung. Never a fourth.
+FINAL_AFTER_DAYS = 9
 # Someone who opened their preview is a call, not an email - but if no call is logged this long after
 # the first email, they get the one follow-up after all, so a warm firm is never simply forgotten.
 VIEWER_FOLLOWUP_DAYS = 10
@@ -269,11 +272,12 @@ def record_sent(outreach: Path, row: dict, batch: str, today: date, message_id: 
     _write_sent(outreach, rows)
 
 
-def record_followup_sent(outreach: Path, email: str, today: date) -> None:
+def record_followup_sent(outreach: Path, email: str, today: date, final: bool = False) -> None:
+    col = "final_sent" if final else "followup_sent"
     rows = _rows(outreach / SENT)[1]
     for r in rows:
-        if (r.get("email") or "").lower() == email.lower() and not r.get("followup_sent"):
-            r["followup_sent"] = today.isoformat()
+        if (r.get("email") or "").lower() == email.lower() and not r.get(col):
+            r[col] = today.isoformat()
     _write_sent(outreach, rows)
 
 
@@ -305,11 +309,13 @@ def _slug(url: str) -> str:
 
 def followup_candidates(outreach: Path, after_days: int = FOLLOWUP_AFTER_DAYS, today: date | None = None,
                         views: dict[str, dict] | None = None) -> tuple[list[dict], dict[str, int]]:
-    """Emailed once, long enough ago, and no sign of life - (rows to follow up, why others were left out).
+    """Emailed, long enough ago, and no sign of life - (rows to follow up, why others were left out).
 
-    Only ever one follow-up. Left out: anyone who replied (in any way), bounced or said no. Anyone who
+    One follow-up ("stage": "followup"), then one closing email ("stage": "final") FINAL_AFTER_DAYS
+    after it - never more. Left out: anyone who replied (in any way), bounced or said no. Anyone who
     opened their preview is on the Calls list - a call beats a second email - so they wait
-    VIEWER_FOLLOWUP_DAYS, and are left out for good once a call is logged."""
+    VIEWER_FOLLOWUP_DAYS, and are left out for good once a call is logged; they never get the closing
+    email at all."""
     from datetime import timedelta
 
     today = today or date.today()
@@ -332,7 +338,24 @@ def followup_candidates(outreach: Path, after_days: int = FOLLOWUP_AFTER_DAYS, t
     out, skipped = [], {"replied": 0, "viewed": 0, "blocked": 0, "too soon": 0}
     for r in _rows(outreach / SENT)[1]:
         email = (r.get("email") or "").lower()
-        if not email or r.get("followup_sent"):
+        if not email or r.get("final_sent"):
+            continue
+        if r.get("followup_sent"):
+            try:
+                followed = date.fromisoformat(r["followup_sent"][:10])
+            except ValueError:
+                continue
+            viewed = views is not None and ((views.get(_slug(r.get("preview_url", ""))) or {}).get("view_count") or 0) > 0
+            if followed > today - timedelta(days=FINAL_AFTER_DAYS):
+                skipped["too soon"] += 1
+            elif email in stop:
+                skipped["blocked"] += 1
+            elif email in replied_emails or (r.get("business") or "").lower() in replied_names:
+                skipped["replied"] += 1
+            elif viewed or (r.get("business") or "").strip().lower() in called:
+                skipped["viewed"] += 1
+            elif views is not None:  # without the dashboard's views, a viewer can't be told apart: no closing email
+                out.append({**r, **latest.get(email, {}), "email": email, "stage": "final"})
             continue
         try:
             sent = date.fromisoformat(r.get("sent") or "")
@@ -349,7 +372,7 @@ def followup_candidates(outreach: Path, after_days: int = FOLLOWUP_AFTER_DAYS, t
         ):
             skipped["viewed"] += 1
         else:
-            out.append({**r, **latest.get(email, {}), "email": email})
+            out.append({**r, **latest.get(email, {}), "email": email, "stage": "followup"})
     out.sort(key=lambda r: r.get("sent") or "")
     return out, skipped
 
@@ -376,28 +399,30 @@ def make_followups(outreach: Path, size: int, after_days: int = FOLLOWUP_AFTER_D
     while path.exists():
         path = outreach / f"mailmeteor-followup-{today.isoformat()}-{n}.csv"
         n += 1
-    fields = [f for f in dict.fromkeys(k for r in picked for k in r) if f not in ("batch", "sent", "followup_sent")]
+    fields = [f for f in dict.fromkeys(k for r in picked for k in r) if f not in ("batch", "sent", "followup_sent", "final_sent")]
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(picked)
     with (outreach / FOLLOWUP_PENDING).open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["email", "batch"])
+        writer = csv.DictWriter(f, fieldnames=["email", "batch", "stage"])
         writer.writeheader()
-        writer.writerows({"email": r["email"], "batch": path.name} for r in picked)
+        writer.writerows({"email": r["email"], "batch": path.name, "stage": r.get("stage", "followup")} for r in picked)
     return path, notes, skipped
 
 
 def mark_followups_sent(outreach: Path, today: date | None = None) -> int:
     today = today or date.today()
-    pending = {r["email"].lower() for r in _rows(outreach / FOLLOWUP_PENDING)[1] if r.get("email")}
+    pending = {r["email"].lower(): r.get("stage") or "followup" for r in _rows(outreach / FOLLOWUP_PENDING)[1] if r.get("email")}
     if not pending:
         return 0
     rows = _rows(outreach / SENT)[1]
     n = 0
     for r in rows:
-        if (r.get("email") or "").lower() in pending and not r.get("followup_sent"):
-            r["followup_sent"] = today.isoformat()
+        stage = pending.get((r.get("email") or "").lower())
+        col = "final_sent" if stage == "final" else "followup_sent"
+        if stage and not r.get(col):
+            r[col] = today.isoformat()
             n += 1
     with (outreach / SENT).open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=SENT_FIELDS, extrasaction="ignore")

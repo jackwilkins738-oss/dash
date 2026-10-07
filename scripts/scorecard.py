@@ -300,6 +300,21 @@ def objections(outreach: Path, today: date | None = None, days: int = 90) -> str
     return out
 
 
+def lost_reasons(outreach: Path, today: date | None = None, days: int = 90) -> str:
+    """Why firms said no on the phone - the one-tap reason on "Not interested"."""
+    since = ((today or date.today()) - timedelta(days=days)).isoformat()
+    counts: dict[str, int] = {}
+    for r in eb._rows(outreach / "calls.csv")[1]:
+        note = r.get("note") or ""
+        if r.get("outcome") == "Not interested" and note.startswith("Reason: ") and (r.get("at") or "")[:10] >= since:
+            reason = note[len("Reason: "):].split(" - ")[0]
+            counts[reason] = counts.get(reason, 0) + 1
+    if not counts:
+        return ""
+    return f"Why they said no on the phone (last {days} days): " + " · ".join(
+        f"{k} {n}" for k, n in sorted(counts.items(), key=lambda kv: -kv[1]))
+
+
 def scorecard(outreach: Path, views: dict[str, dict] | None, today: date | None = None) -> list[str]:
     today = today or date.today()
     rows = gather(outreach, views, today)
@@ -326,6 +341,9 @@ def scorecard(outreach: Path, views: dict[str, dict] | None, today: date | None 
     held = objections(outreach, today)
     if held:
         out.append(held)
+    lost = lost_reasons(outreach, today)
+    if lost:
+        out.append(lost)
     if letters(views):
         out.append(letters(views))
     calls = [r for r in eb._rows(outreach / "calls.csv")[1] if (r.get("at") or "")[:10] > (today - timedelta(days=7)).isoformat()]

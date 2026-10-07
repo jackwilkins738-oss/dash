@@ -31,3 +31,11 @@ export function stars(rating: number): string {
   const full = Math.round(rating)
   return '★'.repeat(full) + '☆'.repeat(5 - full)
 }
+
+// The personal video on a preview: only the three players the dashboard stores (migration 062),
+// checked again here so nothing else is ever framed on the page.
+const VIDEO = /^https:\/\/(www\.loom\.com\/embed\/[a-f0-9]{32}|www\.youtube-nocookie\.com\/embed\/[A-Za-z0-9_-]{11}|player\.vimeo\.com\/video\/[0-9]{6,12})$/
+
+export function videoSrc(url: string | null | undefined): string | null {
+  return typeof url === 'string' && VIDEO.test(url) ? url : null
+}
