@@ -32,7 +32,10 @@ def _get(url: str, headers: dict | None = None, timeout: int = 20) -> tuple[int,
             except ValueError:
                 return res.status, {}
     except urllib.error.HTTPError as e:
-        return e.code, {}
+        try:  # the services here answer errors as JSON - keep it, so the reason can be shown
+            return e.code, json.loads(e.read(20_000))
+        except (ValueError, OSError):
+            return e.code, {}
     except (urllib.error.URLError, OSError, TimeoutError):
         return 0, {}
 
@@ -60,8 +63,13 @@ def checks(env: dict, outreach: Path, get=_get, have=installed) -> list[tuple[st
             add(BAD, "Dashboard", "refused the secret - PROSPECTS_API_SECRET must match the dashboard's in Vercel")
         else:
             add(BAD, "Dashboard", f"couldn't reach {api} (HTTP {code or 'no answer'})")
-        code, _ = get(f"{api}/api/prospects/quotes?tenant_id={TENANT}", {"Authorization": f"Bearer {secret}"})
-        add(OK if code == 200 else BAD, "Quote chaser", "open quotes readable" if code == 200 else f"HTTP {code or 'no answer'} - redeploy the dashboard")
+        code, body = get(f"{api}/api/prospects/quotes?tenant_id={TENANT}", {"Authorization": f"Bearer {secret}"})
+        if code == 200 and body.get("warning"):
+            add(BAD, "Quote chaser", f"{body['warning']} (Supabase -> SQL Editor)")
+        elif code == 200:
+            add(OK, "Quote chaser", f"{len(body.get('quotes') or [])} open quote(s) readable")
+        else:
+            add(BAD, "Quote chaser", f"HTTP {code or 'no answer'}" + (f" - {str(body['error'])[:120]}" if body.get("error") else " - redeploy the dashboard"))
 
     if env.get("MAIL_ADDRESS") and env.get("MAIL_APP_PASSWORD"):
         add(OK if env.get("MAIL_FROM_NAME") else BAD, "Email", f"{env['MAIL_ADDRESS']}" + ("" if env.get("MAIL_FROM_NAME") else
