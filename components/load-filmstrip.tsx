@@ -3,7 +3,7 @@
 // Inline JPEGs only (checked by the dashboard and again in lib/teardown), so
 // nothing is fetched from their site.
 
-import { isDataJpeg, type Frame } from '@/lib/teardown'
+import type { Frame } from '@/lib/teardown'
 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`
 
@@ -29,16 +29,3 @@ export function LoadFilmstrip({ frames, domain }: { frames: Frame[]; domain: str
 }
 
 /** Their homepage as it looks today, once loaded - the "before" beside the rebuild. */
-export function TodayPhone({ src, domain }: { src: string; domain: string }) {
-  if (!isDataJpeg(src)) return null
-  return (
-    <div className="mx-auto w-full max-w-[340px]">
-      <div className="rounded-[2.4rem] border border-border bg-[#0b0d12] p-2.5 shadow-2xl shadow-black/40">
-        <div className="h-[560px] overflow-hidden rounded-[1.9rem] bg-white">
-          {/* eslint-disable-next-line @next/next/no-img-element -- an inline capture from Google's test */}
-          <img src={src} alt={`${domain} on a phone today`} className="block h-auto w-full" />
-        </div>
-      </div>
-    </div>
-  )
-}

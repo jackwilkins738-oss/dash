@@ -37,7 +37,7 @@ const SECTIONS = [
         <p className="mt-3">
           The &ldquo;send me the full report&rdquo; form under the free speed test collects your name, business
           name, email, website, and optionally your phone, trade and town. It&apos;s used to prepare and send
-          the report you asked for (including a preview of your site rebuilt) and to reply to you about it -
+          the report you asked for (including a concept of a fast site for your business) and to reply to you about it -
           nothing else, and you can ask for it to be deleted at any time.
         </p>
       </>

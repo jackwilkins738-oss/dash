@@ -39,7 +39,7 @@ export function ReportRequest({ website, score }: { website: string; score: numb
       <div className="mx-auto mt-8 max-w-lg rounded-2xl border border-blueprint/40 bg-card p-7 text-center" role="status">
         <p className="font-display text-xl font-bold tracking-tight">Got it - it&apos;s on its way.</p>
         <p className="mt-3 text-pretty text-muted-foreground">
-          You&apos;ll get the full report, with a preview of your site rebuilt to load fast, by email - usually the same day.
+          You&apos;ll get the full report, with a concept of a fast site for your business, by email - usually the same day.
           Nothing to pay and no obligation.
         </p>
       </div>
@@ -48,10 +48,10 @@ export function ReportRequest({ website, score }: { website: string; score: numb
 
   return (
     <form onSubmit={submit} className="mx-auto mt-8 max-w-lg rounded-2xl border border-blueprint/40 bg-card p-7">
-      <p className="font-display text-xl font-bold tracking-tight">Want the full report - and your site rebuilt, free to look at?</p>
+      <p className="font-display text-xl font-bold tracking-tight">Want the full report - free, in plain English?</p>
       <p className="mt-2 text-pretty text-sm leading-relaxed text-muted-foreground">
-        What&apos;s slowing your site down, in plain English, plus a preview of your own homepage rebuilt to load in under
-        a second. Sent by email, usually the same day. No obligation - and we won&apos;t add you to any mailing list.
+        What&apos;s slowing your site down and what it&apos;s costing you, in plain English, plus a concept of a fast site
+        for your business. Sent by email, usually the same day. No obligation - and we won&apos;t add you to any mailing list.
       </p>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <input className={field} placeholder="Your name" value={form.name} onChange={set('name')} autoComplete="name" required maxLength={80} aria-label="Your name" />
