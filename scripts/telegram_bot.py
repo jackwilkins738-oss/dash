@@ -152,9 +152,13 @@ class Bot:
             quotes = self._open_quotes()
             import daily
 
-            self.send(daily.plan({} if data.get("message") else data, len(quotes), email_batches.remaining(p.OUTREACH, None)))
-            if datetime.now().weekday() == 6:
-                self.send(daily.week(p.OUTREACH, email_batches.preview_views(), datetime.now().date()))
+            today = datetime.now().date()
+            goals = p.load_settings().get("WEEKLY_TARGETS") or ""
+            plan = daily.plan({} if data.get("message") else data, len(quotes), email_batches.remaining(p.OUTREACH, None))
+            # Monday starts a fresh week: the count shows from Tuesday, and in full on Sunday.
+            self.send(plan + ("\n\n" + daily.progress(p.OUTREACH, today, goals) if today.weekday() not in (0, 6) else ""))
+            if today.weekday() == 6:
+                self.send(daily.week(p.OUTREACH, email_batches.preview_views(), today) + "\n" + daily.progress(p.OUTREACH, today, goals))
         except Exception as e:  # noqa: BLE001 - a bad morning never stops the bot
             self.send(f"Today's plan didn't work: {type(e).__name__}: {e}")
         try:

@@ -295,6 +295,7 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
             "area": str(row.get("Area") or row.get("Town") or "").strip(),
             "preview": f"{site}/for/{slug}?src=dashboard",
             "views": int(act.get("view_count") or 0), "last_viewed": act.get("last_viewed_at") or "",
+            "first_viewed": act.get("first_viewed_at") or "",
             "status": act.get("status") or "",
             "last_call": last.get("outcome") if last else "", "last_call_at": last.get("at") if last else "",
             "calls": len(history), "posted": posted.get(key, ""),
