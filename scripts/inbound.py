@@ -42,8 +42,9 @@ def safe(value: str) -> str:
     return "'" + value if value[:1] in ("=", "+", "-", "@") else value
 
 
-def add(outreach: Path, lead: dict) -> tuple[str, str]:
-    """("added" | "already" | "known:<list>", message) - adds them to inbound.xlsx unless they're already in a list."""
+def add(outreach: Path, lead: dict, sheet: str = SHEET, source: str = SOURCE, found: str = "they gave it") -> tuple[str, str]:
+    """("added" | "already" | "known:<list>", message) - adds them to inbound.xlsx (or `sheet`) unless they're
+    already in a list."""
     import openpyxl
 
     from find_prospects import HEADERS
@@ -52,9 +53,9 @@ def add(outreach: Path, lead: dict) -> tuple[str, str]:
     domain = domain_of(lead["website"]) or ""
     if not domain:
         return "bad", "Their website address doesn't look right - add them by hand."
-    path = outreach / SHEET
+    path = outreach / sheet
     for other in sorted(outreach.glob("*.xlsx")):
-        if other.name in (SHEET, "outreach-results.xlsx") or other.name.startswith("~$") or other.name.endswith(".tmp.xlsx"):
+        if other.name in (sheet, "outreach-results.xlsx") or other.name.startswith("~$") or other.name.endswith(".tmp.xlsx"):
             continue
         try:
             wb = openpyxl.load_workbook(other, read_only=True, data_only=True)
@@ -78,18 +79,18 @@ def add(outreach: Path, lead: dict) -> tuple[str, str]:
         headers = [str(c.value or "") for c in ws[1]]
         site_col = headers.index("Website")
         if any(domain_of(str(r[site_col] or "")) == domain for r in ws.iter_rows(min_row=2, values_only=True)):
-            return "already", f"{lead['business']} is already in {SHEET}."
+            return "already", f"{lead['business']} is already in {sheet}."
     else:
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Outreach"
         ws.append(headers)
     row = {"Business": lead["business"], "Website": lead["website"], "Status": "New", "Trade": lead.get("trade", ""),
-           "Area": lead.get("town", ""), "Email": lead["email"], "Phone": lead.get("phone", ""),
-           "Contact name": lead.get("name", ""), "Website found": "they gave it", "Source": SOURCE,
+           "Area": lead.get("town", ""), "Email": lead.get("email", ""), "Phone": lead.get("phone", ""),
+           "Contact name": lead.get("name", ""), "Website found": found, "Source": source,
            "Their score": lead.get("score", "")}
     ws.append([safe(str(row.get(h, ""))) for h in headers])
     tmp = path.with_suffix(".tmp.xlsx")
     wb.save(tmp)
     tmp.replace(path)
-    return "added", f"{lead['business']} added to {SHEET}."
+    return "added", f"{lead['business']} added to {sheet}."

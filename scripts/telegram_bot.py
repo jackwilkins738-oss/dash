@@ -7,6 +7,7 @@ Windows" on the Today tab and it's always there while the PC is on.
 It only ever answers YOUR chat (TELEGRAM_CHAT_ID): anyone else who finds the bot gets silence. It
 asks Telegram for new taps (outbound only - no port is opened on your PC, nothing to configure).
 
+    ▶️ Next call   one firm at a time - script, number, outcome buttons - the next as soon as you tap one
     📊 Status      what's running, the autopilot, today's sends, replies and calls waiting, red flags
     💬 Replies     each reply waiting: ✨ AI draft -> Send / Edit / Discard, call back, not interested
     📞 Calls       the hottest preview viewers (tap the number to ring): outcome buttons, 🔎 research
@@ -21,7 +22,8 @@ anyone who opened their preview twice or more without a reply
 or a call, with a follow-up written for them - ✅ Send it, ✏️ Edit or 🗑 Discard (nudges.py) - and
 anyone who opened their quote two days ago without accepting it (quote_chase.py), and each client a
 month after launch, with a review and referral ask ready to paste (daily.py). Type "objections" for
-answers to what people say on calls.
+answers to what people say on calls, or "coach" for three changes from Claude on the week's numbers
+(also every Sunday). Send a photo of a van or sign board and the firm becomes a prospect (spotted.py).
 
 Anything started here texts you its result when it finishes. Kept on the panel only (screen work, or
 too risky for a stray tap): finding new firms, building and publishing client sites, Settings, and
@@ -38,7 +40,7 @@ from datetime import datetime
 import urllib.error
 import urllib.request
 
-MENU = [["📊 Status", "💬 Replies", "📞 Calls"], ["✉️ Emails", "🗂 Lists", "🤖 Autopilot"], ["📈 Scorecard", "📜 Log", "⏹ Stop"]]
+MENU = [["▶️ Next call", "📞 Calls", "💬 Replies"], ["📊 Status", "✉️ Emails", "🗂 Lists"], ["🤖 Autopilot", "📈 Scorecard", "📜 Log"], ["⏹ Stop"]]
 CALLS_SHOWN = 6
 LOG_LINES = 15
 SEND_GAP_MIN = 5
@@ -71,6 +73,8 @@ class Bot:
         self.drafts: dict[str, str] = {}  # short id -> reply text waiting for Send
         self.awaiting: str = ""  # short id whose reply you're typing
         self.lists: list[str] = []
+        self.queue: list[dict] = []  # ▶️ Next call: who's left, hottest first
+        self.queue_sid = ""  # the call on screen - an outcome on it brings up the next
         self.offset = 0
         self.stop_event = threading.Event()
 
@@ -158,7 +162,9 @@ class Bot:
             # Monday starts a fresh week: the count shows from Tuesday, and in full on Sunday.
             self.send(plan + ("\n\n" + daily.progress(p.OUTREACH, today, goals) if today.weekday() not in (0, 6) else ""))
             if today.weekday() == 6:
-                self.send(daily.week(p.OUTREACH, email_batches.preview_views(), today) + "\n" + daily.progress(p.OUTREACH, today, goals))
+                views = email_batches.preview_views()
+                self.send(daily.week(p.OUTREACH, views, today) + "\n" + daily.progress(p.OUTREACH, today, goals))
+                self.coach(views)
         except Exception as e:  # noqa: BLE001 - a bad morning never stops the bot
             self.send(f"Today's plan didn't work: {type(e).__name__}: {e}")
         try:
@@ -183,6 +189,15 @@ class Bot:
             self.ask_referrals()
         except Exception as e:  # noqa: BLE001
             self.send(f"Referral reminders didn't work: {type(e).__name__}: {e}")
+
+    def coach(self, views: dict | None) -> None:
+        """Three changes for next week from Claude, on the week's counts (coach.py)."""
+        import coach
+
+        settings = self.panel.load_settings()
+        if not settings.get("ANTHROPIC_API_KEY"):
+            return
+        self.send(coach.advise(self.panel.OUTREACH, views, settings["ANTHROPIC_API_KEY"], settings.get("AI_MODEL") or ""))
 
     def _open_quotes(self) -> list:
         import os
@@ -250,15 +265,23 @@ class Bot:
         msg = update.get("message") or {}
         if not self.mine((msg.get("chat") or {}).get("id")):
             return
+        if msg.get("photo"):  # a van, a site board, a flyer: a new prospect (spotted.py)
+            self.spot(msg["photo"])
+            return
         text = (msg.get("text") or "").strip()
         if not text:
             return
-        handler = {"📊 Status": self.status, "💬 Replies": self.replies, "📞 Calls": self.calls, "✉️ Emails": self.emails,
+        handler = {"▶️ Next call": self.next_call, "📊 Status": self.status, "💬 Replies": self.replies, "📞 Calls": self.calls, "✉️ Emails": self.emails,
                    "🗂 Lists": self.list_menu, "🤖 Autopilot": self.autopilot, "📈 Scorecard": self.scorecard,
                    "📜 Log": self.log, "⏹ Stop": self.stop_job}.get(text)
         if handler:
             self.awaiting = ""
             handler()
+        elif text.lower() in ("coach", "/coach"):
+            self.send("Reading this week's numbers...")
+            import email_batches
+
+            self.coach(email_batches.preview_views())
         elif text.lower() in ("objections", "/objections"):
             import objections
 
@@ -405,6 +428,42 @@ class Bot:
                        [("📞 Call back tomorrow", f"cb:{sid}"), ("🚫 Not interested", f"ni?:{sid}")],
                        [("✓ Dealt with", f"done:{sid}")]])
 
+    def next_call(self) -> None:
+        """One firm at a time: the script, their number, the outcome buttons - and the next one as soon as
+        you tap an outcome. The queue is call-backs due, then repeat viewers, hottest first."""
+        if not self.queue:
+            data = self._all_calls()
+            if data.get("message"):
+                self.send(data["message"])
+                return
+            self.queue = list(data.get("callbacks") or []) + list(data.get("viewing") or [])
+            if not self.queue:
+                self.queue_sid = ""
+                self.send("Nobody to ring right now - nobody new has opened their preview. 👍", menu=True)
+                return
+            self.send(f"{len(self.queue)} to ring. Tap an outcome and the next one comes up.")
+        i = self.queue.pop(0)
+        sid = self._remember("call", i)
+        self.queue_sid = sid
+        why = (f"Call back {'(' + str(i['overdue']) + ' days overdue)' if i.get('overdue') else 'today'}"
+               + (f' - "{i["note"]}"' if i.get("note") else "")) if "due" in i else \
+            f"{i.get('views', 0)} visit(s), {i.get('seconds', 0)}s on the page"
+        self.send(f"📞 {i['business']}{' - ' + i['contact'] if i.get('contact') else ''}\n"
+                  f"{i.get('phone') or 'no phone - check their site'}\n{why}\n{i.get('preview', '')}\n\n{self._script(i)}",
+                  [[("No answer", f"o:{sid}:No answer"), ("Call back tmrw", f"cb:{sid}")],
+                   [("👍 Interested", f"o:{sid}:Interested"), ("🚫 Not interested", f"ni?:{sid}")],
+                   [("⏭ Skip", f"skip:{sid}"), (f"⏹ Stop ({len(self.queue)} left)", f"endq:{sid}")]])
+
+    def _advance(self, sid: str, out: dict) -> None:
+        """After an outcome on the call on screen: the next one, or the end."""
+        if sid != self.queue_sid or out.get("error"):
+            return
+        if self.queue:
+            self.next_call()
+        else:
+            self.queue_sid = ""
+            self.send("That's everyone. ✅", menu=True)
+
     def calls(self) -> None:
         data = self._all_calls()
         if data.get("message"):
@@ -506,6 +565,11 @@ class Bot:
             import autopilot
 
             self.send(autopilot.stop())
+        elif verb == "skip":
+            self.next_call()
+        elif verb == "endq":
+            self.queue, self.queue_sid = [], ""
+            self.send("Calling stopped. ▶️ Next call starts again from the hottest.", menu=True)
         elif verb == "cancel":
             self.send("OK - nothing done.")
         else:
@@ -526,9 +590,11 @@ class Bot:
             self.send(out.get("message") or out.get("error", ""))
             if extra == "No answer" and not out.get("error"):
                 self.after_no_answer(item)
+            self._advance(sid, out)
         elif verb == "cb":
             out, _ = p.call_action({**body, "outcome": "Call back", "due": "tomorrow"})
             self.send(out.get("message") or out.get("error", ""))
+            self._advance(sid, out)
         elif verb == "ni?":
             import calls
 
@@ -538,6 +604,7 @@ class Bot:
         elif verb == "ni":
             out, _ = p.call_action({**body, "outcome": "Not interested", "reason": extra})
             self.send(out.get("message") or out.get("error", ""))
+            self._advance(sid, out)
         elif verb == "done":
             import calls
 
@@ -664,6 +731,57 @@ class Bot:
         self.start("all", {"sheet": inbound.SHEET}, then=(
             f"{lead['business']}'s preview: {preview.replace('src=dashboard', 'src=email')}\nThey asked for this - reply personally, today:",
             [[("✨ AI draft with their preview", f"ai:{sid}"), ("✏️ Write it", f"wr:{sid}")]]))
+
+    def spot(self, photos: list) -> None:
+        """A photo of a van or sign board: Claude reads the firm off it; with a website their preview is built
+        and you get a call card, without one they go on the No website tab."""
+        import ai_reply
+        import inbound
+        import overrides
+        import spotted
+        from push_prospects import domain_of, make_slug
+
+        p = self.panel
+        settings = p.load_settings()
+        if not settings.get("ANTHROPIC_API_KEY"):
+            self.send("Add ANTHROPIC_API_KEY in the panel's Settings to read photos.")
+            return
+        biggest = max(photos, key=lambda ph: int(ph.get("file_size") or ph.get("width") or 0))
+        self.send("Reading the photo...")
+        try:
+            image = spotted.download(self.token, biggest.get("file_id", ""), lambda m, payload: self.http(m, payload))
+        except (OSError, ValueError):
+            self.send("Couldn't get the photo from Telegram - send it again.")
+            return
+        try:
+            lead = spotted.read_photo(image, settings["ANTHROPIC_API_KEY"], settings.get("AI_MODEL") or "")
+        except ai_reply.AIError as e:
+            self.send(str(e))
+            return
+        if not lead["business"]:
+            self.send("I couldn't read a business name on that - try again closer and straight on.")
+            return
+        seen = "\n".join(f"{k.title()}: {lead[k]}" for k in spotted.FIELDS if lead[k])
+        if not lead["website"]:
+            ring = f"\nRing {lead['phone']} - they've no website, so they need one." if lead["phone"] else ""
+            self.send(f"📸 {seen}\n\n{spotted.add_no_website(p.OUTREACH, lead)}{ring}")
+            return
+        status, message = inbound.add(p.OUTREACH, lead, sheet=spotted.SHEET, source=spotted.SOURCE, found="on the photo")
+        self.send(f"📸 {seen}\n\n{message}")
+        if status not in ("added", "already"):
+            return
+        domain = domain_of(lead["website"]) or ""
+        site = (settings.get("SITE_URL") or "https://www.scalardigital.co.uk").rstrip("/")
+        preview = f"{site}/for/{make_slug(lead['business'], domain, settings['PROSPECTS_API_SECRET'])}?src=dashboard"
+        item = {"key": overrides.row_key({"Business": lead["business"], "Website": lead["website"]}), "sheet": spotted.SHEET,
+                "business": lead["business"], "website": domain, "email": lead["email"], "phone": lead["phone"],
+                "contact": "", "area": lead["town"], "preview": preview}
+        sid = self._remember("call", item)
+        self.start("all", {"sheet": spotted.SHEET}, then=(
+            f"{lead['business']}'s preview is ready: {preview.replace('src=dashboard', 'src=card')}\n"
+            f"{('Ring ' + lead['phone']) if lead['phone'] else 'No phone on the photo - check their site.'}",
+            [[("No answer", f"o:{sid}:No answer"), ("Call back tmrw", f"cb:{sid}")],
+             [("👍 Interested", f"o:{sid}:Interested"), ("🚫 Not interested", f"ni?:{sid}")]]))
 
     def offer_draft(self, sid: str) -> None:
         item = self.items[sid]["item"]
