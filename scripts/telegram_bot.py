@@ -16,6 +16,9 @@ asks Telegram for new taps (outbound only - no port is opened on your PC, nothin
     📈 Scorecard   the numbers
     📜 Log / ⏹ Stop   the running job's last lines, or stop it
 
+Each morning from 8:30 it also texts you anyone who opened their preview twice or more without a reply
+or a call, with a follow-up written for them - ✅ Send it, ✏️ Edit or 🗑 Discard (nudges.py).
+
 Anything started here texts you its result when it finishes. Kept on the panel only (screen work, or
 too risky for a stray tap): finding new firms, building and publishing client sites, Settings, and
 erasing someone's data.
@@ -27,6 +30,7 @@ import hashlib
 import json
 import threading
 import time
+from datetime import datetime
 import urllib.error
 import urllib.request
 
@@ -99,6 +103,47 @@ class Bot:
                     self.handle(update)
                 except Exception as e:  # noqa: BLE001 - one bad tap never stops the bot
                     self.send(f"That didn't work: {type(e).__name__}: {e}")
+            self.maybe_morning()
+
+    def maybe_morning(self, now_local: datetime | None = None) -> bool:
+        """Once a day from 8:30: the morning nudges, in the background so taps still answer."""
+        import nudges
+
+        day_file = self.panel.OUTREACH / "nudge-day.txt"
+        try:
+            last = day_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            last = ""
+        now_local = now_local or datetime.now()
+        if not nudges.due(now_local, last):
+            return False
+        try:
+            day_file.write_text(now_local.date().isoformat(), encoding="utf-8")  # first, so a crash never repeats it
+        except OSError:
+            return False
+        threading.Thread(target=self.morning, daemon=True).start()
+        return True
+
+    def morning(self) -> None:
+        import nudges
+
+        try:
+            data = self._all_calls()
+            if data.get("message"):
+                return
+            items = nudges.candidates(data, self.panel.OUTREACH)
+            name = self.panel.load_settings().get("MAIL_FROM_NAME") or ""
+            for item in items:
+                d = nudges.draft(item, name)
+                sid = self._remember("nudge", {**item, "subject": d["subject"], "message_id": d["message_id"]})
+                self.drafts[sid] = d["text"]
+                nudges.mark(self.panel.OUTREACH, item["website"], item["business"], datetime.now().date())
+                ring = f"Best move: ring {item['phone']}." if item.get("phone") else "No phone on your list."
+                self.send(f"☀️ {item['business']}{' - ' + item['contact'] if item.get('contact') else ''} opened their preview "
+                          f"{item['views']} times ({item.get('seconds', 0)}s on it) and hasn't replied.\n{ring} Or send this:")
+                self.offer_draft(sid)
+        except Exception as e:  # noqa: BLE001 - a bad morning never stops the bot
+            self.send(f"Morning nudges didn't work: {type(e).__name__}: {e}")
 
     def handle(self, update: dict) -> None:
         if "callback_query" in update:
