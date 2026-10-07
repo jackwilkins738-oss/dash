@@ -1158,6 +1158,7 @@ def main() -> None:
             verify_links()
         return
 
+    failed_push: set[str] = set()
     for start in range(0, len(selected), 500):
         batch = selected[start : start + 500]
         req = urllib.request.Request(
@@ -1172,10 +1173,25 @@ def main() -> None:
             with urllib.request.urlopen(req, timeout=60) as res:
                 body = json.loads(res.read())
         except urllib.error.HTTPError as e:
-            sys.exit(f"Import failed: HTTP {e.code} {e.read().decode(errors='replace')}")
+            detail = e.read().decode(errors="replace")
+            if "teardown_check" in detail:
+                print("Your dashboard refused this batch: its speed-check results are bigger than the database allows.\n"
+                      "  Fix, once: Supabase -> SQL Editor -> paste supabase/migrations/061_teardown_size.sql from the\n"
+                      "  dashboard repository (NEW) -> Run. Then press Run the whole list again - nothing is lost.")
+            sys.exit(f"Import failed: HTTP {e.code} {detail}")
         print(f"Pushed {body.get('upserted')} (rejected: {body.get('rejected')})")
         rejected = {r.get("index") for r in body.get("rejected") or [] if isinstance(r, dict)}
-        live.update(p["slug"] for i, p in enumerate(batch) if i not in rejected)
+        # Rows the dashboard couldn't write (it now writes the rest of the batch): not live, not logged -
+        # so they're checked and sent again next run.
+        refused = {f.get("slug"): f.get("error") for f in body.get("failed") or [] if isinstance(f, dict)}
+        for slug, why in refused.items():
+            p_name = next((p["business_name"] for p in batch if p["slug"] == slug), slug)
+            print(f"WARNING: the dashboard refused {p_name}: {why}")
+            failed_push.add(slug)
+        if body.get("slimmed"):
+            print(f"  {len(body['slimmed'])} preview(s) saved without their loading filmstrip/screenshot - too big for the\n"
+                  "  database. Run supabase/migrations/061_teardown_size.sql (dashboard repository) in Supabase to keep them.")
+        live.update(p["slug"] for i, p in enumerate(batch) if i not in rejected and p["slug"] not in refused)
     if live_known:
         write_outputs()  # the firms just pushed now have a page: add them to the Mailmeteor file
 
@@ -1186,6 +1202,8 @@ def main() -> None:
         ok = failed = 0
         no_score: dict[str, int] = {}
         for p in selected:
+            if p["slug"] in failed_push:
+                continue  # the dashboard didn't take it - checked again next run
             if p.get("teardown_at") and p.get("_no_score"):
                 no_score[p["_no_score"]] = no_score.get(p["_no_score"], 0) + 1
                 before = log.get(p["website"]) or {}
