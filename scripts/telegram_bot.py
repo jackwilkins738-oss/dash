@@ -16,9 +16,12 @@ asks Telegram for new taps (outbound only - no port is opened on your PC, nothin
     📈 Scorecard   the numbers
     📜 Log / ⏹ Stop   the running job's last lines, or stop it
 
-Each morning from 8:30 it also texts you anyone who opened their preview twice or more without a reply
+Each morning from 8:30 it texts you the day's plan (and on Sundays the week against the last), then
+anyone who opened their preview twice or more without a reply
 or a call, with a follow-up written for them - ✅ Send it, ✏️ Edit or 🗑 Discard (nudges.py) - and
-anyone who opened their quote two days ago without accepting it (quote_chase.py).
+anyone who opened their quote two days ago without accepting it (quote_chase.py), and each client a
+month after launch, with a review and referral ask ready to paste (daily.py). Type "objections" for
+answers to what people say on calls.
 
 Anything started here texts you its result when it finishes. Kept on the panel only (screen work, or
 too risky for a stray tap): finding new firms, building and publishing client sites, Settings, and
@@ -137,43 +140,80 @@ class Bot:
         return True
 
     def morning(self) -> None:
+        """8:30: the day's plan, the week on Sundays, then each nudge, quote chaser and referral ask."""
+        import email_batches
         import nudges
 
+        p = self.panel
+        data: dict = {}
+        quotes: list = []
         try:
             data = self._all_calls()
-            items = [] if data.get("message") else nudges.candidates(data, self.panel.OUTREACH)
-            name = self.panel.load_settings().get("MAIL_FROM_NAME") or ""
+            quotes = self._open_quotes()
+            import daily
+
+            self.send(daily.plan({} if data.get("message") else data, len(quotes), email_batches.remaining(p.OUTREACH, None)))
+            if datetime.now().weekday() == 6:
+                self.send(daily.week(p.OUTREACH, email_batches.preview_views(), datetime.now().date()))
+        except Exception as e:  # noqa: BLE001 - a bad morning never stops the bot
+            self.send(f"Today's plan didn't work: {type(e).__name__}: {e}")
+        try:
+            items = [] if not data or data.get("message") else nudges.candidates(data, p.OUTREACH)
+            name = p.load_settings().get("MAIL_FROM_NAME") or ""
             for item in items:
                 d = nudges.draft(item, name)
                 sid = self._remember("nudge", {**item, "subject": d["subject"], "message_id": d["message_id"]})
                 self.drafts[sid] = d["text"]
-                nudges.mark(self.panel.OUTREACH, item["website"], item["business"], datetime.now().date())
+                nudges.mark(p.OUTREACH, item["website"], item["business"], datetime.now().date())
                 ring = f"Best move: ring {item['phone']}." if item.get("phone") else "No phone on your list."
                 self.send(f"☀️ {item['business']}{' - ' + item['contact'] if item.get('contact') else ''} opened their preview "
                           f"{item['views']} times ({item.get('seconds', 0)}s on it) and hasn't replied.\n{ring} Or send this:")
                 self.offer_draft(sid)
-        except Exception as e:  # noqa: BLE001 - a bad morning never stops the bot
+        except Exception as e:  # noqa: BLE001
             self.send(f"Morning nudges didn't work: {type(e).__name__}: {e}")
         try:
-            self.chase_quotes()
+            self.chase_quotes(quotes)
         except Exception as e:  # noqa: BLE001
             self.send(f"Quote chasers didn't work: {type(e).__name__}: {e}")
+        try:
+            self.ask_referrals()
+        except Exception as e:  # noqa: BLE001
+            self.send(f"Referral reminders didn't work: {type(e).__name__}: {e}")
 
-    def chase_quotes(self) -> None:
-        """Quotes opened but not accepted after two days: ring them, or send the follow-up (quote_chase.py)."""
+    def _open_quotes(self) -> list:
         import os
 
+        import quote_chase
+
+        settings = self.panel.load_settings()
+        secret = settings.get("PROSPECTS_API_SECRET") or ""
+        if len(secret) < 32:
+            return []
+        api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
+        tenant = os.environ.get("SCALAR_TENANT_ID", "abdc6408-1fd5-4fb6-9c4c-53600b571a6d")
+        return quote_chase.fetch(api, secret, tenant)
+
+    def ask_referrals(self) -> None:
+        """30 days after a launch: ask for a review and a referral - the words ready to paste (daily.py)."""
+        import daily
+
+        p = self.panel
+        settings = p.load_settings()
+        site = (settings.get("SITE_URL") or "https://www.scalardigital.co.uk").rstrip("/")
+        for row in daily.referrals_due(p.OUTREACH, datetime.now().date()):
+            daily.mark_asked(p.OUTREACH, row["new_site"], datetime.now().date())
+            self.send(f"🤝 {row.get('business') or row['new_site']} went live a month ago - ask for a "
+                      f"{'review and a ' if settings.get('REVIEW_LINK') else ''}referral. Send them this (WhatsApp or email):")
+            self.send(daily.referral_text(row, site, settings.get("REVIEW_LINK") or ""))
+
+    def chase_quotes(self, quotes: list | None = None) -> None:
+        """Quotes opened but not accepted after two days: ring them, or send the follow-up (quote_chase.py)."""
         import nudges
         import quote_chase
 
         p = self.panel
         settings = p.load_settings()
-        secret = settings.get("PROSPECTS_API_SECRET") or ""
-        if len(secret) < 32:
-            return
-        api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
-        tenant = os.environ.get("SCALAR_TENANT_ID", "abdc6408-1fd5-4fb6-9c4c-53600b571a6d")
-        quotes = quote_chase.due(quote_chase.fetch(api, secret, tenant), p.OUTREACH)
+        quotes = quote_chase.due(self._open_quotes() if quotes is None else quotes, p.OUTREACH)
         sent = nudges.sent_rows(p.OUTREACH)
         for q in quotes:
             firm = self.find_by_slug(q.get("slug") or "") or {}
@@ -215,9 +255,14 @@ class Bot:
         if handler:
             self.awaiting = ""
             handler()
+        elif text.lower() in ("objections", "/objections"):
+            import objections
+
+            self.send(objections.text())
         elif text.lower() in ("/start", "/help", "menu", "help"):
             self.awaiting = ""
-            self.send("Scalar panel - pick from the buttons below. Only this chat can use it.", menu=True)
+            self.send("Scalar panel - pick from the buttons below. Type \"objections\" for answers to what people say on calls. "
+                      "Only this chat can use it.", menu=True)
         elif self.awaiting:
             sid, self.awaiting = self.awaiting, ""
             self.drafts[sid] = text

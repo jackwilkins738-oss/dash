@@ -70,17 +70,23 @@ class Morning(Setup):
         sent = []
         bot = telegram_bot.Bot(panel, "tok", CHAT, http=lambda m, p, timeout=30: sent.append((m, p)) or {})
         bot._all_calls = lambda: self.data
-        bot.chase_quotes = lambda: None
+        bot._open_quotes = lambda: []
+        bot.ask_referrals = lambda: None
         orig = nudges.candidates
         nudges.candidates = lambda data, outreach: orig(data, outreach, NOW)
+        import email_batches
+
+        old_views, email_batches.preview_views = email_batches.preview_views, lambda: None
         try:
             bot.morning()
         finally:
-            nudges.candidates = orig
-        texts = [p["text"] for m, p in sent if m == "sendMessage"]
-        self.assertIn("Hot - Sam Kerr opened their preview 3 times", texts[0])
-        self.assertIn("ring 01483 111222", texts[0])
-        self.assertTrue(texts[1].startswith("To info@hot.co.uk:\n\nHi Sam,"))
+            nudges.candidates, email_batches.preview_views = orig, old_views
+        texts = [p["text"] for m, p in sent if m == "sendMessage" and not p["text"].startswith("📈")]
+        self.assertTrue(texts[0].startswith("☀️ Today:"))
+        self.assertIn("8 firm(s) opened their preview 2+ times", texts[0])
+        self.assertIn("Hot - Sam Kerr opened their preview 3 times", texts[1])
+        self.assertIn("ring 01483 111222", texts[1])
+        self.assertTrue(texts[2].startswith("To info@hot.co.uk:\n\nHi Sam,"))
         self.assertEqual(calls, [])  # nothing goes out by itself
         self.assertEqual(nudges.nudged(self.d), {"hot.co.uk", "warm.co.uk"})
         button = next(b["callback_data"] for m, p in sent if "reply_markup" in p
