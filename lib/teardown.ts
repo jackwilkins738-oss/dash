@@ -35,7 +35,7 @@ export type Teardown = {
   /** Their brand colour, #rrggbb, already dark enough for white text. */
   brandColour?: string
   /** Their logo and up to 4 photos from their own homepage - https jpg/png/webp, checked by the dashboard.
-   *  Only ever loaded through /for/[slug]/img/[which], never straight from their site. */
+   *  No longer shown on the preview (its "rebuilt" section was removed); kept as data only. */
   logo?: string
   photos?: string[]
   /** Slow sites only: 3 frames of their homepage loading in Google's mobile test (ms from the start,

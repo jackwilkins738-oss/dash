@@ -15,9 +15,8 @@ import { SHOWCASE_TRADES, showcaseIdForTradeText } from '@/lib/showcase'
 import { teardownFindings, teardownPasses, usableFrames } from '@/lib/teardown'
 import { PrintButton } from '@/components/print-button'
 import { PreviewOptOut } from '@/components/preview-optout'
-import { RebuiltPreview } from '@/components/rebuilt-preview'
 import { QuickReply } from '@/components/quick-reply'
-import { LoadFilmstrip, TodayPhone } from '@/components/load-filmstrip'
+import { LoadFilmstrip } from '@/components/load-filmstrip'
 import { PRICES } from '@/lib/site'
 import { reviewsView, rivalsView, stars } from '@/lib/preview-extras'
 import { SITE } from '@/lib/site'
@@ -82,7 +81,6 @@ export default async function ProspectPreviewPage({ params }: Props) {
   const findings = checkedAt ? teardownFindings(p.teardown, checkedAt.getUTCFullYear()) : []
   const passes = teardownPasses(p.teardown)
   const frames = slow ? usableFrames(p.teardown?.frames) : []
-  const todayShot = slow && p.website ? p.teardown?.screenshot : undefined
 
   // The personal race only renders on measured figures, and only when it's a
   // clear win: a Scalar build that's been measured, their LCP known, and at
@@ -278,58 +276,6 @@ export default async function ProspectPreviewPage({ params }: Props) {
             </Reveal>
             <Reveal className="mt-10">
               <LoadFilmstrip frames={frames} domain={p.website} />
-            </Reveal>
-          </div>
-        </section>
-      )}
-
-      {(p.teardown?.logo || p.teardown?.photos?.length) && (
-        <section id="rebuilt" className="scroll-mt-20 border-t border-border py-20 sm:py-24">
-          <div
-            className={`mx-auto grid max-w-6xl items-center gap-12 px-5 sm:px-8 ${todayShot ? '' : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'}`}
-          >
-            <Reveal className={todayShot ? 'mx-auto max-w-3xl text-center' : undefined}>
-              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">Your homepage, rebuilt</span>
-              <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-                {p.business_name}, the way a phone should see it.
-              </h2>
-              <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
-                This uses your own {p.teardown?.logo ? 'logo and ' : ''}photos{p.website ? ` from ${p.website}` : ''}
-                {p.teardown?.services?.length ? ' and the services you list' : ''}, laid out the way a Scalar build puts
-                them: who you are and where you work in the first second, a call button always in reach, and your work
-                doing the selling.
-              </p>
-              <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
-                It&apos;s a quick first pass, not the finished design &mdash; the real build is drawn up properly around
-                your business, and you see every page before anything goes live.
-              </p>
-              <p className="mt-6 font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-muted-foreground/70">
-                A concept made for you from your current site &middot; nothing has been published
-              </p>
-            </Reveal>
-            <Reveal className={todayShot ? 'grid items-start gap-10 sm:grid-cols-2' : undefined}>
-              {todayShot && (
-                <div>
-                  <p className="mb-4 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Today</p>
-                  <TodayPhone src={todayShot} domain={p.website!} />
-                </div>
-              )}
-              <div>
-                {todayShot && (
-                  <p className="mb-4 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-blueprint">Rebuilt</p>
-                )}
-                <RebuiltPreview
-                  slug={p.slug}
-                  name={p.business_name}
-                  tradeLabel={p.trade ? p.trade.charAt(0).toUpperCase() + p.trade.slice(1).toLowerCase() : null}
-                  area={p.area}
-                  domain={p.website}
-                  accent={p.teardown?.brandColour}
-                  services={p.teardown?.services}
-                  hasLogo={!!p.teardown?.logo}
-                  photoCount={p.teardown?.photos?.length ?? 0}
-                />
-              </div>
             </Reveal>
           </div>
         </section>
