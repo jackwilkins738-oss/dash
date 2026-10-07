@@ -905,7 +905,8 @@ class FollowUps(unittest.TestCase):
                 w = csv.writer(f)
                 w.writerow(["message_id", "date", "from", "business", "website", "kind", "subject", "snippet", "handled"])
                 w.writerow(["1", "2026-09-22", "replied@x.co.uk", "Replied", "", "read it", "", "", ""])
-                w.writerow(["2", "2026-09-22", "ooo@x.co.uk", "Ooo", "", "out of office", "", "", ""])
+                # An out-of-office with no return date holds the follow-up a week - long past by the 28th.
+                w.writerow(["2", "2026-09-15", "ooo@x.co.uk", "Ooo", "", "out of office", "", "", ""])
             add_to_blocklist(d, [("email", "blocked@x.co.uk")], "said no")
             views = {"viewer-abc123": {"view_count": 2}}
             path, notes, skipped = eb.make_followups(d, 20, 5, check=lambda u: None, views=views, today=date(2026, 9, 28))

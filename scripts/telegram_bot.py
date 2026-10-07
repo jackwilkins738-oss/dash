@@ -24,6 +24,8 @@ anyone who opened their quote two days ago without accepting it (quote_chase.py)
 month after launch, with a review and referral ask ready to paste (daily.py). Type "objections" for
 answers to what people say on calls, or "coach" for three changes from Claude on the week's numbers
 (also every Sunday). Send a photo of a van or sign board and the firm becomes a prospect (spotted.py).
+After a call, send a voice note saying how it went and it's logged once you tap ✅ (voice.py). /update
+fetches the latest panel and restarts it.
 
 Anything started here texts you its result when it finishes. Kept on the panel only (screen work, or
 too risky for a stray tap): finding new firms, building and publishing client sites, Settings, and
@@ -36,9 +38,10 @@ import hashlib
 import json
 import threading
 import time
-from datetime import datetime
 import urllib.error
 import urllib.request
+from datetime import datetime
+from pathlib import Path
 
 MENU = [["▶️ Next call", "📞 Calls", "💬 Replies"], ["📊 Status", "✉️ Emails", "🗂 Lists"], ["🤖 Autopilot", "📈 Scorecard", "📜 Log"], ["⏹ Stop"]]
 CALLS_SHOWN = 6
@@ -75,6 +78,8 @@ class Bot:
         self.lists: list[str] = []
         self.queue: list[dict] = []  # ▶️ Next call: who's left, hottest first
         self.queue_sid = ""  # the call on screen - an outcome on it brings up the next
+        self.focus_sid = ""  # the one firm a voice note is about: the last call card shown on its own
+        self.pending_voice: dict[str, dict] = {}  # short id -> what a voice note said, waiting for ✅
         self.offset = 0
         self.stop_event = threading.Event()
 
@@ -265,6 +270,9 @@ class Bot:
         msg = update.get("message") or {}
         if not self.mine((msg.get("chat") or {}).get("id")):
             return
+        if msg.get("voice"):  # how the last call went, said out loud (voice.py)
+            threading.Thread(target=self.voice_note, args=(msg["voice"],), daemon=True).start()
+            return
         if msg.get("photo"):  # a van, a site board, a flyer: a new prospect (spotted.py)
             self.spot(msg["photo"])
             return
@@ -277,6 +285,11 @@ class Bot:
         if handler:
             self.awaiting = ""
             handler()
+        elif text.lower() in ("update", "/update"):
+            message, new = self.panel.pull_update()
+            self.send(message)
+            if new:
+                self.panel.restart()
         elif text.lower() in ("coach", "/coach"):
             self.send("Reading this week's numbers...")
             import email_batches
@@ -444,7 +457,7 @@ class Bot:
             self.send(f"{len(self.queue)} to ring. Tap an outcome and the next one comes up.")
         i = self.queue.pop(0)
         sid = self._remember("call", i)
-        self.queue_sid = sid
+        self.queue_sid = self.focus_sid = sid
         why = (f"Call back {'(' + str(i['overdue']) + ' days overdue)' if i.get('overdue') else 'today'}"
                + (f' - "{i["note"]}"' if i.get("note") else "")) if "due" in i else \
             f"{i.get('views', 0)} visit(s), {i.get('seconds', 0)}s on the page"
@@ -595,6 +608,24 @@ class Bot:
             out, _ = p.call_action({**body, "outcome": "Call back", "due": "tomorrow"})
             self.send(out.get("message") or out.get("error", ""))
             self._advance(sid, out)
+        elif verb == "vlog":
+            said = self.pending_voice.pop(sid, None)
+            if not said:
+                self.send("That voice note has gone - say it again, or tap an outcome.")
+                return
+            out, _ = p.call_action({**body, "outcome": said["outcome"], "note": said["note"],
+                                    "due": said["due"] if said["outcome"] == "Call back" else ""})
+            self.send(out.get("message") or out.get("error", ""))
+            if said["outcome"] == "Interested" and said["due"] and not out.get("error"):
+                import calls
+                from datetime import date as _date
+
+                calls.add_callback(p.OUTREACH, item.get("sheet") or "", item.get("key") or "", item.get("business") or "",
+                                   _date.fromisoformat(said["due"]), said["note"])
+                self.send(f"...and a call-back on {said['due']}.")
+            if said["outcome"] == "No answer" and not out.get("error"):
+                self.after_no_answer(item)
+            self._advance(sid, out)
         elif verb == "ni?":
             import calls
 
@@ -693,6 +724,7 @@ class Bot:
             self.send("Couldn't find that firm in your lists on this PC - check Calls on the panel.")
             return
         sid = self._remember("call", item)
+        self.focus_sid = sid
         who = f" - ask for {item['contact']}" if item.get("contact") else ""
         self.send(f"📞 {item['business']}{who}\n{item['phone'] or 'No phone on your list - check their site: ' + item['website']}\n\n"
                   f"{self._script(item)}",
@@ -731,6 +763,54 @@ class Bot:
         self.start("all", {"sheet": inbound.SHEET}, then=(
             f"{lead['business']}'s preview: {preview.replace('src=dashboard', 'src=email')}\nThey asked for this - reply personally, today:",
             [[("✨ AI draft with their preview", f"ai:{sid}"), ("✏️ Write it", f"wr:{sid}")]]))
+
+    def voice_note(self, voice: dict) -> None:
+        """A voice note about the call on screen: turned into text here, read by Claude, logged on ✅."""
+        import tempfile
+
+        import ai_reply
+        import calls
+        import spotted
+        import voice as v
+
+        sid = self.focus_sid
+        entry = self.items.get(sid)
+        if not entry:
+            self.send("Which firm is that about? Open one with ▶️ Next call first, then send the voice note.")
+            return
+        settings = self.panel.load_settings()
+        if not settings.get("ANTHROPIC_API_KEY"):
+            self.send("Add ANTHROPIC_API_KEY in the panel's Settings to log calls by voice.")
+            return
+        item = entry["item"]
+        self.send(f"🎙 Listening ({item['business']})...")
+        try:
+            audio = spotted.download(self.token, voice.get("file_id", ""), lambda m, payload: self.http(m, payload))
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "note.ogg"
+                path.write_bytes(audio)
+                text = v.transcribe(path)
+        except v.VoiceUnavailable as e:
+            self.send(str(e))
+            return
+        except (OSError, ValueError, RuntimeError) as e:
+            self.send(f"Couldn't hear that one ({type(e).__name__}) - say it again, or tap an outcome.")
+            return
+        if not text:
+            self.send("That note was silent - say it again, or tap an outcome.")
+            return
+        try:
+            said = v.read(text, calls.OUTCOMES, settings["ANTHROPIC_API_KEY"], settings.get("AI_MODEL") or "")
+        except ai_reply.AIError as e:
+            self.send(f"Heard: \"{text}\"\n{e}")
+            return
+        if not said["outcome"]:
+            self.send(f"Heard: \"{text}\"\nCouldn't tell how it went - tap an outcome on the card.")
+            return
+        self.pending_voice[sid] = said
+        when = f", call back {said['due']}" if said["due"] else ""
+        self.send(f"Heard: \"{text}\"\n\nLog for {item['business']}: {said['outcome']}{when}" + (f" - {said['note']}" if said["note"] else ""),
+                  [[("✅ Log it", f"vlog:{sid}"), ("✖️ Cancel", "cancel")]])
 
     def spot(self, photos: list) -> None:
         """A photo of a van or sign board: Claude reads the firm off it; with a website their preview is built
@@ -777,6 +857,7 @@ class Bot:
                 "business": lead["business"], "website": domain, "email": lead["email"], "phone": lead["phone"],
                 "contact": "", "area": lead["town"], "preview": preview}
         sid = self._remember("call", item)
+        self.focus_sid = sid
         self.start("all", {"sheet": spotted.SHEET}, then=(
             f"{lead['business']}'s preview is ready: {preview.replace('src=dashboard', 'src=card')}\n"
             f"{('Ring ' + lead['phone']) if lead['phone'] else 'No phone on the photo - check their site.'}",

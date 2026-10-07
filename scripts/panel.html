@@ -244,6 +244,7 @@
   <section data-section="review" id="pane-review" hidden>
     <div class="card">
       <p class="hint" style="margin:0 0 8px">Firms the checks weren't sure about. Decide each one - your choice is kept and the sheet is never changed.</p>
+      <div class="row" style="margin-bottom:8px"><button data-action="ai_site_check" title="Claude reads each possible site's homepage next to the Companies House record: clear matches confirmed, clear mismatches left out, the rest left here - reasons in site-checks.csv, undo any here">✨ Let AI check the possible websites</button></div>
       <div class="chips" id="review-filters" style="margin-bottom:8px"></div>
       <div class="toast" id="review-toast"></div>
       <div id="review"></div>
@@ -557,6 +558,7 @@ Scalar Digital · 07401 696272</textarea>
         <div><label>Cloudflare, for Publish site <code>CLOUDFLARE_API_TOKEN</code></label><input type="password" id="CLOUDFLARE_API_TOKEN" autocomplete="off"></div>
         <div><label>Phone alerts bot <code>TELEGRAM_BOT_TOKEN</code> <span id="set-tg"></span></label><input type="password" id="TELEGRAM_BOT_TOKEN" autocomplete="off"></div>
         <div><label>Phone alerts chat <code>TELEGRAM_CHAT_ID</code></label><input type="text" id="TELEGRAM_CHAT_ID" placeholder="same as in Vercel"></div>
+        <div><label>Voice notes in Telegram</label><button data-action="install_voice" title="Once: about 200 MB. Then say how a call went as a Telegram voice note - turned into text on this PC, logged when you tap ✅">Install voice notes</button></div>
         <div style="grid-column:1/-1"><p class="hint" style="margin:0">With both set, you can run the panel from Telegram: send <b>/start</b> to your bot for the buttons (status, replies with AI drafts, calls, batches, lists, autopilot, scorecard). Only this chat ID can use them. They work while the panel is running, so <button class="link" data-action="startup_on">start the panel with Windows</button> (<button class="link" data-action="startup_off">undo</button>) to have it there whenever the PC is on and awake.</p></div>
       </div>
       <p class="hint">Cloudflare token: My Profile → API Tokens → Create Custom Token, permission <b>Account → Cloudflare Pages → Edit</b> only, Account Resources <b>All accounts</b>, no zones. Telegram texts you when a long run finishes.</p>
