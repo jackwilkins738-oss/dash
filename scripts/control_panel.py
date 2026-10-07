@@ -74,7 +74,7 @@ SETTING_KEYS = [
     "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD",
     "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD",
     "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS",
-    "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR",
+    "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "REVIEW_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR",
     "ANTHROPIC_API_KEY", "AI_MODEL",
 ]
 SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
@@ -83,7 +83,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "85"
+PANEL_VERSION = "86"
 MAX_LOG_LINES = 5000
 
 
@@ -242,6 +242,8 @@ def save_settings(new: dict[str, str]) -> None:
             values[key] = value
     if values.get("BOOKING_LINK") and not values["BOOKING_LINK"].startswith("https://"):
         values["BOOKING_LINK"] = ""  # only a real https link goes into emails
+    if values.get("REVIEW_LINK") and not values["REVIEW_LINK"].startswith("https://"):
+        values["REVIEW_LINK"] = ""
     if values.get("COMPANIES_HOUSE_API_KEY"):
         sys.path.insert(0, str(HERE))
         from company_lookup import clean_key
@@ -897,6 +899,9 @@ def calls_for(sheet: str) -> dict:
     out["message"] = message
     out["outcomes"] = calls.OUTCOMES
     out["reasons"] = calls.LOST_REASONS
+    import objections
+
+    out["objections"] = objections.OBJECTIONS
     return out
 
 

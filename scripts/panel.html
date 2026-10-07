@@ -506,6 +506,7 @@ Scalar Digital · 07401 696272</textarea>
       <div class="grid2">
         <div><label>Your name - who emails are from, and the sign-off <code>MAIL_FROM_NAME</code></label><input type="text" id="MAIL_FROM_NAME" placeholder="e.g. Sam Carter"></div>
         <div><label>Booking link <code>BOOKING_LINK</code></label><input type="text" id="BOOKING_LINK" placeholder="e.g. https://cal.com/yourname/15min"></div>
+        <div><label>Your Google review link <code>REVIEW_LINK</code></label><input type="text" id="REVIEW_LINK" placeholder="From your Google Business Profile: Ask for reviews - https://g.page/r/..."></div>
       </div>
       <label>Letters and proposals: signed as / email / phone <code>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</code></label>
       <div class="grid3"><input type="text" id="LETTER_SIGNOFF" placeholder="e.g. Scalar Digital"><input type="text" id="LETTER_EMAIL" placeholder="e.g. hello@scalardigital.co.uk"><input type="text" id="LETTER_PHONE" placeholder="e.g. 07401 696272"></div>
@@ -640,7 +641,7 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "AI_MODEL"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "REVIEW_LINK", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "AI_MODEL"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     fillSendFrom(s.settings);
     if (!s.settings.PROSPECTS_API_SECRET) showTab("settings");  // nothing works until it's set
@@ -825,7 +826,9 @@ function renderCalls() {
   const cb = (callData.callbacks || []).map((i) => callRow(i, "callbacks")).join("");
   const v = (callData.viewing || []).map((i) => callRow(i, "viewing")).join("") || '<p class="hint">Nobody new has opened their preview since your last calls.</p>';
   const l = (callData.letters || []).map((i) => callRow(i, "letters")).join("") || '<p class="hint">No letters waiting on a follow-up.</p>';
-  $("calls").innerHTML = msg + tps
+  const obj = (callData.objections || []).length
+    ? `<details class="ritem"><summary><b>What they say, and what to answer</b></summary>${callData.objections.map(([q, a]) => `<div class="why"><b>"${esc(q)}"</b><br>${esc(a)}</div>`).join("")}</details>` : "";
+  $("calls").innerHTML = msg + tps + obj
     + (cb ? `<h2 style="font-size:12px;color:var(--warn);text-transform:uppercase;letter-spacing:.06em">Call-backs due</h2>` + cb : "")
     + (rp ? `<h2 style="font-size:12px;color:var(--ok);text-transform:uppercase;letter-spacing:.06em">Replied to your email - answer these first</h2>` + rp : "") + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em">Looking at their preview - hottest first</h2>` + v
     + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:18px">Letter follow-ups (${LETTER_WAIT} days+, not opened)</h2>` + l;
@@ -1243,7 +1246,7 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); loadBatch(); if (callsWanted()) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "ANTHROPIC_API_KEY", "AI_MODEL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "REVIEW_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "ANTHROPIC_API_KEY", "AI_MODEL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD", "ANTHROPIC_API_KEY"]) $(k).value = "";
   fillSendFrom(body);
