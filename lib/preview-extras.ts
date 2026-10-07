@@ -36,6 +36,11 @@ export function stars(rating: number): string {
 // checked again here so nothing else is ever framed on the page.
 const VIDEO = /^https:\/\/(www\.loom\.com\/embed\/[a-f0-9]{32}|www\.youtube-nocookie\.com\/embed\/[A-Za-z0-9_-]{11}|player\.vimeo\.com\/video\/[0-9]{6,12})$/
 
+// ...or a walkthrough the panel recorded (dashboard migration 063), from the dashboard's own storage only.
+const OWN_VIDEO = /^https:\/\/wfyzsnyfliohevpjpuib\.supabase\.co\/storage\/v1\/object\/public\/preview-videos\/[a-z0-9-]{1,100}\.mp4$/
+
 export function videoSrc(url: string | null | undefined): string | null {
-  return typeof url === 'string' && VIDEO.test(url) ? url : null
+  return typeof url === 'string' && (VIDEO.test(url) || OWN_VIDEO.test(url)) ? url : null
 }
+
+export const isVideoFile = (src: string) => src.endsWith('.mp4')

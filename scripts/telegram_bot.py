@@ -255,7 +255,8 @@ class Bot:
                 nudges.mark(p.OUTREACH, item["website"], item["business"], datetime.now().date())
                 ring = f"Best move: ring {item['phone']}." if item.get("phone") else "No phone on your list."
                 self.send(f"☀️ {item['business']}{' - ' + item['contact'] if item.get('contact') else ''} opened their preview "
-                          f"{item['views']} times ({item.get('seconds', 0)}s on it) and hasn't replied.\n{ring} Or send this:")
+                          f"{item['views']} times ({item.get('seconds', 0)}s on it) and hasn't replied.\n{ring} Or send this:",
+                          [[("🎬 Put a walkthrough video on their page first", f"av:{sid}")]])
                 self.offer_draft(sid)
         except Exception as e:  # noqa: BLE001
             self.send(f"Morning nudges didn't work: {type(e).__name__}: {e}")
@@ -701,6 +702,9 @@ class Bot:
             if said["outcome"] == "No answer" and not out.get("error"):
                 self.after_no_answer(item)
             self._advance(sid, out)
+        elif verb == "av":
+            self.start("auto_video", {"video_preview": item.get("preview", "")},
+                       then=(f"If the log above says READY, {item['business']}'s page has its video - now send the follow-up above.", None))
         elif verb == "ni?":
             import calls
 
@@ -973,7 +977,7 @@ class Bot:
         p = self.panel
         body = {"action": action, "batch_size": BATCH_SIZE, "batch_scope": "all", "followup_size": BATCH_SIZE, "followup_days": 5,
                 "send_gap": SEND_GAP_MIN, "send_from": "", **(extra or {})}
-        if action not in ("batch", "followups", "send_batch", "send_followups", "autopilot_now", "all"):
+        if action not in ("batch", "followups", "send_batch", "send_followups", "autopilot_now", "all", "auto_video"):
             self.send("That can only be done on the panel.")
             return
         settings = p.load_settings()
