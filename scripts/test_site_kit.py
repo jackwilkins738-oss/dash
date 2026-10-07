@@ -258,6 +258,50 @@ class SiteKit(unittest.TestCase):
             sk.init(self.folder)  # never overwrites work
 
 
+class Photos(SiteKit):
+    def test_sideways_phone_photo_upright_with_a_phone_copy_and_described(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow not installed")
+        import json as _json
+        from unittest import mock
+
+        files = self.folder / "client-files"
+        files.mkdir()
+        im = Image.new("RGB", (3000, 1500), "#888")
+        exif = im.getexif()
+        exif[0x0112] = 6  # "rotate 90" - how a phone held upright saves it
+        exif[0x010F] = "PhoneCo"  # the camera's details (and any GPS) must not reach the web
+        im.save(files / "job.jpg", exif=exif)
+        (self.folder / sk.ALT_FILE).write_text(_json.dumps({"client-files/job.jpg": "New slate roof on a detached house"}))
+        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}):
+            self.build(gallery={"photos": ["client-files/job.jpg"], "before_after": [], "from_dashboard": False})
+        with Image.open(self.folder / "site" / "img" / "job.jpg") as out:
+            self.assertGreater(out.height, out.width)  # turned upright
+            self.assertNotIn(0x010F, out.getexif())
+        self.assertTrue((self.folder / "site" / "img" / "job-800.jpg").exists())
+        gallery = self.page("gallery.html")
+        self.assertIn('srcset="/img/job-800.jpg 800w, /img/job.jpg 1500w"', gallery)
+        self.assertIn('alt="New slate roof on a detached house"', gallery)
+
+    def test_describe_photos_asks_once_and_keeps_it(self):
+        (self.folder / "a.jpg").write_bytes(b"\xff\xd8jpeg")
+        asked = []
+
+        def fake(path, key, payload, timeout=45):
+            asked.append(payload["messages"][0]["content"][0]["source"]["media_type"])
+            return {"content": [{"type": "text", "text": '"Resin driveway with block edging"'}]}
+
+        from unittest import mock
+
+        with mock.patch("ai_reply.model_for", lambda key, chosen="": "m"):
+            sk.describe_photos(self.folder, [("a.jpg", "/img/a.jpg")], "driveways", key="k", request=fake)
+            sk.describe_photos(self.folder, [("a.jpg", "/img/a.jpg")], "driveways", key="k", request=fake)
+        self.assertEqual(asked, ["image/jpeg"])
+        self.assertEqual(sk._ALT["/img/a.jpg"], "Resin driveway with block edging")
+
+
 class PanelButtons(unittest.TestCase):
     """Build site / Publish site on the panel: the right command, and never a draft made live."""
 

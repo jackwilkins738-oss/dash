@@ -98,7 +98,9 @@ record that went missing with exactly what to add in Cloudflare.
 2. Easiest route: in Cloudflare, *Add a site* with their domain on the Free plan.
    Cloudflare imports the existing records - **check every one from your
    screenshot is there** (especially MX and TXT) before going on.
-3. Change the nameservers at their registrar to the two Cloudflare gives you.
+3. Change the nameservers at their registrar to the two Cloudflare gives you. Usually the client has to
+   do this: paste the two into the panel and press **Client's nameserver guide** - a one-page guide for
+   their registrar to send them, and the Telegram bot texts you the moment the switch happens.
 4. In the Pages project: *Custom domains → Set up a domain* for both
    `theirdomain.co.uk` and `www.theirdomain.co.uk`. SSL is automatic.
 5. Send a test email **to** and **from** their address once it's live.

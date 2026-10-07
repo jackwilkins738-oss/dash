@@ -85,7 +85,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "89"
+PANEL_VERSION = "90"
 MAX_LOG_LINES = 5000
 
 
@@ -368,6 +368,7 @@ ACTIONS = {
     "launch_report": "Launch report",
     "dns_snapshot": "Save their DNS (before the switch)",
     "launch_check": "Check the launch",
+    "dns_handover": "Make the client's nameserver guide",
     "client_speed": "Speed check client sites",
     "backup_now": "Back up now",
     "sending_health": "Check sending health",
@@ -612,7 +613,7 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not settings.get("PAGESPEED_API_KEY"):
             return None, "Add PAGESPEED_API_KEY in Settings first."
         return (lambda job: [(CLIENT_SPEED, [])]), ""
-    if action in ("dns_snapshot", "launch_check"):
+    if action in ("dns_snapshot", "launch_check", "dns_handover"):
         from push_prospects import domain_of
 
         domain = domain_of(str(body.get("golive_domain") or "").strip().lower())
@@ -620,6 +621,11 @@ def build_steps(body: dict, settings: dict[str, str]):
             return None, "Type their domain, e.g. kerrroofing.co.uk"
         folder = str(body.get("publish_folder") or "").strip().lower()
         extra = ["--folder", folder] if re.match(r"^[a-z0-9][a-z0-9-]{0,80}$", folder) else []
+        if action == "dns_handover":
+            ns = [n.strip().lower() for n in re.split(r"[\s,]+", str(body.get("cf_ns") or "")) if n.strip()]
+            if len(ns) != 2 or not all(re.fullmatch(r"[a-z0-9-]+\.ns\.cloudflare\.com", n) for n in ns):
+                return None, "Paste the two nameservers Cloudflare shows for their domain, e.g. ada.ns.cloudflare.com bob.ns.cloudflare.com"
+            return (lambda job: [(GO_LIVE, ["handover", domain, "--ns", ",".join(ns), *extra])]), ""
         return (lambda job: [(GO_LIVE, ["dns" if action == "dns_snapshot" else "check", domain, *extra])]), ""
     if action == "write_copy":
         folder = str(body.get("publish_folder") or "").strip().lower()
