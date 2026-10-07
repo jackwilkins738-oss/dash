@@ -22,6 +22,11 @@ export const UPDATED = '2026-09-24'
 
 export const PRICES = { landing: 750, build: 2500, dashboardMonthly: 39 } as const
 
+// Founding clients: the first Scalar builds get extras in return for a case study. When one signs,
+// raise `taken` and redeploy - the offer shows the places left, and disappears once none are.
+export const FOUNDING = { places: 3, taken: 0 } as const
+export const foundingLeft = (f: { places: number; taken: number } = FOUNDING) => Math.max(0, f.places - f.taken)
+
 // Partners: accountants, bookkeepers, merchants and others who see a lot of trades. Paid once the
 // client they sent has paid for their build. Kept here so /partners and the enquiry alert agree.
 export const PARTNER = { perBuild: 100, perLanding: 50, clientDiscountPercent: 10 } as const

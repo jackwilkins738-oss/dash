@@ -65,7 +65,7 @@ export function ContactForm() {
     : ''
   const prefillMessage = [
     fromFirm ? `I've seen the preview you made for ${fromFirm}.` : '',
-    wantsFounding ? "I'd like one of the three founding-client places on The Scalar build." : '',
+    wantsFounding ? "I'd like one of the founding-client places on The Scalar build." : '',
     wantsPackage,
   ]
     .filter(Boolean)

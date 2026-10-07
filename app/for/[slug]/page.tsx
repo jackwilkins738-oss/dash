@@ -15,6 +15,7 @@ import { SHOWCASE_TRADES, showcaseIdForTradeText } from '@/lib/showcase'
 import { teardownFindings, teardownPasses, usableFrames } from '@/lib/teardown'
 import { PrintButton } from '@/components/print-button'
 import { PreviewOptOut } from '@/components/preview-optout'
+import { FoundingOffer } from '@/components/founding-offer'
 import { QuickReply } from '@/components/quick-reply'
 import { LoadFilmstrip } from '@/components/load-filmstrip'
 import { PRICES } from '@/lib/site'
@@ -378,6 +379,9 @@ export default async function ProspectPreviewPage({ params }: Props) {
                 <span className="mt-4 inline-block font-semibold text-blueprint">See my quote &rarr;</span>
               </StartQuote>
             </div>
+          </Reveal>
+          <Reveal className="mt-6">
+            <FoundingOffer href={`${contactHref}&founding=1`} />
           </Reveal>
           <dl className="mt-12 divide-y divide-border border-y border-border">
             {[
