@@ -541,6 +541,61 @@ class PushRun(unittest.TestCase):
             log = {r["website"]: (r["result"], r["mobile_score"]) for r in csv.DictReader(f)}
         self.assertEqual(log["churchill.co.uk"], ("ok", "33"))
 
+    def test_a_firm_the_dashboard_refuses_is_not_logged(self):
+        import json as _json
+
+        from push_prospects import make_slug
+
+        secret = "x" * 40
+        make_sheet(self.dir / "rf.xlsx", [{"Business": "Big Roofing", "Website": "big.co.uk", "Status": "New", "Company type": "Ltd"},
+                                          {"Business": "Fine Roofing", "Website": "fine.co.uk", "Status": "New", "Company type": "Ltd"}])
+        big = make_slug("Big Roofing", "big.co.uk", secret)
+
+        class Res(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        answer = {"upserted": 1, "rejected": [], "failed": [{"slug": big, "error": "violates check constraint"}], "slimmed": []}
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": secret, "PAGESPEED_API_KEY": "k"}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, s, tenant: {}), \
+                mock.patch("site_teardown.teardown", lambda dom, key: {"v": 1, "checks": {}, "_mobile_score": 40}), \
+                mock.patch("google_extras.add_to", lambda *a, **k: None), \
+                mock.patch("urllib.request.urlopen", lambda req, timeout=0: Res(_json.dumps(answer).encode())), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "rf.xlsx"), "--teardown", "--limit", "10"]):
+            import push_prospects
+
+            push_prospects.main()
+        self.assertIn("WARNING: the dashboard refused Big Roofing: violates check constraint", buf.getvalue())
+        with (self.dir / "teardown-log.csv").open(encoding="utf-8") as f:
+            logged = {r["website"] for r in csv.DictReader(f)}
+        self.assertIn("fine.co.uk", logged)
+        self.assertNotIn("big.co.uk", logged)  # checked again next run
+
+    def test_the_old_size_error_says_how_to_fix_it(self):
+        import urllib.error
+
+        make_sheet(self.dir / "sz.xlsx", [{"Business": "Big Roofing", "Website": "big.co.uk", "Status": "New", "Company type": "Ltd"}])
+
+        def refuse(req, timeout=0):
+            raise urllib.error.HTTPError("u", 500, "x", {}, io.BytesIO(b'{"error":"violates check constraint \\"prospects_teardown_check\\""}'))
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"PROSPECTS_API_SECRET": "x" * 40, "PAGESPEED_API_KEY": "k"}), redirect_stdout(buf), \
+                mock.patch("calls.fetch_activity", lambda api, s, tenant: {}), \
+                mock.patch("site_teardown.teardown", lambda dom, key: {"v": 1, "checks": {}, "_mobile_score": 40}), \
+                mock.patch("google_extras.add_to", lambda *a, **k: None), \
+                mock.patch("urllib.request.urlopen", refuse), \
+                mock.patch.object(sys, "argv", ["p", "--sheet", str(self.dir / "sz.xlsx"), "--teardown", "--limit", "10"]):
+            import push_prospects
+
+            with self.assertRaises(SystemExit):
+                push_prospects.main()
+        self.assertIn("061_teardown_size.sql", buf.getvalue())
+
     def test_an_older_dashboard_changes_nothing(self):
         make_sheet(self.dir / "old.xlsx", [{"Business": "Kerr Roofing", "Website": "kerr.co.uk", "Status": "New", "Company type": "Ltd"}])
         with (self.dir / "teardown-log.csv").open("w", newline="", encoding="utf-8") as f:
