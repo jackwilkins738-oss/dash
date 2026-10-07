@@ -70,6 +70,7 @@ class Morning(Setup):
         sent = []
         bot = telegram_bot.Bot(panel, "tok", CHAT, http=lambda m, p, timeout=30: sent.append((m, p)) or {})
         bot._all_calls = lambda: self.data
+        bot.chase_quotes = lambda: None
         orig = nudges.candidates
         nudges.candidates = lambda data, outreach: orig(data, outreach, NOW)
         try:
