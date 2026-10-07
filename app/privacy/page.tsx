@@ -70,24 +70,51 @@ const SECTIONS = [
     body: (
       <>
         <p>
-          Scalar Digital contacts some trade businesses directly, by email, post or phone, using business details
-          they publish themselves: the name they trade under, their website, and the contact details listed on it.
-          That website is also run through Google&apos;s public speed test. This is done on the basis of legitimate
-          interests — offering a relevant service to a business — and limited companies are the only ones
-          contacted by email without having asked first.
+          Scalar Digital contacts some trade businesses directly, by email, post or phone, to offer a faster
+          website. This is done on the basis of legitimate interests - offering a relevant service to a business -
+          and limited companies are the only ones contacted by email without having asked first.
+        </p>
+        <p className="mt-3">What&apos;s used, all of it published by the business or on a public register:</p>
+        <ul className="mt-3 list-disc space-y-1 pl-5">
+          <li>The name it trades under, its website, and the contact details listed on that website</li>
+          <li>
+            Companies House records: company type and number, registered address, and director names (a director
+            may be the person addressed)
+          </li>
+          <li>Its Google rating and number of reviews, and which local firms Google shows for its trade and town</li>
+          <li>
+            Google&apos;s public speed test of its website, and an automated check of the homepage (for example
+            whether the phone number can be tapped), with screenshots of how it loads on a phone
+          </li>
+          <li>Occasionally a photo of a sign or van, taken in public, to read the business name and number</li>
+        </ul>
+        <p className="mt-3">
+          Some messages link to a private preview page made for that business. When it&apos;s opened, Scalar
+          Digital records that it was viewed, when and how many times, roughly how long it was looked at, how far
+          down it was scrolled and which sections were reached, any button pressed on it (such as &ldquo;not for
+          us&rdquo;) and a phone number if one is left there to be called back, and whether the link came from an email, a letter or a card - and gets a notification so it
+          can follow up. A short walkthrough video of the business&apos;s current site and its preview may be
+          added to that page. If a quote is opened, when and how often is recorded too.
         </p>
         <p className="mt-3">
-          Some of those messages link to a private preview page made for that business. When it&apos;s opened,
-          Scalar Digital records that it was viewed, when, how many times, and whether the link came from the
-          email or the letter, and gets a notification so it can follow up. Nothing else about the visitor is
-          collected on those pages beyond the analytics described below.
+          Replies, and notes and outcomes from phone calls, are kept so the conversation can be picked up again.
+          Lists and call notes are kept on Scalar Digital&apos;s own computer; preview pages and quotes are kept in
+          its own dashboard.
         </p>
         <p className="mt-3">
-          If you&apos;d rather not be contacted again, reply to any message or email{' '}
+          Some of this is processed by an AI service, Anthropic&apos;s Claude, used through its business API: to
+          check a website really belongs to the business, to read a reply or a photo, to suggest wording for a
+          reply (always read and sent by a person), and to describe photos. Nothing is decided about a business by
+          AI alone, and no one is contacted automatically because of it.
+        </p>
+        <p className="mt-3">
+          If you&apos;d rather not be contacted again, reply to any message, press &ldquo;not for us&rdquo; on the
+          preview page, or email{' '}
           <a href="mailto:hello@scalardigital.co.uk" className="text-blueprint underline-offset-4 hover:underline">
             hello@scalardigital.co.uk
-          </a>{' '}
-          and your business&apos;s details and preview page will be deleted.
+          </a>
+          . Your business&apos;s details, preview page and any video are deleted, and only the minimum needed to
+          make sure you&apos;re never contacted again (the business name, website or email address) is kept.
         </p>
       </>
     ),
@@ -174,7 +201,7 @@ const SECTIONS = [
     body: (
       <>
         If what this site collects or how it&apos;s used changes, this page will be updated to reflect it. Last
-        updated: 21 September 2026.
+        updated: 7 October 2026.
       </>
     ),
   },
@@ -186,7 +213,7 @@ export default function PrivacyPage() {
       <PageHeader
         eyebrow="Privacy"
         title="Privacy policy."
-        body="Plain terms: what this site collects through the contact form, why, and how to get it changed or removed."
+        body="Plain terms: what this site collects, what's used when Scalar Digital contacts a business, why, and how to get it changed or removed."
       />
 
       <section className="py-20 sm:py-24">

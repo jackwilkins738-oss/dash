@@ -46,6 +46,7 @@ SET_VIDEO = HERE / "set_video.py"
 CARDS = HERE / "cards.py"
 SITE_CHECK = HERE / "site_check.py"
 AUTO_VIDEO = HERE / "auto_video.py"
+SELF_TEST = HERE / "self_test.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
@@ -86,7 +87,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "91"
+PANEL_VERSION = "92"
 MAX_LOG_LINES = 5000
 
 
@@ -384,6 +385,7 @@ ACTIONS = {
     "set_video": "Add a video to a preview",
     "auto_video": "Make a walkthrough video",
     "install_video": "Install video maker",
+    "self_test": "Self-test",
     "dr_find": "Data request: find",
     "dr_export": "Data request: export",
     "dr_erase": "Data request: erase",
@@ -690,6 +692,8 @@ def build_steps(body: dict, settings: dict[str, str]):
         return (lambda job: [("pip", ["install", "segno"])]), ""
     if action == "install_voice":
         return (lambda job: [("pip", ["install", "faster-whisper"])]), ""
+    if action == "self_test":
+        return (lambda job: [(SELF_TEST, [])]), ""
     if action == "install_video":
         return (lambda job: [("pip", ["install", "playwright", "imageio-ffmpeg"]), ("pip-module", ["playwright", "install", "chromium"])]), ""
     if action == "auto_video":
@@ -1569,7 +1573,7 @@ class Handler(BaseHTTPRequestHandler):
                                    "autopilot": autopilot.now_doing()}, 409)
             finder = body["action"] in ("find", "count")
             label = ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") and not finder else "")
-            error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] not in ("install_segno", "install_voice", "install_video"),
+            error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] not in ("install_segno", "install_voice", "install_video", "self_test"),
                               keep_going=body["action"] in ("all", "prepare", "batch"))
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
         if route == "/api/autopilot":
