@@ -43,6 +43,7 @@ FIND = HERE / "find_prospects.py"
 SCOUT = HERE / "area_scout.py"
 CHECK_PREVIEW = HERE / "check_preview.py"
 SET_VIDEO = HERE / "set_video.py"
+CARDS = HERE / "cards.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
@@ -74,7 +75,7 @@ SETTING_KEYS = [
     "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD",
     "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD",
     "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS",
-    "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "REVIEW_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR",
+    "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "REVIEW_LINK", "WEEKLY_TARGETS", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR",
     "ANTHROPIC_API_KEY", "AI_MODEL",
 ]
 SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
@@ -83,7 +84,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "86"
+PANEL_VERSION = "87"
 MAX_LOG_LINES = 5000
 
 
@@ -389,6 +390,7 @@ ACTIONS = {
     "trades": "Guess missing trades",
     "push": "Push to dashboard",
     "letters": "Make letters",
+    "cards": "Make canvass cards",
     "install_segno": "Install segno (for letters)",
 }
 
@@ -518,6 +520,14 @@ def build_steps(body: dict, settings: dict[str, str]):
         return (lambda job: [(REPLIES, [])]), ""
     if action == "insights":
         return (lambda job: [(INSIGHTS, [])]), ""
+    if action == "cards":
+        sheet = str(body.get("sheet") or "")
+        area = str(body.get("cards_area") or "").strip()
+        if not sheet_path(sheet):
+            return None, "Pick a list first."
+        if area and not re.fullmatch(r"[A-Za-z0-9 '&-]{1,40}", area):
+            return None, "Area: a town or postcode district, e.g. Guildford or GU1."
+        return (lambda job: [(CARDS, ["--sheet", sheet, *(["--area", area] if area else [])])]), ""
     if action in ("startup_on", "startup_off"):
         return (lambda job: [(PANEL_STARTUP, ["--install" if action == "startup_on" else "--remove"])]), ""
     if action in ("reply_watch_on", "reply_watch_off"):

@@ -412,6 +412,7 @@ Scalar Digital · 07401 696272</textarea>
     <div class="card">
       <h2>Letters</h2>
       <div class="row"><button class="primary" data-action="letters">Make letters</button><label class="check" style="margin:0"><input type="checkbox" id="letters-all"> Include firms already sent one</label></div>
+      <div class="row"><input type="text" id="cards-area" placeholder="Town for canvass cards, e.g. Guildford (blank: whole list)" style="flex:1"><button data-action="cards">Make canvass cards</button></div>
       <p class="hint" id="letters-links"></p>
       <p class="hint">A print-ready A4 letter for every letter-channel firm, with their score, worst problem and a QR code to their preview.</p>
       <details style="margin-top:6px"><summary>Edit letter text</summary>
@@ -506,6 +507,7 @@ Scalar Digital · 07401 696272</textarea>
       <div class="grid2">
         <div><label>Your name - who emails are from, and the sign-off <code>MAIL_FROM_NAME</code></label><input type="text" id="MAIL_FROM_NAME" placeholder="e.g. Sam Carter"></div>
         <div><label>Booking link <code>BOOKING_LINK</code></label><input type="text" id="BOOKING_LINK" placeholder="e.g. https://cal.com/yourname/15min"></div>
+        <div><label>Weekly targets <code>WEEKLY_TARGETS</code></label><input type="text" id="WEEKLY_TARGETS" placeholder="emails 100, calls 40, videos 5, quotes 2"></div>
         <div><label>Your Google review link <code>REVIEW_LINK</code></label><input type="text" id="REVIEW_LINK" placeholder="From your Google Business Profile: Ask for reviews - https://g.page/r/..."></div>
       </div>
       <label>Letters and proposals: signed as / email / phone <code>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</code></label>
@@ -641,7 +643,7 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "REVIEW_LINK", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "AI_MODEL"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "REVIEW_LINK", "WEEKLY_TARGETS", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "AI_MODEL"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     fillSendFrom(s.settings);
     if (!s.settings.PROSPECTS_API_SECRET) showTab("settings");  // nothing works until it's set
@@ -708,7 +710,7 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "send_followups" && !confirm("Send the follow-ups now, from your own email?")) return;
   if (action === "dr_erase" && !confirm(`Erase ${$("dr-who").value} everywhere - every list, every CSV and their preview page? This can't be undone.`)) return;
   if (action === "publish_site" && !confirm(`Publish outreach/sites/${$("publish-folder").value}/site live on their Cloudflare?`)) return;
-  const r = await runOrStopAutopilot({ action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked,
+  const r = await runOrStopAutopilot({ action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked, cards_area: $("cards-area").value,
     batch_size: $("batch-size").value, batch_scope: $("batch-scope").value, followup_size: $("followup-size").value, followup_days: $("followup-days").value, test_kind: b.dataset.testKind || "", send_gap: $("send-gap").value, send_from: $("send-from").value,
     launch_old: $("launch-old").value, launch_new: $("launch-new").value,
     golive_domain: $("golive-domain").value, dr_who: $("dr-who").value, preview_link: $("pv-link").value, video_preview: $("vid-preview").value, video_url: $("vid-url").value,
@@ -1246,7 +1248,7 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); loadBatch(); if (callsWanted()) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "REVIEW_LINK", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "ANTHROPIC_API_KEY", "AI_MODEL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "REVIEW_LINK", "WEEKLY_TARGETS", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "ANTHROPIC_API_KEY", "AI_MODEL"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD", "ANTHROPIC_API_KEY"]) $(k).value = "";
   fillSendFrom(body);

@@ -68,6 +68,12 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("The dashboard has no page with that link - check it with 'Check a preview link'.")
         raise SystemExit(f"Not saved: {out['error']}")
     site = os.environ.get("SITE_URL", "https://www.scalardigital.co.uk").rstrip("/")
+    if out.get("video_url"):
+        from datetime import date
+
+        import daily
+        outreach = next((d / "outreach" for d in [HERE.parent, *HERE.parents] if (d / "outreach").is_dir()), HERE.parent / "outreach")
+        daily.log_video(outreach, slug, date.today())  # counts towards the week's videos target
     print(f"Video on: {site}/for/{slug}" if out.get("video_url") else f"Video taken off {site}/for/{slug}")
     return 0
 

@@ -16,6 +16,10 @@ from datetime import date, timedelta
 from pathlib import Path
 
 ASKED = "referrals-asked.csv"
+VIDEOS = "videos.csv"
+# Weekly targets (Settings, WEEKLY_TARGETS): what a good week looks like, counted Monday to Sunday.
+DEFAULT_TARGETS = "emails 100, calls 40, videos 5, quotes 2"
+DIALLED = {"No answer", "Call back", "Interested", "Quoted", "Not interested", "Won"}
 REFERRAL_AFTER_DAYS = 30
 
 
@@ -114,3 +118,48 @@ def referral_text(row: dict, site_url: str, review_link: str = "") -> str:
     else:
         asks = f"One small favour, if you're happy with it: {refer}"
     return f"Hi - it's been a month since {row.get('new_site')} went live{better}. {asks}\n\nThanks again."
+
+
+def targets(text: str) -> dict[str, int]:
+    """"emails 100, calls 40" -> {"emails": 100, "calls": 40}; anything unreadable is left out."""
+    import re
+
+    out = {}
+    for name, n in re.findall(r"(emails|calls|videos|quotes)\s*[:=]?\s*(\d{1,4})", (text or DEFAULT_TARGETS).lower()):
+        out[name] = int(n)
+    return out or targets(DEFAULT_TARGETS)
+
+
+def log_video(outreach: Path, slug: str, today: date) -> None:
+    path = outreach / VIDEOS
+    new = not path.exists()
+    with path.open("a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if new:
+            w.writerow(["slug", "added"])
+        w.writerow([slug, today.isoformat()])
+
+
+def done_this_week(outreach: Path, today: date) -> dict[str, int]:
+    import email_batches as eb
+
+    monday = (today - timedelta(days=today.weekday())).isoformat()
+    end = (today + timedelta(days=1)).isoformat()
+
+    def inside(value: str) -> bool:
+        return monday <= (value or "")[:10] < end
+
+    sent = eb._rows(outreach / eb.SENT)[1]
+    return {
+        "emails": sum(inside(r.get(c, "")) for r in sent for c in ("sent", "followup_sent", "final_sent")),
+        "calls": sum(1 for r in eb._rows(outreach / "calls.csv")[1] if r.get("outcome") in DIALLED and inside(r.get("at", ""))),
+        "videos": sum(1 for r in eb._rows(outreach / VIDEOS)[1] if inside(r.get("added", ""))),
+        "quotes": sum(1 for r in eb._rows(outreach / "quotes-sent.csv")[1] if inside(r.get("at", ""))),
+    }
+
+
+def progress(outreach: Path, today: date, target_text: str) -> str:
+    goal = targets(target_text)
+    done = done_this_week(outreach, today)
+    parts = [f"{k} {done[k]}/{n}{' ✅' if done[k] >= n else ''}" for k, n in goal.items()]
+    return "🎯 This week so far: " + " · ".join(parts)

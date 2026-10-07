@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -55,6 +56,40 @@ def facts(data: dict, website: str) -> dict:
     return out
 
 
+def uk_time(iso: str) -> datetime | None:
+    """A UTC timestamp in UK clock time (BST from the last Sunday of March to the last Sunday of October,
+    01:00 UTC) - worked out here so it needs no time-zone database on Windows."""
+    try:
+        t = datetime.fromisoformat((iso or "").replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+    def last_sunday(month: int) -> datetime:
+        d = datetime(t.year, month, 31 if month in (3, 10) else 30, 1, tzinfo=timezone.utc)
+        return d - timedelta(days=(d.weekday() + 1) % 7)
+
+    return t + timedelta(hours=1) if last_sunday(3) <= t < last_sunday(10) else t
+
+
+def best_time(item: dict) -> str:
+    """When they opened their preview, as a hint for when to ring: the moments they had their phone out."""
+    times = [x for x in (uk_time(item.get("first_viewed", "")), uk_time(item.get("last_viewed", ""))) if x]
+    if not times:
+        return ""
+    hours = sorted({x.hour for x in times})
+    label = lambda h: f"{h % 12 or 12}{'am' if h < 12 else 'pm'}"  # noqa: E731
+    when = " and ".join(label(h) for h in hours)
+    if all(h >= 17 for h in hours):
+        tip = "evenings suit them - try 5-7pm"
+    elif all(h < 9 for h in hours):
+        tip = "early starter - try 7:30-8:30am"
+    elif all(12 <= h < 14 for h in hours):
+        tip = "lunchtimes - try 12-1:30pm"
+    else:
+        tip = "try the same time of day"
+    return f"When: opened it around {when} - {tip}."
+
+
 def script(item: dict, outreach: Path, your_name: str = "", data: dict | None = None) -> list[str]:
     from saved_replies import first_name
 
@@ -62,6 +97,9 @@ def script(item: dict, outreach: Path, your_name: str = "", data: dict | None = 
     name = first_name(item.get("contact", ""))
     me = (your_name or "").split()[0] if (your_name or "").strip() else "<your name>"
     lines = [f"Ask for {item['contact']}." if item.get("contact") else "Ask for the owner."]
+    when = best_time(item)
+    if when:
+        lines.append(when)
     lines.append(f"Open: \"Hi{' ' + name if name != 'there' else ''}, it's {me} from Scalar Digital - I put together a page "
                  f"for {item['business']} and sent it over. Did you get a chance to look?\"")
     if "score" in f:
