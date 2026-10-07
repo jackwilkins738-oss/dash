@@ -2,6 +2,7 @@
 
     python scripts/go_live.py dns   kerrroofing.co.uk [--folder kerr-roofing] [--fresh]
     python scripts/go_live.py check kerrroofing.co.uk [--folder kerr-roofing]
+    python scripts/go_live.py handover kerrroofing.co.uk --ns ada.ns.cloudflare.com,bob.ns.cloudflare.com [--folder ...]
 
 The one thing that turns a launch into an emergency is the client's email stopping, because a
 record didn't come across when their nameservers moved to Cloudflare (docs/launching-a-client-site.md,
@@ -18,7 +19,14 @@ step 5). So:
          nothing says noindex or "Draft", the dashboard's tracking and the quote form are on the site,
          and how long the certificate has left. Then the email records again, if a snapshot exists.
 
-Read-only: it only looks things up (Google's public DNS, and the site itself). Nothing is changed.
+  handover  the one step only the client can do: point their domain at Cloudflare. Looks up who their
+         domain is registered with (RDAP, the public registry record) and writes a one-page guide for
+         them - that company's login, where nameservers live, the two to paste, and that their email
+         keeps working - nameserver-guide.html beside the snapshot. The Telegram bot then checks every
+         15 minutes and texts you when the switch has happened (outreach/dns-watch.json).
+
+Read-only: it only looks things up (Google's public DNS, the public registry record, and the site
+itself). Nothing is changed.
 """
 
 from __future__ import annotations
@@ -264,6 +272,134 @@ def run_check(domain: str, outreach: Path, folder: str | None, ask=lookup, get=f
     return code
 
 
+RDAP = "https://rdap.org/domain/"
+WATCH = "dns-watch.json"
+# Where the client logs in. Only the big UK registrars, and only the login page - menus move, so the
+# guide describes the setting by name rather than promising a click path.
+REGISTRARS = {
+    "123-reg": ("123 Reg", "https://www.123-reg.co.uk/secure/"),
+    "godaddy": ("GoDaddy", "https://sso.godaddy.com/"),
+    "ionos": ("IONOS", "https://login.ionos.co.uk/"),
+    "1&1": ("IONOS", "https://login.ionos.co.uk/"),
+    "namecheap": ("Namecheap", "https://www.namecheap.com/myaccount/login/"),
+    "fasthosts": ("Fasthosts", "https://admin.fasthosts.co.uk/"),
+    "squarespace": ("Squarespace", "https://account.squarespace.com/domains"),
+    "wix": ("Wix", "https://manage.wix.com/account/domains"),
+    "tucows": ("your domain company (Tucows resells for many hosts)", ""),
+}
+NS_RE = re.compile(r"^[a-z0-9-]+\.ns\.cloudflare\.com$")
+
+
+def registrar(domain: str, get=None) -> str:
+    """The registrar's name from the public registry record (RDAP), or "" if it can't be read."""
+    def _get(url: str) -> dict:
+        req = urllib.request.Request(url, headers={"accept": "application/rdap+json", "User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            return json.load(r)
+
+    try:
+        data = (get or _get)(RDAP + domain)
+    except (urllib.error.URLError, OSError, ValueError):
+        return ""
+    for ent in data.get("entities") or []:
+        if "registrar" in (ent.get("roles") or []):
+            for item in ((ent.get("vcardArray") or [None, []])[1] or []):
+                if isinstance(item, list) and len(item) >= 4 and item[0] == "fn":
+                    return str(item[3]).strip()
+    return ""
+
+
+def login_for(name: str) -> tuple[str, str]:
+    low = name.lower()
+    for key, found in REGISTRARS.items():
+        if key in low:
+            return found
+    return (name or "the company you pay for your domain", "")
+
+
+def guide_html(domain: str, reg: str, ns: list[str], email_host_name: str, firm: str = "") -> str:
+    import html as h
+
+    name, login = login_for(reg)
+    where = (f'<a href="{h.escape(login)}">{h.escape(login)}</a>' if login else "your account with them (the company that emails you the domain renewal)")
+    email = (f"Your email ({h.escape(email_host_name)}) carries on working: every email setting has already been copied across."
+             if email_host_name and email_host_name != "none found" else "Nothing else changes - if you use email on this domain, its settings have been copied across.")
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Switching {h.escape(domain)} to your new website</title>
+<style>body{{font-family:Arial,sans-serif;max-width:640px;margin:24px auto;padding:0 16px;line-height:1.5;color:#111}}
+code{{display:block;font-size:18px;background:#f3f3f3;padding:10px;margin:6px 0;border-radius:6px}}li{{margin:10px 0}}</style></head><body>
+<h1>One last step for {h.escape(firm or domain)}'s new website</h1>
+<p>Your new site is ready. The last step is pointing <b>{h.escape(domain)}</b> at it - about 5 minutes, done once.
+Your domain is registered with <b>{h.escape(name)}</b>.</p>
+<ol>
+<li>Log in at {where}.</li>
+<li>Open <b>{h.escape(domain)}</b> and find the setting called <b>Nameservers</b> (sometimes under "DNS", "Manage DNS" or "Advanced").</li>
+<li>Choose the option to use <b>custom nameservers</b> (or "my own nameservers"), remove the ones there, and paste these two:
+{''.join(f'<code>{h.escape(n)}</code>' for n in ns)}</li>
+<li>Save. That's it - you'll see a warning that this changes where the domain points; that's expected.</li>
+</ol>
+<p>{email}</p>
+<p>The switch takes from a few minutes to a few hours. Your current site stays up until it happens, and I'll check it the moment it does.</p>
+<p>Can't find the setting? Send me a screenshot of the page you're on and I'll point to it.</p>
+</body></html>"""
+
+
+def watch(outreach: Path, domain: str, ns: list[str], folder: str | None) -> None:
+    path = outreach / WATCH
+    try:
+        items = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        items = []
+    items = [i for i in items if i.get("domain") != domain] + [
+        {"domain": domain, "ns": ns, "folder": folder or "", "since": datetime.now(timezone.utc).isoformat(timespec="seconds")}]
+    path.write_text(json.dumps(items, indent=2), encoding="utf-8")
+
+
+def switched(outreach: Path, ask=None) -> list[dict]:
+    """Watched domains whose nameservers now match - removed from the watch list and returned."""
+    ask = ask or lookup
+    path = outreach / WATCH
+    try:
+        items = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    done, left = [], []
+    for i in items:
+        try:
+            now = {n.rstrip(".").lower() for n in ask(i["domain"], "NS")}
+        except (urllib.error.URLError, OSError, ValueError):
+            now = set()
+        (done if now and now == {n.lower() for n in i["ns"]} else left).append(i)
+    if done:
+        path.write_text(json.dumps(left, indent=2), encoding="utf-8")
+    return done
+
+
+def run_handover(domain: str, ns: list[str], outreach: Path, folder: str | None, firm: str = "", ask=lookup, get=None) -> int:
+    ns = [n.strip().lower().rstrip(".") for n in ns if n.strip()]
+    if len(ns) != 2 or not all(NS_RE.match(n) for n in ns):
+        print("Give the two nameservers Cloudflare shows for their domain, e.g. ada.ns.cloudflare.com,bob.ns.cloudflare.com")
+        return 1
+    now = {n.rstrip(".").lower() for n in ask(domain, "NS")}
+    if now == set(ns):
+        print(f"{domain} already points at those nameservers - nothing for the client to do. Run Check the launch.")
+        return 0
+    snap = snapshot_path(outreach, domain, folder)
+    if not snap.exists():
+        print("Save their DNS first (button 1) - the guide promises their email keeps working, so the snapshot must exist.")
+        return 1
+    reg = registrar(domain, get)
+    rec = json.loads(snap.read_text(encoding="utf-8")).get("records") or {}
+    out = snap.parent / "nameserver-guide.html" if folder else outreach / "dns" / f"{domain}-guide.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(guide_html(domain, reg, ns, email_host(rec, domain), firm), encoding="utf-8")
+    watch(outreach, domain, ns, folder)
+    print(f"Registered with: {reg or 'unknown (the registry record is private)'}")
+    print(f"Now: {', '.join(sorted(now)) or 'no nameservers found'}")
+    print(f"READY: {out} - send it to them (it opens on a phone). The bot texts you when the switch happens.")
+    return 0
+
+
 def outreach_dir() -> Path:
     import reply_scanner
     return reply_scanner.outreach_dir()
@@ -273,10 +409,11 @@ def main() -> None:
     from push_prospects import domain_of
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("command", choices=["dns", "check"])
+    ap.add_argument("command", choices=["dns", "check", "handover"])
     ap.add_argument("domain")
     ap.add_argument("--folder", help="their folder under outreach/sites (the snapshot is kept there)")
     ap.add_argument("--fresh", action="store_true", help="dns: take a new 'before' snapshot instead of comparing")
+    ap.add_argument("--ns", default="", help="handover: Cloudflare's two nameservers, comma separated")
     args = ap.parse_args()
     domain = domain_of(args.domain)
     if not domain:
@@ -285,6 +422,8 @@ def main() -> None:
     try:
         if args.command == "dns":
             sys.exit(run_dns(domain, outreach_dir(), folder, args.fresh))
+        if args.command == "handover":
+            sys.exit(run_handover(domain, args.ns.split(","), outreach_dir(), folder))
         sys.exit(run_check(domain, outreach_dir(), folder))
     except (urllib.error.URLError, OSError) as e:
         sys.exit(f"Couldn't look up {domain}'s DNS ({type(e).__name__}) - check the internet connection and try again.")

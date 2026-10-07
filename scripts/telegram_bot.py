@@ -25,7 +25,9 @@ month after launch, with a review and referral ask ready to paste (daily.py). Ty
 answers to what people say on calls, or "coach" for three changes from Claude on the week's numbers
 (also every Sunday). Send a photo of a van or sign board and the firm becomes a prospect (spotted.py).
 After a call, send a voice note saying how it went and it's logged once you tap ✅ (voice.py). /update
-fetches the latest panel and restarts it.
+fetches the latest panel and restarts it. A Cal.com booking arrives with "📋 Brief me": everything on
+the firm now, and again 15 minutes before the call. When a client's domain switches to Cloudflare it
+texts you (go_live.py handover).
 
 Anything started here texts you its result when it finishes. Kept on the panel only (screen work, or
 too risky for a stray tap): finding new firms, building and publishing client sites, Settings, and
@@ -128,6 +130,77 @@ class Bot:
                 except Exception as e:  # noqa: BLE001 - one bad tap never stops the bot
                     self.send(f"That didn't work: {type(e).__name__}: {e}")
             self.maybe_morning()
+            self.maybe_dns_check()
+            self.maybe_briefs()
+
+    def brief(self, alert: str) -> None:
+        """A booked call: everything about the firm on one screen, now and again 15 minutes before."""
+        import re
+
+        import call_script
+        import calls
+        email = (re.search(r"^Email: (\S+@\S+)$", alert, re.M) or [None, ""])[1]
+        start = (re.search(r"^Start: (\S+)$", alert, re.M) or [None, ""])[1]
+        if not email:
+            self.send("That alert has no email to look up.")
+            return
+        firm = self.find_by_email(email)
+        if not firm:
+            text = (f"📋 {email} isn't in your lists - a new lead. Ask how they found you, what work they want more of, "
+                    "and offer to make their preview page while you're on the call.")
+        else:
+            settings = self.panel.load_settings()
+            lines = [f"📋 Brief: {firm['business']}{' - ' + firm['contact'] if firm.get('contact') else ''}",
+                     f"{firm.get('phone') or 'no phone on your list'} · {firm['website']}", firm.get("preview", "")]
+            history = calls.load_calls(self.panel.OUTREACH).get(firm["key"]) or []
+            if history:
+                last = history[-1]
+                lines.append(f"Last call: {last.get('outcome')} {str(last.get('at') or '')[:10]}" + (f" - {last['note']}" if last.get("note") else ""))
+            lines += call_script.script(firm, self.panel.OUTREACH, settings.get("MAIL_FROM_NAME") or "")[1:]
+            out, _ = self.panel.research_action({"business": firm["business"], "website": firm["website"], "area": firm.get("area", "")})
+            lines += out.get("lines") or []
+            text = "\n".join(x for x in lines if x)
+        self.send(text)
+        when = calls._when(start)
+        if when and when.timestamp() - 15 * 60 > time.time():  # a later reminder only when there's time for one
+            self._save_brief({"at": when.timestamp() - 15 * 60, "text": "⏰ In 15 minutes:\n" + text})
+
+    def _save_brief(self, item: dict) -> None:
+        path = self.panel.OUTREACH / "briefs.json"
+        try:
+            items = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            items = []
+        path.write_text(json.dumps([*items, item]), encoding="utf-8")
+
+    def maybe_briefs(self, now: float | None = None) -> None:
+        """Sends each saved brief at its time (15 minutes before the call); drops ones whose call has passed."""
+        path = self.panel.OUTREACH / "briefs.json"
+        if not path.exists():
+            return
+        now = time.time() if now is None else now
+        try:
+            items = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        due = [i for i in items if i.get("at", 0) <= now < i.get("at", 0) + 15 * 60]
+        left = [i for i in items if i.get("at", 0) > now]
+        for i in due:
+            self.send(i["text"])
+        if len(left) != len(items):
+            path.write_text(json.dumps(left), encoding="utf-8")
+
+    def maybe_dns_check(self, now: float | None = None) -> None:
+        """Every 15 minutes: has a client's domain moved to Cloudflare yet? (go_live.py handover)"""
+        now = time.time() if now is None else now
+        if now - getattr(self, "_dns_checked", 0) < 900 or not (self.panel.OUTREACH / "dns-watch.json").exists():
+            return
+        self._dns_checked = now
+        import go_live
+
+        for item in go_live.switched(self.panel.OUTREACH):
+            self.send(f"✅ {item['domain']} now points at Cloudflare. On the panel: 1. Save their DNS again (it compares - "
+                      "their email records must all be there), then 2. Check the launch.")
 
     def maybe_morning(self, now_local: datetime | None = None) -> bool:
         """Once a day from 8:30: the morning nudges, in the background so taps still answer."""
@@ -262,6 +335,8 @@ class Bot:
             data = str(q.get("data") or "")
             if data == "inbound":  # the website's "asked for their report" alert - its own text is the lead
                 self.inbound(str((q.get("message") or {}).get("text") or ""))
+            elif data == "brief":  # the website's Cal.com "call booked" alert - its own text has the email and time
+                self.brief(str((q.get("message") or {}).get("text") or ""))
             elif data.startswith("callnow:"):  # the website's "just opened their preview" alert
                 self.call_now(data.partition(":")[2])
             else:
@@ -673,6 +748,16 @@ class Bot:
 
     def find_by_slug(self, slug: str) -> dict | None:
         """The firm whose preview this is, from your lists - with the phone only this PC has."""
+        from push_prospects import make_slug
+
+        return self._find_firm(lambda business, domain, email, secret: make_slug(business, domain, secret) == slug)
+
+    def find_by_email(self, email: str) -> dict | None:
+        """The firm with this email address (theirs on the list, or found on their site)."""
+        email = email.strip().lower()
+        return self._find_firm(lambda business, domain, mail, secret: bool(email) and mail.lower() == email)
+
+    def _find_firm(self, match) -> dict | None:
         import csv
 
         import openpyxl
@@ -705,10 +790,12 @@ class Bot:
                         row = dict(zip(header, values))
                         business = str(row.get("Business") or "").strip()
                         domain = domain_of(str(row.get("Website") or row.get("Possible website") or "")) or ""
-                        if not business or not domain or make_slug(business, domain, secret) != slug:
-                            continue
                         extra = found.get(domain) or {}
+                        mail = str(row.get("Email") or "").strip() or extra.get("email", "")
+                        if not business or not domain or not match(business, domain, mail, secret):
+                            continue
                         phone = next((str(row[c]).strip() for c in calls.PHONE_COLUMNS if str(row.get(c) or "").strip()), "") or extra.get("phone", "")
+                        slug = make_slug(business, domain, secret)
                         return {"key": overrides.row_key(row), "sheet": name, "business": business, "website": domain,
                                 "contact": str(row.get("Contact name") or "").strip() or extra.get("contact", ""),
                                 "email": str(row.get("Email") or "").strip() or extra.get("email", ""), "phone": phone,
