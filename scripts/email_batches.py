@@ -346,11 +346,21 @@ def followup_candidates(outreach: Path, after_days: int = FOLLOWUP_AFTER_DAYS, t
 
     today = today or date.today()
     stop = do_not_email(outreach)
-    replied_emails, replied_names = set(), set()
+    from reply_scanner import back_on
+
+    replied_emails, replied_names, away = set(), set(), {}
     for r in _rows(outreach / "replies.csv")[1]:
         if r.get("kind") != "out of office":
             replied_emails.add((r.get("from") or "").lower())
             replied_names.add((r.get("business") or "").lower())
+            continue
+        try:  # an out-of-office: no follow-up until they're back (and a day to catch up)
+            received = date.fromisoformat((r.get("date") or "")[:10])
+        except ValueError:
+            continue
+        until = back_on(r.get("message") or r.get("snippet") or "", received)
+        who = (r.get("from") or "").lower()
+        away[who] = max(away.get(who, until), until)
     latest: dict[str, dict] = {}
     for src in sources(outreach, None):
         for r in _rows(src)[1]:
@@ -365,6 +375,9 @@ def followup_candidates(outreach: Path, after_days: int = FOLLOWUP_AFTER_DAYS, t
     for r in _rows(outreach / SENT)[1]:
         email = (r.get("email") or "").lower()
         if not email or r.get("final_sent"):
+            continue
+        if email in away and today <= away[email]:
+            skipped["too soon"] += 1  # away - their follow-up waits until they're back
             continue
         if r.get("followup_sent"):
             try:

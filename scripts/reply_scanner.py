@@ -241,6 +241,39 @@ def bounced_addresses(msg: Message) -> list[str]:
     return list(dict.fromkeys(a.strip().lower().rstrip(".") for a in found))
 
 
+MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+_AWAY = r"(?:back|return(?:ing)?|in the office|until|till|from)\b[^.\n]{0,30}?"
+_DAY_MONTH = re.compile(_AWAY + r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?([a-z]{3})[a-z]*", re.I)
+_MONTH_DAY = re.compile(_AWAY + r"\b([a-z]{3})[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?\b", re.I)
+_NUMERIC = re.compile(_AWAY + r"\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?\b", re.I)
+OOO_DEFAULT_DAYS = 7
+
+
+def back_on(text: str, received: date) -> date:
+    """When an out-of-office says they're back ("back on Monday 14th October", "returning 14/10"), else a week
+    after it arrived. UK day-first dates; the next such date on or after the reply."""
+    def next_one(day: int, month: int, year: int | None = None) -> date | None:
+        try:
+            d = date(year if year and year > 99 else (2000 + year if year else received.year), month, day)
+        except ValueError:
+            return None
+        if not year and d < received:
+            d = date(d.year + 1, month, day)
+        return d if received <= d <= received + timedelta(days=120) else None
+
+    text = text or ""
+    for m in _DAY_MONTH.finditer(text):
+        if m.group(2).lower()[:3] in MONTHS and (d := next_one(int(m.group(1)), MONTHS[m.group(2).lower()[:3]])):
+            return d
+    for m in _MONTH_DAY.finditer(text):
+        if m.group(1).lower()[:3] in MONTHS and (d := next_one(int(m.group(2)), MONTHS[m.group(1).lower()[:3]])):
+            return d
+    for m in _NUMERIC.finditer(text):
+        if d := next_one(int(m.group(1)), int(m.group(2)), int(m.group(3)) if m.group(3) else None):
+            return d
+    return received + timedelta(days=OOO_DEFAULT_DAYS)
+
+
 def classify(msg: Message, text: str) -> str:
     subject = _header(msg, "Subject")
     auto = (msg.get("Auto-Submitted") or "").lower()

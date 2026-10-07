@@ -44,6 +44,7 @@ SCOUT = HERE / "area_scout.py"
 CHECK_PREVIEW = HERE / "check_preview.py"
 SET_VIDEO = HERE / "set_video.py"
 CARDS = HERE / "cards.py"
+SITE_CHECK = HERE / "site_check.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
@@ -84,7 +85,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "88"
+PANEL_VERSION = "89"
 MAX_LOG_LINES = 5000
 
 
@@ -391,7 +392,9 @@ ACTIONS = {
     "push": "Push to dashboard",
     "letters": "Make letters",
     "cards": "Make canvass cards",
+    "ai_site_check": "AI check of possible websites",
     "install_segno": "Install segno (for letters)",
+    "install_voice": "Install voice notes",
 }
 
 
@@ -520,6 +523,13 @@ def build_steps(body: dict, settings: dict[str, str]):
         return (lambda job: [(REPLIES, [])]), ""
     if action == "insights":
         return (lambda job: [(INSIGHTS, [])]), ""
+    if action == "ai_site_check":
+        sheet = str(body.get("sheet") or "")
+        if not sheet_path(sheet):
+            return None, "Pick a list first."
+        if not settings.get("ANTHROPIC_API_KEY"):
+            return None, "Add ANTHROPIC_API_KEY in Settings first."
+        return (lambda job: [(SITE_CHECK, ["--sheet", sheet])]), ""
     if action == "cards":
         sheet = str(body.get("sheet") or "")
         area = str(body.get("cards_area") or "").strip()
@@ -669,6 +679,8 @@ def build_steps(body: dict, settings: dict[str, str]):
         return (lambda job: [*replies_first(settings), (BATCHES, args)]), ""
     if action == "install_segno":
         return (lambda job: [("pip", ["install", "segno"])]), ""
+    if action == "install_voice":
+        return (lambda job: [("pip", ["install", "faster-whisper"])]), ""
     if action == "scout":
         from find_prospects import TRADES
 
@@ -1537,7 +1549,7 @@ class Handler(BaseHTTPRequestHandler):
                                    "autopilot": autopilot.now_doing()}, 409)
             finder = body["action"] in ("find", "count")
             label = ACTIONS[body["action"]] + (" (dry run)" if body.get("dry_run") and not finder else "")
-            error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] != "install_segno",
+            error = JOB.start(label, steps, settings, needs_secret=not finder and body["action"] not in ("install_segno", "install_voice"),
                               keep_going=body["action"] in ("all", "prepare", "batch"))
             return self._json({"error": error} if error else {"ok": True}, 409 if error else 200)
         if route == "/api/autopilot":
@@ -1693,6 +1705,34 @@ def start_server(port: int) -> ThreadingHTTPServer | str | None:
                 return None  # not a panel - never close someone else's program
             stop_old_panel(port)
     return None
+
+
+def pull_update() -> tuple[str, str | None]:
+    """Telegram's /update: fetch the latest version. (message, new version to restart into, or None)."""
+    import autopilot
+
+    if JOB.running() or autopilot.is_running():
+        return "A run is going - send /update again when it's finished.", None
+    try:
+        res = subprocess.run(["git", "pull", "--ff-only"], cwd=str(HERE.parent), capture_output=True, text=True, timeout=180)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"Couldn't update ({e}).", None
+    said = (res.stdout + res.stderr).strip()
+    if res.returncode != 0:
+        return "Couldn't update: " + said[-300:], None
+    if "up to date" in said.lower():
+        return f"Already up to date (v{PANEL_VERSION}).", None
+    m = re.search(r'^PANEL_VERSION = "(\d+)"', (HERE / "control_panel.py").read_text(encoding="utf-8"), re.M)
+    if not m or m.group(1) == PANEL_VERSION:
+        return "Updated - the changes apply next time the panel starts.", None
+    return f"Updated to v{m.group(1)} - restarting, back in about 10 seconds.", m.group(1)
+
+
+def restart() -> None:
+    """Start the new version; it closes this one (an older version on the port) as it starts."""
+    flags = (subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP) if sys.platform == "win32" else 0
+    subprocess.Popen([sys.executable, str(HERE / "control_panel.py"), "--no-browser", "--port", str(Handler.port or 8765)],
+                     cwd=str(HERE), creationflags=flags)
 
 
 def main() -> None:

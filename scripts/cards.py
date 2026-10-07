@@ -14,6 +14,7 @@ import argparse
 import csv
 import html
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -63,12 +64,40 @@ def pick(outreach: Path, sheet: str, area: str, secret: str, most: int = MOST) -
             last = (history.get(overrides.row_key(row)) or [{}])[-1]
             if last.get("outcome") in calls.FINAL or last.get("outcome") == "Interested":
                 continue
-            out.append({"business": business, "area": town, "score": scores.get(domain),
+            address = str(row.get("Address") or row.get("Registered address") or "").strip()
+            out.append({"business": business, "area": town, "score": scores.get(domain), "address": address,
                         "slug": make_slug(business, domain, secret)})
     finally:
         wb.close()
     out.sort(key=lambda r: (r["score"] is None, r["score"] if r["score"] is not None else 0, r["business"].lower()))
-    return out[:most]
+    return route(out[:most])
+
+
+def _postcode(address: str) -> str:
+    from company_lookup import POSTCODE
+
+    found = POSTCODE.findall((address or "").upper())
+    return "".join(found[-1]) if found else ""
+
+
+def route(firms: list[dict]) -> list[dict]:
+    """The day's cards in driving order: by postcode, so neighbours are next to each other (no address: last)."""
+    def key(pair: tuple[int, dict]) -> tuple:
+        i, f = pair
+        pc = _postcode(f.get("address", ""))
+        m = re.match(r"([A-Z]{1,2})(\d+)([A-Z]?)(\d)?", pc)
+        return (not pc, (m.group(1), int(m.group(2)), m.group(3), m.group(4) or "") if m else ("",), i)  # no address: as picked
+
+    return [f for _, f in sorted(enumerate(firms), key=key)]
+
+
+def maps_links(firms: list[dict], per_link: int = 10) -> list[str]:
+    """Google Maps directions through the addresses, in card order - one link per 10 stops."""
+    from urllib.parse import quote
+
+    stops = [f["address"] for f in firms if _postcode(f.get("address", ""))]
+    return ["https://www.google.com/maps/dir/" + "/".join(quote(s, safe="") for s in stops[i:i + per_link])
+            for i in range(0, len(stops), per_link)]
 
 
 def render(firms: list[dict], site: str, sender: dict) -> str:
@@ -87,6 +116,10 @@ def render(firms: list[dict], site: str, sender: dict) -> str:
   <p class="me">{html.escape(sender['name'])} · Scalar Digital · {html.escape(sender['phone'])}</p>
 </div>""")
     pages = ["<section class=\"page\">" + "".join(cards[i:i + 4]) + "</section>" for i in range(0, len(cards), 4)]
+    links = maps_links(firms)
+    route_html = ("<nav class=\"route\">Today's route, in card order: " + " ".join(
+        f'<a href="{html.escape(u)}" target="_blank" rel="noopener">Stops {i * 10 + 1}-{min((i + 1) * 10, len(firms))} ↗</a>'
+        for i, u in enumerate(links)) + "</nav>") if links else ""
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Canvass cards</title>
 <style>
 @page {{ size: A4; margin: 0; }}
@@ -101,7 +134,9 @@ h2 {{ margin: 3mm 0; font-size: 17pt; }}
 img {{ width: 42mm; height: 42mm; }}
 .url {{ margin: 3mm 0 0; font-size: 9pt; color: #333; word-break: break-all; }}
 .me {{ margin-top: auto; font-size: 9pt; color: #333; }}
-</style></head><body>{''.join(pages)}</body></html>"""
+.route {{ padding: 4mm 10mm; font-size: 11pt; }} .route a {{ margin-right: 4mm; }}
+@media print {{ .route {{ display: none; }} }}
+</style></head><body>{route_html}{''.join(pages)}</body></html>"""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -129,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     out.write_text(render(firms, site, sender), encoding="utf-8")
     print(f"Wrote {out.name}: {len(firms)} card{'s' if len(firms) != 1 else ''} ({(len(firms) + 3) // 4} A4 page(s)) - "
           "open it, print on card, cut in four. Their preview pages must already be live (Run the whole list first).")
+    for i, link in enumerate(maps_links(firms)):
+        print(f"Route, stops {i * 10 + 1}+ (in card order): {link}")
     return 0
 
 
