@@ -30,3 +30,13 @@ export const foundingLeft = (f: { places: number; taken: number } = FOUNDING) =>
 // Partners: accountants, bookkeepers, merchants and others who see a lot of trades. Paid once the
 // client they sent has paid for their build. Kept here so /partners and the enquiry alert agree.
 export const PARTNER = { perBuild: 100, perLanding: 50, clientDiscountPercent: 10 } as const
+
+// Who a trade owner will actually deal with - shown on the homepage and every preview (components/founder.tsx).
+// Hidden until `show` is true: it needs a real photo at public/<photo> and words in your own voice.
+export const FOUNDER = {
+  show: false,
+  name: '',
+  role: 'Founder, Scalar Digital',
+  photo: '/brand/founder.jpg',
+  lines: [] as string[],
+}

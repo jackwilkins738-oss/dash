@@ -100,6 +100,25 @@ Kind regards,
 {{your_name}}
 Scalar Digital · 07401 696272""",
 }
+# The closing email (email_batches.FINAL_AFTER_DAYS after the follow-up), in the same thread. Short and
+# final on purpose: a polite "I'll stop here" often gets the reply the follow-up didn't.
+FINAL_TEMPLATE = {
+    "subject": "Closing the file - {{business}}",
+    "body": """Hi {{greeting_name}},
+
+I haven't heard back, so I'll take it the timing isn't right and I won't chase again.
+
+The page I made for {{business}} stays up for now, in case it's ever useful:
+
+{{preview_url}}
+
+If anything changes, just reply to this email.
+
+All the best,
+{{your_name}}
+Scalar Digital · 07401 696272""",
+}
+
 # An optional second version of the first email, tested against the first: each firm gets one
 # version, picked from its email address (so a re-send never switches it), and the scorecard
 # (scorecard.py) compares how each does. Leave both blank to send one version only.
@@ -234,7 +253,7 @@ def sent_today(outreach: Path, today: date, by_inbox: bool = False, main: str = 
     rows = eb._rows(outreach / eb.SENT)[1]
     counts: dict[str, int] = {}
     for r in rows:
-        n = (r.get("sent") == today.isoformat()) + (r.get("followup_sent") == today.isoformat())
+        n = sum(r.get(c) == today.isoformat() for c in ("sent", "followup_sent", "final_sent"))
         if n:
             inbox = (r.get("sent_from") or main).lower()
             counts[inbox] = counts.get(inbox, 0) + n
@@ -342,7 +361,7 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
         email = (p.get("email") or "").strip().lower()
         row = first_line.apply({**details.get(email, {}), **{k: v for k, v in p.items() if v}, "email": email}, lines)
         already = sent_rows.get(email, {})
-        if not test and (already.get("followup_sent") if followups else already.get("sent")):
+        if not test and already.get(_sent_col(followups, row)):
             continue  # sent on an earlier press
         todo.append(row)
     if not todo:
@@ -419,13 +438,14 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
                     continue
             variant = "" if followups else variant_for(email, templates)
             suffix = "_b" if variant == "B" else ""
-            subject = render(templates[f"{kind}_subject{suffix}"], row, your_name).strip()
+            final = followups and row.get("stage") == "final"
+            subject = render(FINAL_TEMPLATE["subject"] if final else templates[f"{kind}_subject{suffix}"], row, your_name).strip()
             reply_to = ""
             if followups:
                 first = sent_rows.get(email, {})
                 if first.get("message_id") and first.get("subject"):
                     reply_to, subject = first["message_id"], "Re: " + first["subject"]
-            body = render(templates[f"{kind}_body{suffix}"], row, your_name)
+            body = render(FINAL_TEMPLATE["body"] if final else templates[f"{kind}_body{suffix}"], row, your_name)
             inbox = pick(email)
             if inbox is None:
                 out(f"[{i + 1}/{len(todo)}] {business}: waits for tomorrow - its inbox has reached today's {DAILY_CAP}.")
@@ -448,7 +468,7 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
                 out(f"Test sent to {me} - check it reads right, then press Send.")
                 return 1
             if followups:
-                eb.record_followup_sent(outreach, email, today)
+                eb.record_followup_sent(outreach, email, today, final=final)
             else:
                 eb.record_sent(outreach, row, batch_file.name, today, msg["Message-ID"], subject, variant, inbox.address)
             sent += 1
@@ -503,11 +523,12 @@ def preview_batch(outreach: Path, followups: bool = False, env: dict | None = No
         if booking and not row.get("booking_link"):
             row["booking_link"] = booking
         already = sent_rows.get(email, {})
-        if already.get("followup_sent") if followups else already.get("sent"):
+        if already.get(_sent_col(followups, row)):
             continue
         variant = "" if followups else variant_for(email, templates)
         suffix = "_b" if variant == "B" else ""
-        subject = render(templates[f"{kind}_subject{suffix}"], row, your_name).strip()
+        final = followups and row.get("stage") == "final"
+        subject = render(FINAL_TEMPLATE["subject"] if final else templates[f"{kind}_subject{suffix}"], row, your_name).strip()
         if followups and already.get("subject"):
             subject = "Re: " + already["subject"]
         skip = _still_ok(outreach, email, row.get("business", ""))
@@ -520,18 +541,26 @@ def preview_batch(outreach: Path, followups: bool = False, env: dict | None = No
             sender = min(used, key=lambda a: used[a])
             used[sender] += 1
         emails.append({"business": row.get("business", ""), "email": email, "from": sender, "subject": subject,
-                       "body": render(templates[f"{kind}_body{suffix}"], row, your_name), "variant": variant,
+                       "body": render(FINAL_TEMPLATE["body"] if final else templates[f"{kind}_body{suffix}"], row, your_name),
+                       "variant": variant,
                        "preview_url": row.get("preview_url", ""), "first_line": row.get("first_line", ""), "skip": skip})
         if len(emails) >= PREVIEW_MAX:
             break
     return {"ok": True, "emails": emails, "ab": has_variant_b(templates) and not followups}
 
 
+def _sent_col(followups: bool, row: dict) -> str:
+    """The emails-sent.csv column that says this row's email has gone."""
+    if not followups:
+        return "sent"
+    return "final_sent" if row.get("stage") == "final" else "followup_sent"
+
+
 def _done(outreach: Path, p: dict, followups: bool) -> bool:
     email = (p.get("email") or "").lower()
     for r in eb._rows(outreach / eb.SENT)[1]:
         if (r.get("email") or "").lower() == email:
-            return bool(r.get("followup_sent") if followups else r.get("sent"))
+            return bool(r.get(_sent_col(followups, p)))
     return bool(_still_ok(outreach, email, p.get("business", "")))  # said no or replied: not waiting any more
 
 

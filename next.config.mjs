@@ -85,7 +85,9 @@ const nextConfig = {
               "connect-src 'self' https://admin.scalardigital.co.uk https://wfyzsnyfliohevpjpuib.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://www.googleapis.com",
               // The Cal.com booking calendar on /contact and the preview pages
               // (components/book-call.tsx) is an iframe of cal.com.
-              "frame-src https://cal.com https://app.cal.com",
+              // The personal walkthrough video on a preview page (components/preview-video.tsx) - only
+              // these three players, the same ones the dashboard will store.
+              "frame-src https://cal.com https://app.cal.com https://www.loom.com https://www.youtube-nocookie.com https://player.vimeo.com",
               "frame-ancestors 'none'",
               "object-src 'none'",
               "base-uri 'self'",

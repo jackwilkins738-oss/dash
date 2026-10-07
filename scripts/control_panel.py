@@ -42,6 +42,7 @@ PUSH = HERE / "push_prospects.py"
 FIND = HERE / "find_prospects.py"
 SCOUT = HERE / "area_scout.py"
 CHECK_PREVIEW = HERE / "check_preview.py"
+SET_VIDEO = HERE / "set_video.py"
 EXPORT = HERE / "export_results.py"
 BATCHES = HERE / "email_batches.py"
 REPLIES = HERE / "reply_scanner.py"
@@ -82,7 +83,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 10
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "83"
+PANEL_VERSION = "84"
 MAX_LOG_LINES = 5000
 
 
@@ -374,6 +375,7 @@ ACTIONS = {
     "scorecard": "Scorecard",
     "insights": "Insights (deep dive)",
     "check_preview": "Check a preview link",
+    "set_video": "Add a video to a preview",
     "dr_find": "Data request: find",
     "dr_export": "Data request: export",
     "dr_erase": "Data request: erase",
@@ -568,6 +570,17 @@ def build_steps(body: dict, settings: dict[str, str]):
         if not slug:
             return None, "Paste a preview link, e.g. https://www.scalardigital.co.uk/for/kerr-roofing-a1b2c3."
         return (lambda job: [(CHECK_PREVIEW, ["--link", slug])]), ""
+    if action == "set_video":
+        from check_preview import slug_from
+        from set_video import looks_like_video
+
+        slug = slug_from(str(body.get("video_preview") or ""))
+        video = str(body.get("video_url") or "").strip()
+        if not slug:
+            return None, "Paste their preview link, e.g. https://www.scalardigital.co.uk/for/kerr-roofing-a1b2c3."
+        if video and not looks_like_video(video):
+            return None, "Paste a Loom, YouTube or Vimeo link (https://...), or leave it blank to take the video off."
+        return (lambda job: [(SET_VIDEO, ["--link", slug, "--video", video])]), ""
     if action in ("dr_find", "dr_export", "dr_erase"):
         who = str(body.get("dr_who") or "").strip().lower()
         if not (re.fullmatch(r"[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}", who) or re.fullmatch(r"(https?://)?[a-z0-9.-]+\.[a-z]{2,}/?", who)):
@@ -874,8 +887,16 @@ def calls_for(sheet: str) -> dict:
         out = calls.call_list(OUTREACH, sheet, secret, site, activity)
     except Exception as e:  # a sheet open in Excel, an odd file
         return {"viewing": [], "letters": [], "message": f"Couldn't read {sheet}: {e}"}
+    import call_script
+
+    me = settings.get("MAIL_FROM_NAME") or ""
+    known = call_script.load(OUTREACH)
+    for section in ("callbacks", "viewing", "letters", "replied"):
+        for item in out.get(section) or []:
+            item["script"] = call_script.script(item, OUTREACH, me, known)
     out["message"] = message
     out["outcomes"] = calls.OUTCOMES
+    out["reasons"] = calls.LOST_REASONS
     return out
 
 
@@ -1130,6 +1151,9 @@ def call_action(body: dict) -> tuple[dict, int]:
     if not sheet_path(sheet) or not REVIEW_KEY.match(key) or outcome not in calls.OUTCOMES or not business:
         return {"error": "That doesn't look right."}, 400
     note = str(body.get("note") or "")[:300]
+    reason = str(body.get("reason") or "")
+    if outcome == "Not interested" and reason in calls.LOST_REASONS:
+        note = f"Reason: {reason}" + (f" - {note}" if note else "")
     due = None
     if outcome == "Call back":
         due = calls.parse_due(str(body.get("due") or "3d"), date.today())

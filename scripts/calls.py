@@ -31,6 +31,9 @@ import overrides
 
 OUTCOMES = ["No answer", "Call back", "Replied to them", "Interested", "Quoted", "Not interested", "Won"]
 FINAL = {"Not interested", "Won"}
+# Why a firm said no - one tap on "Not interested", kept in the call's note ("Reason: Price") so the
+# scorecard can count them. A month of these says what the real objection is.
+LOST_REASONS = ["Price", "Timing", "Has someone", "No need", "Other"]
 LETTER_WAIT_DAYS = 7
 PHONE_COLUMNS = ["Phone", "Phone number", "Telephone", "Tel", "Mobile", "Landline"]
 

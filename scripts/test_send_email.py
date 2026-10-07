@@ -137,6 +137,29 @@ class SendEmail(unittest.TestCase):
         self.assertIn("Just following up", msg.get_content())
         self.assertEqual(read(self.out / eb.SENT)[0]["followup_sent"], "2026-10-05")
 
+    def test_the_closing_email_goes_once_in_the_same_thread(self):
+        self.send(FakeSMTP())
+        rows = read(self.out / eb.SENT)
+        rows[0]["followup_sent"] = "2026-10-05"
+        write(self.out / eb.SENT, eb.SENT_FIELDS, rows)
+        write(self.out / "mailmeteor-followup-2026-10-14.csv", list(FIRMS[0]), FIRMS[:1])
+        write(self.out / eb.FOLLOWUP_PENDING, ["email", "batch", "stage"],
+              [{"email": "bill@kerr.co.uk", "batch": "mailmeteor-followup-2026-10-14.csv", "stage": "final"}])
+        preview = se.preview_batch(self.out, followups=True, env={"MAIL_FROM_NAME": "Jack"})
+        self.assertIn("won't chase again", preview["emails"][0]["body"])
+        smtp = FakeSMTP()
+        send = lambda: se.send_batch(self.out, followups=True, smtp=smtp, sleep=self.sleeps.append,  # noqa: E731
+                                     today=date(2026, 10, 14), out=lambda s: None)
+        self.assertEqual(send(), 1)
+        msg = smtp.sent[0]
+        self.assertEqual(msg["Subject"], "Re: Kerr Roofing - quick look at your website")
+        self.assertIn("I won't chase again", msg.get_content())
+        self.assertEqual(read(self.out / eb.SENT)[0]["final_sent"], "2026-10-14")
+        write(self.out / eb.FOLLOWUP_PENDING, ["email", "batch", "stage"],
+              [{"email": "bill@kerr.co.uk", "batch": "mailmeteor-followup-2026-10-14.csv", "stage": "final"}])
+        self.assertEqual(send(), 0)  # already sent: never twice
+        self.assertEqual(len(smtp.sent), 1)
+
     def test_a_refused_address_is_marked_bounced_and_the_rest_still_go(self):
         smtp = FakeSMTP(refuse={"info@acme.co.uk"})
         self.assertEqual(self.send(smtp), 2)

@@ -25,6 +25,8 @@ export type Prospect = {
   /** Automated website checks (dashboard migration 042), when they've been run. */
   teardown?: Teardown | null
   teardown_at?: string | null
+  /** A personal walkthrough video's player address (dashboard migration 062). */
+  video_url?: string | null
   updated_at?: string
 }
 

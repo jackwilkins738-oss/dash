@@ -3,6 +3,7 @@ import { Hero } from '@/components/hero'
 import { ExampleBuild } from '@/components/example-build'
 import { DashShowcase } from '@/components/dash-showcase'
 import { CtaBand } from '@/components/cta-band'
+import { Founder } from '@/components/founder'
 import { Reveal } from '@/components/reveal'
 import { ReplyClock } from '@/components/reply-clock'
 import { Pricing } from '@/components/pricing'
@@ -122,6 +123,7 @@ export default function HomePage() {
       </section>
 
       <Pricing />
+      <Founder />
       <CtaBand />
     </main>
   )

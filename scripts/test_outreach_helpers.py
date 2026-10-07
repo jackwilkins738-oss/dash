@@ -102,6 +102,21 @@ class ViewerFollowUps(unittest.TestCase):
             self.assertEqual([r["email"] for r in rows], ["b@x.co.uk"])
             self.assertEqual(skipped["viewed"], 1)
 
+    def test_closing_email_only_for_the_silent_who_never_looked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            write(d / eb.SENT, eb.SENT_FIELDS, [
+                ["a@x.co.uk", "Alpha", "https://s/for/alpha-1?src=email", "b", "2026-09-01", "2026-09-06"],
+                ["b@x.co.uk", "Beta", "https://s/for/beta-1?src=email", "b", "2026-09-01", "2026-09-06"],
+                ["c@x.co.uk", "Gamma", "https://s/for/gamma-1?src=email", "b", "2026-09-01", "2026-09-25"],
+                ["e@x.co.uk", "Epsilon", "https://s/for/eps-1?src=email", "b", "2026-09-01", "2026-09-06", "", "", "", "", "", "2026-09-16"]])
+            views = {"beta-1": {"view_count": 1}}
+            rows, skipped = eb.followup_candidates(d, 5, date(2026, 9, 29), views)
+            self.assertEqual([(r["email"], r["stage"]) for r in rows], [("a@x.co.uk", "final")])
+            self.assertEqual((skipped["viewed"], skipped["too soon"]), (1, 1))
+            # Without the dashboard's views, nobody gets a closing email (a viewer can't be told apart).
+            self.assertEqual(eb.followup_candidates(d, 5, date(2026, 9, 29), None)[0], [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -45,6 +45,16 @@ def short(key: str) -> str:
     return hashlib.sha1(key.encode()).hexdigest()[:10]
 
 
+def mobile(phone: str) -> str:
+    """A UK mobile as WhatsApp wants it (447...), or "" for a landline or anything unclear."""
+    digits = "".join(c for c in phone or "" if c.isdigit())
+    if digits.startswith("07") and len(digits) == 11:
+        return "44" + digits[1:]
+    if digits.startswith("447") and len(digits) == 12:
+        return digits
+    return ""
+
+
 def clip(text: str, n: int = 3800) -> str:
     return text if len(text) <= n else text[: n - 20] + "\n... (cut short)"
 
@@ -76,7 +86,8 @@ class Bot:
     def send(self, text: str, buttons: list[list[tuple[str, str]]] | None = None, menu: bool = False) -> None:
         payload = {"chat_id": self.chat, "text": clip(text), "disable_web_page_preview": True}
         if buttons:
-            payload["reply_markup"] = {"inline_keyboard": [[{"text": t, "callback_data": d} for t, d in row] for row in buttons]}
+            payload["reply_markup"] = {"inline_keyboard": [[{"text": t, "url": d} if d.startswith("https://") else {"text": t, "callback_data": d}
+                                                             for t, d in row] for row in buttons]}
         elif menu:
             payload["reply_markup"] = {"keyboard": [[{"text": t} for t in row] for row in MENU], "resize_keyboard": True,
                                        "is_persistent": True}
@@ -266,6 +277,30 @@ class Bot:
         out["viewing"].sort(key=lambda i: -i.get("heat", 0))
         return out
 
+    def _script(self, item: dict) -> str:
+        import call_script
+
+        return "\n".join(call_script.script(item, self.panel.OUTREACH, self.panel.load_settings().get("MAIL_FROM_NAME") or ""))
+
+    def after_no_answer(self, item: dict) -> None:
+        """No answer: a ready message they'll see straight away - one tap opens WhatsApp with it typed."""
+        import urllib.parse
+
+        from saved_replies import first_name
+
+        me = (self.panel.load_settings().get("MAIL_FROM_NAME") or "").split()
+        name = first_name(item.get("contact", ""))
+        link = (item.get("preview") or "").replace("src=dashboard", "src=whatsapp")
+        text = (f"Hi{' ' + name if name != 'there' else ''}, it's {me[0] if me else 'Scalar Digital'}"
+                f"{' from Scalar Digital' if me else ''} - just tried to ring you. Here's the page I put together for "
+                f"{item['business']}: {link} - happy to talk it through whenever suits.")
+        number = mobile(item.get("phone", ""))
+        if number:
+            self.send(f"Send them this on WhatsApp?\n\n{text}",
+                      [[("💬 Open WhatsApp with it", f"https://wa.me/{number}?{urllib.parse.urlencode({'text': text})}")]])
+        elif link:
+            self.send(f"Their number isn't a mobile, so no WhatsApp. If you have one for them, send:\n\n{text}")
+
     def _remember(self, kind: str, item: dict) -> str:
         sid = short(f"{kind}|{item.get('sheet')}|{item.get('key')}")
         self.items[sid] = {"kind": kind, "item": item}
@@ -303,7 +338,7 @@ class Bot:
                    + (f' - "{i["note"]}"' if i.get("note") else "")) if "due" in i else \
                 f"{i.get('views', 0)} visit(s), {i.get('seconds', 0)}s on the page"
             self.send(f"📞 {i['business']}{' - ' + i['contact'] if i.get('contact') else ''}\n"
-                      f"{i.get('phone') or 'no phone - check their site'}\n{why}\n{i.get('preview', '')}",
+                      f"{i.get('phone') or 'no phone - check their site'}\n{why}\n{i.get('preview', '')}\n\n{self._script(i)}",
                       [[("No answer", f"o:{sid}:No answer"), ("Call back tmrw", f"cb:{sid}")],
                        [("👍 Interested", f"o:{sid}:Interested"), ("🚫 Not interested", f"ni?:{sid}")],
                        [("🏆 Won", f"o:{sid}:Won"), ("🔎 Research", f"rs:{sid}")]])
@@ -407,13 +442,19 @@ class Bot:
         if verb == "o":
             out, _ = p.call_action({**body, "outcome": extra})
             self.send(out.get("message") or out.get("error", ""))
+            if extra == "No answer" and not out.get("error"):
+                self.after_no_answer(item)
         elif verb == "cb":
             out, _ = p.call_action({**body, "outcome": "Call back", "due": "tomorrow"})
             self.send(out.get("message") or out.get("error", ""))
         elif verb == "ni?":
-            self.send(f"{item['business']}: not interested - never contact them again?", [[("Yes", f"ni:{sid}"), ("Cancel", "cancel")]])
+            import calls
+
+            reasons = [(r, f"ni:{sid}:{r}") for r in calls.LOST_REASONS]
+            self.send(f"{item['business']}: not interested - they won't be contacted again. Why?",
+                      [reasons[:3], [*reasons[3:], ("Cancel", "cancel")]])
         elif verb == "ni":
-            out, _ = p.call_action({**body, "outcome": "Not interested"})
+            out, _ = p.call_action({**body, "outcome": "Not interested", "reason": extra})
             self.send(out.get("message") or out.get("error", ""))
         elif verb == "done":
             import calls
@@ -504,8 +545,8 @@ class Bot:
             return
         sid = self._remember("call", item)
         who = f" - ask for {item['contact']}" if item.get("contact") else ""
-        self.send(f"📞 {item['business']}{who}\n{item['phone'] or 'No phone on your list - check their site: ' + item['website']}\n"
-                  "Open with: \"I saw you had a look at the site I made for you...\"",
+        self.send(f"📞 {item['business']}{who}\n{item['phone'] or 'No phone on your list - check their site: ' + item['website']}\n\n"
+                  f"{self._script(item)}",
                   [[("No answer", f"o:{sid}:No answer"), ("Call back tmrw", f"cb:{sid}")],
                    [("👍 Interested", f"o:{sid}:Interested"), ("🚫 Not interested", f"ni?:{sid}")]])
         out, _ = self.panel.research_action({"business": item["business"], "website": item["website"], "area": item.get("area", "")})
