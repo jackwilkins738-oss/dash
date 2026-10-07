@@ -575,7 +575,7 @@ def main() -> None:
                 f,
                 fieldnames=[
                     "business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status",
-                    "trade", "area", "top_issue", "score_line", "issue_line", "why_line", "first_line",
+                    "trade", "area", "top_issue", "score_line", "issue_line", "why_line", "first_line", "website",
                 ],
             )
             writer.writeheader()
@@ -601,6 +601,8 @@ def main() -> None:
                         "issue_line": f"I also noticed {p['_top_issue']}." if p.get("_top_issue") else "",
                         "why_line": why_line(score),
                         "first_line": first_lines.get(p.get("website") or "", ""),
+                        # Not for the email - for picking who goes first (email_batches.need).
+                        "website": p.get("website") or "",
                     }
                 )
 

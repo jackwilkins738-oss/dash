@@ -172,6 +172,28 @@ def verified(outreach: Path, verify, today: date):
     return look, save
 
 
+def _ratings(outreach: Path) -> dict:
+    import json
+
+    try:
+        return json.loads((outreach / "google-ratings.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def need(row: dict, ratings: dict) -> float:
+    """How much this firm needs the email first: a slow site (unknown counts as middling), plus a busy
+    firm on Google (4.5+ stars and plenty of reviews - it gets work and can pay for a site)."""
+    try:
+        score = float(row.get("mobile_score") or "")
+    except ValueError:
+        score = 50.0
+    google = ((ratings.get(row.get("website") or "") or {}).get("google")) or {}
+    reviews, rating = int(google.get("reviews") or 0), float(google.get("rating") or 0)
+    busy = 30 if rating >= 4.5 and reviews >= 20 else 15 if reviews >= 10 else 0
+    return (100 - score) + busy
+
+
 def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, today: date | None = None,
                verify=None) -> tuple[Path | None, list[str]]:
     """(batch file, notes). check(url) -> None if the link loads, else why not. verify(email, cache) ->
@@ -182,9 +204,10 @@ def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, 
     done = sent_emails(outreach)
     stop = do_not_email(outreach)
     look, save = verified(outreach, verify, today) if verify else (None, lambda: None)
-    picked, fields, notes, seen = [], [], [], set()
+    picked, fields, notes, seen, waiting = [], [], [], set(), []
     for src in sources(outreach, sheet):
         src_fields, rows = _rows(src)
+        fields = list(dict.fromkeys([*fields, *src_fields]))
         for r in rows:
             email = (r.get("email") or "").strip().lower()
             if not email or email in done or email in seen:
@@ -193,21 +216,24 @@ def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, 
             if email in stop:
                 notes.append(f"skipped {r.get('business')}: {stop[email]}")
                 continue
-            if look:
-                ok, result = look(email)
-                if not ok:
-                    notes.append(f"skipped {r.get('business')}: {email} can't take mail ({result}) - they'll get a letter instead")
-                    continue
-            why = check(r.get("preview_url") or "")
-            if why:
-                notes.append(f"skipped {r.get('business')}: link {why}")
-                continue
-            fields = fields or src_fields
-            picked.append({**r, "_source": src.name})
-            if len(picked) >= size:
-                break
+            waiting.append({**r, "_source": src.name})
+    # Neediest first: the slowest sites, and among them the firms Google shows are busiest.
+    ratings = _ratings(outreach)
+    waiting.sort(key=lambda r: -need(r, ratings))
+    for r in waiting:
         if len(picked) >= size:
             break
+        email = (r.get("email") or "").strip().lower()
+        if look:
+            ok, result = look(email)
+            if not ok:
+                notes.append(f"skipped {r.get('business')}: {email} can't take mail ({result}) - they'll get a letter instead")
+                continue
+        why = check(r.get("preview_url") or "")
+        if why:
+            notes.append(f"skipped {r.get('business')}: link {why}")
+            continue
+        picked.append(r)
     save()
     if not picked:
         return None, notes

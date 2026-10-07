@@ -17,7 +17,8 @@ asks Telegram for new taps (outbound only - no port is opened on your PC, nothin
     📜 Log / ⏹ Stop   the running job's last lines, or stop it
 
 Each morning from 8:30 it also texts you anyone who opened their preview twice or more without a reply
-or a call, with a follow-up written for them - ✅ Send it, ✏️ Edit or 🗑 Discard (nudges.py).
+or a call, with a follow-up written for them - ✅ Send it, ✏️ Edit or 🗑 Discard (nudges.py) - and
+anyone who opened their quote two days ago without accepting it (quote_chase.py).
 
 Anything started here texts you its result when it finishes. Kept on the panel only (screen work, or
 too risky for a stray tap): finding new firms, building and publishing client sites, Settings, and
@@ -140,9 +141,7 @@ class Bot:
 
         try:
             data = self._all_calls()
-            if data.get("message"):
-                return
-            items = nudges.candidates(data, self.panel.OUTREACH)
+            items = [] if data.get("message") else nudges.candidates(data, self.panel.OUTREACH)
             name = self.panel.load_settings().get("MAIL_FROM_NAME") or ""
             for item in items:
                 d = nudges.draft(item, name)
@@ -155,6 +154,40 @@ class Bot:
                 self.offer_draft(sid)
         except Exception as e:  # noqa: BLE001 - a bad morning never stops the bot
             self.send(f"Morning nudges didn't work: {type(e).__name__}: {e}")
+        try:
+            self.chase_quotes()
+        except Exception as e:  # noqa: BLE001
+            self.send(f"Quote chasers didn't work: {type(e).__name__}: {e}")
+
+    def chase_quotes(self) -> None:
+        """Quotes opened but not accepted after two days: ring them, or send the follow-up (quote_chase.py)."""
+        import os
+
+        import nudges
+        import quote_chase
+
+        p = self.panel
+        settings = p.load_settings()
+        secret = settings.get("PROSPECTS_API_SECRET") or ""
+        if len(secret) < 32:
+            return
+        api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
+        tenant = os.environ.get("SCALAR_TENANT_ID", "abdc6408-1fd5-4fb6-9c4c-53600b571a6d")
+        quotes = quote_chase.due(quote_chase.fetch(api, secret, tenant), p.OUTREACH)
+        sent = nudges.sent_rows(p.OUTREACH)
+        for q in quotes:
+            firm = self.find_by_slug(q.get("slug") or "") or {}
+            quote_chase.mark(p.OUTREACH, q, datetime.now().date())
+            name = q.get("business_name") or firm.get("business") or "A prospect"
+            ring = f"Ring {firm['phone']} - best move." if firm.get("phone") else "No phone on your list."
+            self.send(f"💷 {name} opened their {quote_chase.pounds(q.get('total_pence'))} quote "
+                      f"{q.get('view_count')} time(s) and hasn't accepted.\n{ring}\n{q.get('quote_url', '')}")
+            if not (firm.get("email") and firm.get("sheet") and firm.get("key")):
+                continue
+            first = sent.get(firm["email"].strip().lower()) or {}
+            sid = self._remember("quote", {**firm, "subject": first.get("subject") or "", "message_id": first.get("message_id") or ""})
+            self.drafts[sid] = quote_chase.draft(q, firm, settings.get("MAIL_FROM_NAME") or "")
+            self.offer_draft(sid)
 
     def handle(self, update: dict) -> None:
         if "callback_query" in update:
