@@ -269,6 +269,15 @@ class Bot:
         except Exception as e:  # noqa: BLE001
             self.send(f"Referral reminders didn't work: {type(e).__name__}: {e}")
 
+    def self_test(self) -> None:
+        """Every key, install and connection, checked (self_test.py) - read-only."""
+        import self_test
+
+        self.send("Checking everything (up to a minute)...")
+        rows = self_test.checks(self.panel.load_settings(), self.panel.OUTREACH)
+        bad = sum(1 for m, _, _ in rows if m == self_test.BAD)
+        self.send("\n".join(f"{m} {n}: {d}" for m, n, d in rows) + ("\n\nAll set." if not bad else f"\n\n{bad} to fix (❌)."))
+
     def coach(self, views: dict | None) -> None:
         """Three changes for next week from Claude, on the week's counts (coach.py)."""
         import coach
@@ -361,6 +370,8 @@ class Bot:
         if handler:
             self.awaiting = ""
             handler()
+        elif text.lower() in ("selftest", "/selftest", "self-test"):
+            threading.Thread(target=self.self_test, daemon=True).start()
         elif text.lower() in ("update", "/update"):
             message, new = self.panel.pull_update()
             self.send(message)
