@@ -55,7 +55,11 @@ DEFAULTS = {
     "send_when": "first",
     # The gap is per inbox: the inboxes take turns, each waiting its own gap.
     "gap_per_inbox": False,
+    # Emails per inbox a day (0 = use batch_size): today's target is this x the inboxes sending, the search
+    # finds only what's missing to reach it, and each inbox sends exactly this many first emails.
+    "per_inbox": 0,
 }
+FIND_BUFFER = 1.5  # not every firm found has an email - search for half as many again as are missing
 
 
 def load_config() -> dict:
@@ -246,8 +250,31 @@ def lists_to_run(new_sheet: str | None) -> list[str]:
     return names[:5]
 
 
-def make_batches(r: "Run", cfg: dict) -> None:
-    r.step(panel.BATCHES, ["--size", str(int(cfg.get("batch_size") or 20))])
+def inbox_count(cfg: dict, settings: dict) -> int:
+    import mail_accounts
+
+    if str(cfg.get("send_from") or "").strip():
+        return 1
+    return max(1, len(mail_accounts.accounts(settings)))
+
+
+def daily_target(cfg: dict, settings: dict) -> int:
+    """First emails to send today: Emails per inbox x the inboxes, or the plain batch size."""
+    per = int(cfg.get("per_inbox") or 0)
+    return per * inbox_count(cfg, settings) if per > 0 else int(cfg.get("batch_size") or 20)
+
+
+def search_size(cfg: dict, settings: dict, waiting: int) -> int:
+    """How many new firms today's search should find: enough to reach the target, given those already waiting."""
+    import math
+
+    short = daily_target(cfg, settings) - waiting
+    return 0 if short <= 0 else min(1000, math.ceil(short * FIND_BUFFER))
+
+
+def make_batches(r: "Run", cfg: dict, settings: dict | None = None) -> None:
+    size = daily_target(cfg, settings or {}) if settings is not None else int(cfg.get("batch_size") or 20)
+    r.step(panel.BATCHES, ["--size", str(size)])
     if cfg.get("followups"):
         r.step(panel.BATCHES, ["--followups", "--size", str(int(cfg.get("followup_size") or 20)),
                                "--after-days", str(int(cfg.get("followup_after_days") or 5))])
@@ -261,7 +288,9 @@ def send_args(cfg: dict) -> list[str]:
         gap = 0.0
     frm = str(cfg.get("send_from") or "").strip().lower()
     per_inbox = bool(cfg.get("gap_per_inbox")) and gap and not frm
-    return ([f"--gap-minutes={gap:g}"] if gap else []) + (["--from", frm] if frm else []) + (["--gap-per-inbox"] if per_inbox else [])
+    limit = int(cfg.get("per_inbox") or 0)
+    return ([f"--gap-minutes={gap:g}"] if gap else []) + (["--from", frm] if frm else []) + (["--gap-per-inbox"] if per_inbox else []) \
+        + ([f"--per-inbox-limit={limit}"] if limit > 0 else [])
 
 
 def start_delay(cfg: dict, rand=None) -> int:
@@ -286,7 +315,7 @@ def morning_send(r: "Run", cfg: dict, settings: dict) -> bool:
                "making the batches without sending them.")
         return False
     r.note("--- Morning send")
-    make_batches(r, cfg)
+    make_batches(r, cfg, settings)
     r.step(panel.SEND, send_args(cfg))
     if cfg.get("followups"):
         r.step(panel.SEND, ["--followups", *send_args(cfg)])
@@ -336,6 +365,14 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
 
         new_sheet = None
         find = cfg.get("find") or {}
+        if find.get("trades") and find.get("areas") and int(cfg.get("per_inbox") or 0) > 0:
+            import email_batches
+
+            waiting = email_batches.remaining(panel.OUTREACH, None)
+            need = search_size(cfg, settings, waiting)
+            r.note(f"Today's target: {daily_target(cfg, settings)} emails ({cfg['per_inbox']} x {inbox_count(cfg, settings)} inbox(es)); "
+                   f"{waiting} checked firms already waiting" + (f" - searching for {need} more." if need else " - no search needed today."))
+            find = {**find, "max": need} if need else {}
         if find.get("trades") and find.get("areas"):
             before = set(panel.sheets())
             args, error = panel.build_find_args({**find, "action": "find"}, settings)
@@ -349,7 +386,7 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
                     # "Possible" websites confirmed (or ruled out) before the list runs, so more of today's
                     # firms get a preview and an email instead of waiting on the Review tab.
                     r.step(panel.SITE_CHECK, ["--sheet", new_sheet])
-        else:
+        elif not cfg.get("find"):
             r.note("No saved search - skipping new firms (save one on the panel's Autopilot card).")
 
         for name in lists_to_run(new_sheet):
@@ -366,7 +403,7 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
                 r.step(panel.REPLIES, [])  # anyone who said no while the list ran is left out of the send
             sent_early = morning_send(r, cfg, settings)
         if not sent_early:
-            make_batches(r, cfg)
+            make_batches(r, cfg, settings)
         r.sent_early = sent_early
         r.step(panel.EXPORT, [])
         r.step(panel.BACKUP, [])  # last, so the copy includes everything today changed

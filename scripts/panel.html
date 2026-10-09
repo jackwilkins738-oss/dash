@@ -211,7 +211,8 @@
       <p class="hint">Every day at your time: check replies, find new firms with the saved search, run the list, make the batches, update Excel, text you. It doesn't send unless you tick the box below. The PC must be on.</p>
       <div class="grid2">
         <div><label for="ap-time">Start between</label><div class="row" style="margin:0"><input type="text" id="ap-time" value="07:30" style="width:70px"> and <input type="text" id="ap-time-to" placeholder="(exactly)" style="width:80px"></div></div>
-        <div><label for="ap-batch">Emails a day</label><input type="number" id="ap-batch" value="20" min="1" max="500"></div>
+        <div><label for="ap-per-inbox-n">Emails per inbox a day</label><div class="row" style="margin:0"><input type="number" id="ap-per-inbox-n" min="0" max="100" placeholder="0 = off" style="width:80px"><span class="hint" id="ap-target"></span></div></div>
+        <div><label for="ap-batch">Emails a day (when per inbox is 0)</label><input type="number" id="ap-batch" value="20" min="1" max="500"></div>
       </div>
       <label class="check"><input type="checkbox" id="ap-followups" checked> Also follow-ups after <input type="number" id="ap-fdays" value="5" min="1" max="60" style="width:52px"> days, up to <input type="number" id="ap-fsize" value="20" min="1" max="500" style="width:60px"></label>
       <label class="check"><input type="checkbox" id="ap-send"> <b>Send them automatically</b> - <select id="ap-when" style="width:auto"><option value="first">right after checking replies</option><option value="last">after today's search and list run</option></select>, <input type="number" id="ap-gap" value="5" min="0" max="60" style="width:52px"> min apart, from <select id="ap-from" style="width:auto"><option value="">All inboxes (spread)</option></select></label>
@@ -1025,6 +1026,7 @@ async function loadAutopilot() {
   const c = r.config || {};
   $("ap-time").value = c.time || "07:30"; $("ap-time-to").value = c.time_to || ""; $("ap-batch").value = c.batch_size || 20;
   $("ap-when").value = c.send_when || "first"; $("ap-per-inbox").checked = !!c.gap_per_inbox;
+  $("ap-per-inbox-n").value = c.per_inbox || ""; apTarget();
   $("ap-followups").checked = c.followups !== false; $("ap-fdays").value = c.followup_after_days || 5; $("ap-fsize").value = c.followup_size || 20;
   $("ap-send").checked = !!c.auto_send; $("ap-gap").value = c.send_gap ?? 5;
   $("ap-from").dataset.want = c.send_from || "";
@@ -1040,10 +1042,18 @@ async function loadAutopilot() {
   $("ap-last").textContent = r.last || "";
   if (!r.windows) $("ap-on").title = "Scheduling needs Windows";
 }
+// "20 per inbox x 4 inboxes = 80 a day": the inboxes are the send-from list's options (bar "All inboxes").
+function apTarget() {
+  const n = Number($("ap-per-inbox-n").value) || 0;
+  const inboxes = $("ap-from").value ? 1 : Math.max(1, [...$("send-from").options].filter((o) => o.value).length);
+  $("ap-target").textContent = n ? `x ${inboxes} inbox${inboxes === 1 ? "" : "es"} = ${n * inboxes} a day - the search finds only what's missing` : "";
+}
+document.addEventListener("input", (e) => { if (e.target.id === "ap-per-inbox-n") apTarget(); });
+document.addEventListener("change", (e) => { if (e.target.id === "ap-from") apTarget(); });
 async function saveAutopilot(action) {
   if (action === "on" && $("ap-send").checked && !confirm("Turn on automatic sending? Each day at " + $("ap-time").value + ($("ap-time-to").value ? "-" + $("ap-time-to").value : "") + " the autopilot will email today's batch without you pressing Send.")) return;
   const config = { time: $("ap-time").value.trim(), time_to: $("ap-time-to").value.trim(), send_when: $("ap-when").value,
-    gap_per_inbox: $("ap-per-inbox").checked, batch_size: $("ap-batch").value, followups: $("ap-followups").checked,
+    gap_per_inbox: $("ap-per-inbox").checked, per_inbox: $("ap-per-inbox-n").value, batch_size: $("ap-batch").value, followups: $("ap-followups").checked,
     auto_send: $("ap-send").checked, send_gap: $("ap-gap").value, send_from: $("ap-from").value,
     followup_after_days: $("ap-fdays").value, followup_size: $("ap-fsize").value, ...(apSearch ? { find: apSearch } : {}) };
   const r = await post("/api/autopilot", { action, config });

@@ -87,7 +87,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 40  # speed checks per step of Run the whole list - each step is pushed, so stopping loses nothing
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "95"
+PANEL_VERSION = "96"
 MAX_LOG_LINES = 5000
 
 
@@ -1250,6 +1250,12 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
             return {"error": "Sizes and days must be numbers."}, 400
         if not (1 <= batch <= 500 and 1 <= fsize <= 500 and 1 <= fdays <= 60):
             return {"error": "Batch sizes 1-500, days 1-60."}, 400
+        try:
+            per_inbox = int(new.get("per_inbox") or 0)
+        except (TypeError, ValueError):
+            return {"error": "Emails per inbox must be a number."}, 400
+        if not 0 <= per_inbox <= 100:
+            return {"error": "Emails per inbox: 0-100 (0 = use Emails a day)."}, 400
         find = new.get("find")
         if find is not None:
             settings = load_settings()
@@ -1267,7 +1273,8 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
         cfg.update({"time": at, "batch_size": batch, "followups": bool(new.get("followups")), "followup_size": fsize,
                     "followup_after_days": fdays, "auto_send": bool(new.get("auto_send")), "send_gap": gap,
                     "send_from": send_from, "time_to": until, "send_when": "last" if new.get("send_when") == "last" else "first",
-                    "gap_per_inbox": bool(new.get("gap_per_inbox")), **({"find": find} if find is not None else {})})
+                    "gap_per_inbox": bool(new.get("gap_per_inbox")), "per_inbox": per_inbox,
+                    **({"find": find} if find is not None else {})})
         if action == "on":
             err = autopilot.install(at)
             if err:
@@ -1277,7 +1284,9 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
         autopilot.save_config(cfg)
         per = " per inbox, taking turns" if cfg["gap_per_inbox"] and not send_from else ""
         when = " after the search and list" if cfg["send_when"] == "last" else ""
-        sends = (f" It sends the batch itself{when}, {gap:g} min apart{per}{' from ' + send_from if send_from else ''}." if cfg["auto_send"]
+        target = (f" Target: {per_inbox} per inbox, {autopilot.daily_target(cfg, load_settings())} a day - the search finds only what's missing."
+                  if per_inbox else "")
+        sends = target + (f" It sends the batch itself{when}, {gap:g} min apart{per}{' from ' + send_from if send_from else ''}." if cfg["auto_send"]
                  else " It makes the batches; you press Send.")
         start = f"at a random time between {at} and {until}" if until else f"at {at}"
         return {"ok": True, "message": (f"Autopilot on: every day {start}." + sends) if cfg.get("enabled") else "Saved."}, 200
