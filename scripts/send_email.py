@@ -329,7 +329,7 @@ def bounce_problem(outreach: Path, today: date) -> str:
 
 def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp=None, sleep=time.sleep,
                today: date | None = None, out=print, gap_minutes: float | None = None, only_from: str = "",
-               per_inbox: bool = False, clock=time.monotonic) -> int:
+               per_inbox: bool = False, clock=time.monotonic, per_inbox_limit: int | None = None) -> int:
     """Sends the waiting batch; returns how many were sent. Raises SendStopped on a run-ending problem."""
     today = today or date.today()
     your_name = os.environ.get("MAIL_FROM_NAME", "").strip()
@@ -424,11 +424,21 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
         if test:
             return chosen or main_inbox
         if chosen:
-            return chosen if used[chosen.address] < DAILY_CAP else None
-        free = [a for a in inboxes if used[a.address] < DAILY_CAP]
+            return chosen if used[chosen.address] < DAILY_CAP and room_today(chosen) else None
+        free = [a for a in inboxes if used[a.address] < DAILY_CAP and room_today(a)]
         if per_inbox:  # the inbox that's free soonest, so every one keeps its own gap
             return min(free, key=lambda a: (ready.get(a.address, 0.0), used[a.address])) if free else None
         return min(free, key=lambda a: used[a.address]) if free else None
+
+    # "Emails per inbox": first emails today from each inbox, so each sends exactly its share.
+    firsts = {a.address: 0 for a in inboxes}
+    for r in sent_rows.values():
+        if r.get("sent") == today.isoformat():
+            addr = (r.get("sent_from") or main_inbox.address).lower()
+            firsts[addr] = firsts.get(addr, 0) + 1
+
+    def room_today(inbox: mail_accounts.Account) -> bool:
+        return followups or per_inbox_limit is None or firsts.get(inbox.address, 0) < per_inbox_limit
 
     # "Gap per inbox": each inbox waits its own gap between its emails, and the inboxes take turns - so four
     # inboxes 6 minutes apart send about four emails every 6 minutes, never two within ANY_GAP seconds.
@@ -463,7 +473,9 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
             body = render(FINAL_TEMPLATE["body"] if final else templates[f"{kind}_body{suffix}"], row, your_name)
             inbox = pick(email)
             if inbox is None:
-                out(f"[{i + 1}/{len(todo)}] {business}: waits for tomorrow - its inbox has reached today's {DAILY_CAP}.")
+                cap = per_inbox_limit if per_inbox_limit is not None and not followups else DAILY_CAP
+                out(f"[{i + 1}/{len(todo)}] {business}: waits for tomorrow - "
+                    + ("every inbox has" if not chosen else "its inbox has") + f" sent today's {cap}.")
                 continue
             if per_inbox and not test:
                 wait_turn(inbox)
@@ -484,6 +496,8 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
             if test:
                 out(f"Test sent to {me} - check it reads right, then press Send.")
                 return 1
+            if not followups:
+                firsts[inbox.address] = firsts.get(inbox.address, 0) + 1
             if followups:
                 eb.record_followup_sent(outreach, email, today, final=final)
             else:
@@ -592,6 +606,8 @@ def main() -> None:
     ap.add_argument("--gap-minutes", type=float, default=0,
                     help=f"spread the emails this many minutes apart (varied a little each time; up to {MAX_GAP_MINUTES}). "
                          "Leave out for 40-90 seconds")
+    ap.add_argument("--per-inbox-limit", type=int, default=None,
+                    help="first emails: at most this many from each inbox today (the autopilot's Emails per inbox)")
     ap.add_argument("--gap-per-inbox", action="store_true",
                     help="the gap is per inbox: the inboxes take turns, each waiting its own gap between its emails")
     args = ap.parse_args()
@@ -605,7 +621,8 @@ def main() -> None:
               "Stop any time - pressing Send again carries on.", flush=True)
     try:
         n = send_batch(outreach, followups=args.followups, test=args.test, out=lambda s: print(s, flush=True),
-                       gap_minutes=args.gap_minutes, only_from=args.only_from, per_inbox=args.gap_per_inbox)
+                       gap_minutes=args.gap_minutes, only_from=args.only_from, per_inbox=args.gap_per_inbox,
+                       per_inbox_limit=args.per_inbox_limit)
     except SendStopped as e:
         sys.exit(str(e))
     if not args.test:

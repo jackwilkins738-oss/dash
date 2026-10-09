@@ -231,6 +231,14 @@ class MultipleInboxes(SendEmail):
         # 2nd email: only the few seconds kept between any two; 3rd: the first inbox's own gap (6 min, shortest 4.8)
         self.assertEqual(sleeps, [5, 4.8 * 60 - 5])
 
+    def test_emails_per_inbox_each_inbox_sends_exactly_its_share(self):
+        lines = []
+        n = se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lines.append, per_inbox_limit=1)
+        self.assertEqual(n, 2)  # 3 waiting, 2 inboxes x 1
+        self.assertEqual(sorted(r["sent_from"] for r in read(self.out / eb.SENT)), ["jack@getscalar.co.uk", "jack@scalar.co.uk"])
+        self.assertIn("waits for tomorrow - every inbox has sent today's 1", lines[-1])
+        self.assertTrue((self.out / eb.PENDING).exists())  # the third stays waiting for tomorrow
+
     def test_send_from_an_unknown_inbox_stops_before_sending(self):
         with self.assertRaises(se.SendStopped):
             se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None, only_from="nobody@example.com")
