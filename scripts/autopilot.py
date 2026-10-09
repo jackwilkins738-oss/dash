@@ -58,6 +58,9 @@ DEFAULTS = {
     # Emails per inbox a day (0 = use batch_size): today's target is this x the inboxes sending, the search
     # finds only what's missing to reach it, and each inbox sends exactly this many first emails.
     "per_inbox": 0,
+    # Which inboxes send first emails, and how many each ({address: n}). Set, it overrides per_inbox and
+    # send_from: an inbox at 0 (or left out) sends none - its follow-ups still go from it, in the same thread.
+    "inbox_plan": {},
 }
 FIND_BUFFER = 1.5  # not every firm found has an email - search for half as many again as are missing
 
@@ -258,8 +261,15 @@ def inbox_count(cfg: dict, settings: dict) -> int:
     return max(1, len(mail_accounts.accounts(settings)))
 
 
+def plan_of(cfg: dict) -> dict[str, int]:
+    return {str(k).lower(): int(v) for k, v in (cfg.get("inbox_plan") or {}).items() if int(v or 0) > 0}
+
+
 def daily_target(cfg: dict, settings: dict) -> int:
-    """First emails to send today: Emails per inbox x the inboxes, or the plain batch size."""
+    """First emails to send today: the inbox plan's total, or Emails per inbox x the inboxes, or the batch size."""
+    plan = plan_of(cfg)
+    if plan:
+        return sum(plan.values())
     per = int(cfg.get("per_inbox") or 0)
     return per * inbox_count(cfg, settings) if per > 0 else int(cfg.get("batch_size") or 20)
 
@@ -287,10 +297,14 @@ def send_args(cfg: dict) -> list[str]:
     except (TypeError, ValueError):
         gap = 0.0
     frm = str(cfg.get("send_from") or "").strip().lower()
+    plan = plan_of(cfg)
+    if plan:  # the plan says which inboxes send - not one "send from" inbox
+        frm = ""
     per_inbox = bool(cfg.get("gap_per_inbox")) and gap and not frm
-    limit = int(cfg.get("per_inbox") or 0)
+    limit = 0 if plan else int(cfg.get("per_inbox") or 0)
     return ([f"--gap-minutes={gap:g}"] if gap else []) + (["--from", frm] if frm else []) + (["--gap-per-inbox"] if per_inbox else []) \
-        + ([f"--per-inbox-limit={limit}"] if limit > 0 else [])
+        + ([f"--per-inbox-limit={limit}"] if limit > 0 else []) \
+        + (["--inbox-plan=" + ",".join(f"{k}={v}" for k, v in plan.items())] if plan else [])
 
 
 def start_delay(cfg: dict, rand=None) -> int:
@@ -365,12 +379,14 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
 
         new_sheet = None
         find = cfg.get("find") or {}
-        if find.get("trades") and find.get("areas") and int(cfg.get("per_inbox") or 0) > 0:
+        if find.get("trades") and find.get("areas") and (int(cfg.get("per_inbox") or 0) > 0 or plan_of(cfg)):
             import email_batches
 
             waiting = email_batches.remaining(panel.OUTREACH, None)
             need = search_size(cfg, settings, waiting)
-            r.note(f"Today's target: {daily_target(cfg, settings)} emails ({cfg['per_inbox']} x {inbox_count(cfg, settings)} inbox(es)); "
+            split = (", ".join(f"{k} {v}" for k, v in plan_of(cfg).items()) if plan_of(cfg)
+                     else f"{cfg['per_inbox']} x {inbox_count(cfg, settings)} inbox(es)")
+            r.note(f"Today's target: {daily_target(cfg, settings)} emails ({split}); "
                    f"{waiting} checked firms already waiting" + (f" - searching for {need} more." if need else " - no search needed today."))
             find = {**find, "max": need} if need else {}
         if find.get("trades") and find.get("areas"):

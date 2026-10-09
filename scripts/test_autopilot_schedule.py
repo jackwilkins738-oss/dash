@@ -34,6 +34,16 @@ class Schedule(unittest.TestCase):
         self.assertEqual(autopilot.daily_target({**autopilot.DEFAULTS, "batch_size": 33}, settings), 33)
         self.assertIn("--per-inbox-limit=20", autopilot.send_args({**cfg, "send_gap": 6}))
 
+    def test_inbox_plan_picks_the_inboxes_and_the_split(self):
+        cfg = {**autopilot.DEFAULTS, "per_inbox": 20, "send_from": "x@x.co.uk",
+               "inbox_plan": {"A@a.co.uk": 25, "b@b.co.uk": 10, "c@c.co.uk": 0}}
+        self.assertEqual(autopilot.daily_target(cfg, {}), 35)
+        args = autopilot.send_args({**cfg, "send_gap": 6, "gap_per_inbox": True})
+        self.assertIn("--inbox-plan=a@a.co.uk=25,b@b.co.uk=10", args)
+        self.assertIn("--gap-per-inbox", args)
+        self.assertNotIn("--from", args)  # the plan decides the inboxes
+        self.assertFalse(any(a.startswith("--per-inbox-limit") for a in args))
+
     def test_panel_saves_the_window_and_options(self):
         import control_panel as cp
 
