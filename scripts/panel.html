@@ -217,6 +217,9 @@
       </div>
       <label class="check"><input type="checkbox" id="ap-followups" checked> Also follow-ups after <input type="number" id="ap-fdays" value="5" min="1" max="60" style="width:52px"> days, up to <input type="number" id="ap-fsize" value="20" min="1" max="500" style="width:60px"></label>
       <label class="check"><input type="checkbox" id="ap-send"> <b>Send them automatically</b> - <select id="ap-when" style="width:auto"><option value="first">right after checking replies</option><option value="last">after today's search and list run</option></select>, <input type="number" id="ap-gap" value="5" min="0" max="60" style="width:52px"> min apart, from <select id="ap-from" style="width:auto"><option value="">All inboxes (spread)</option></select></label>
+      <label class="check"><input type="checkbox" id="ap-protect"> <b>Warm up and protect inboxes</b> - a new inbox starts at 10 a day and adds 5 a week up to your number; one with bounces over 5% or a domain problem is paused, and you're told</label>
+      <label class="check"><input type="checkbox" id="ap-weekdays"> <b>Weekdays only</b> - Saturday and Sunday: replies and the lists only, no search, nothing sent</label>
+      <label class="check"><input type="checkbox" id="ap-videos"> <b>Walkthrough videos for repeat viewers</b> - up to 5 a morning, for firms that opened their preview 2+ times (needs Install video maker)</label>
       <label class="check"><input type="checkbox" id="ap-per-inbox"> The gap is <b>per inbox</b> - with All inboxes, they take turns and each waits its own gap (4 inboxes, 6 min = about 4 emails every 6 min)</label>
       <p class="hint">Off = you press Send. On = today's batch (and follow-ups) go out at the time above, with the same checks as pressing Send: no's and replies left out, the bounce pause, the daily cap. Set the time for 06:45 and 20 emails 5 min apart land between 7 and 9am. With a window (05:00 and 07:00) it starts at a different random minute each day; with the gap per inbox, 4 inboxes 6 min apart send 100 emails in about 2½ hours. After changing the time, press Save &amp; turn on again.</p>
       <p class="hint" id="ap-search">Search: none saved yet.</p>
@@ -1028,6 +1031,7 @@ async function loadAutopilot() {
   $("ap-time").value = c.time || "07:30"; $("ap-time-to").value = c.time_to || ""; $("ap-batch").value = c.batch_size || 20;
   $("ap-when").value = c.send_when || "first"; $("ap-per-inbox").checked = !!c.gap_per_inbox;
   $("ap-per-inbox-n").value = c.per_inbox || "";
+  $("ap-protect").checked = !!c.protect_inboxes; $("ap-weekdays").checked = !!c.weekdays_only; $("ap-videos").checked = !!c.auto_videos;
   apPlanSaved = c.inbox_plan && Object.keys(c.inbox_plan).length ? c.inbox_plan
     : Object.fromEntries(apInboxes().map((a) => [a, c.per_inbox || ""]));
   apPlanRows();
@@ -1080,7 +1084,8 @@ document.addEventListener("change", (e) => { if (e.target.id === "ap-from") apTa
 async function saveAutopilot(action) {
   if (action === "on" && $("ap-send").checked && !confirm("Turn on automatic sending? Each day at " + $("ap-time").value + ($("ap-time-to").value ? "-" + $("ap-time-to").value : "") + " the autopilot will email today's batch without you pressing Send.")) return;
   const config = { time: $("ap-time").value.trim(), time_to: $("ap-time-to").value.trim(), send_when: $("ap-when").value,
-    gap_per_inbox: $("ap-per-inbox").checked, per_inbox: $("ap-per-inbox-n").value, inbox_plan: apPlan(), batch_size: $("ap-batch").value, followups: $("ap-followups").checked,
+    gap_per_inbox: $("ap-per-inbox").checked, per_inbox: $("ap-per-inbox-n").value, inbox_plan: apPlan(),
+    protect_inboxes: $("ap-protect").checked, weekdays_only: $("ap-weekdays").checked, auto_videos: $("ap-videos").checked, batch_size: $("ap-batch").value, followups: $("ap-followups").checked,
     auto_send: $("ap-send").checked, send_gap: $("ap-gap").value, send_from: $("ap-from").value,
     followup_after_days: $("ap-fdays").value, followup_size: $("ap-fsize").value, ...(apSearch ? { find: apSearch } : {}) };
   const r = await post("/api/autopilot", { action, config });
