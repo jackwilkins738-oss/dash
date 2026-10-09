@@ -33,6 +33,10 @@ const FAQS: QA[] = [
     a: 'The £750 option is a single hand-coded landing page with your services, a call and WhatsApp button and an enquiry form. The £2,500 option is five hand-coded pages, including a gallery and a service areas page, plus local SEO built into the structure, Google Business and reviews wired in, and a private dashboard.',
   },
   {
+    q: 'What do the monthly plans include?',
+    a: 'Both are optional. Care (£39 a month, free for the first 12 months with the full build) keeps your dashboard running, checks your site every hour, asks customers for reviews after each job and sends you a monthly report. Growth (£149 a month) adds a new page on your site for each finished job, written from your photos and published once you approve it, a matching Google Business Profile post, and ready-to-post replies to your Google reviews. You can stop either plan any month and keep your website.',
+  },
+  {
     q: 'Why hand-coded instead of WordPress?',
     a: 'Hand-coded pages carry no themes or plugins, so they load quickly on a phone and there is nothing extra to update or for someone to break into. Speed matters because most trade customers search on a mobile, often on a weak signal.',
   },
