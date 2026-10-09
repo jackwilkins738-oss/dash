@@ -9,6 +9,8 @@ on a phone and scores 90+ without tuning.
 What every build gets, so none of it is forgotten on a client:
   - home, services, gallery, reviews, contact, thanks, privacy and 404 pages
   - a page per town they cover (areas/<town>.html) - how local search finds them
+  - a page per finished job the client approved on the dashboard (work/<job>.html, from job-posts.json,
+    which job_posts.py keeps up to date), linked from its town's page
   - the enquiry form wired to the dashboard (photos too), page-view tracking,
     and the dashboard's live gallery and reviews
   - sticky call / WhatsApp / quote bar on phones, tap-to-call everywhere
@@ -679,6 +681,7 @@ def area_page(cfg: dict, area: dict, draft: bool) -> str:
     town = area["town"]
     note = area.get("note") or ""
     others = [a for a in cfg["areas"] if a is not area][:8]
+    jobs = [p for p in cfg.get("_posts") or [] if _same_town(p.get("town"), town)][:10]
     body = f"""<section class="page-head"><div class="wrap">
   <p class="eyebrow">Areas we cover</p>
   <h1>{esc(cfg.get('title_trade') or 'Trusted local trades')} in {esc(town)}</h1>
@@ -686,6 +689,7 @@ def area_page(cfg: dict, area: dict, draft: bool) -> str:
   <div class="actions"><a class="btn" href="/contact.html?area={slugify(town)}">Get a free quote in {esc(town)}</a><a class="btn ghost" href="tel:{tel(cfg['phone'])}">Call {esc(cfg['phone'])}</a></div>
 </div></section>
 <section class="section"><div class="wrap"><h2>What we do in {esc(town)}</h2>{service_cards(cfg)}</div></section>
+{('<section class="section"><div class="wrap"><h2>Recent jobs in ' + esc(town) + '</h2>' + job_links(jobs) + '</div></section>') if jobs else ''}
 {('<section class="section alt"><div class="wrap"><h2>What customers say</h2>' + reviews_html(cfg, limit=3) + '</div></section>') if reviews_html(cfg, 3) else ''}
 {('<section class="section"><div class="wrap"><h2>Also nearby</h2><ul class="chips">' + ''.join(f'<li><a href="/areas/{slugify(a["town"])}.html">{esc(a["town"])}</a></li>' for a in others) + '</ul></div></section>') if others else ''}
 {cta_band(cfg, f'Need a quote in {town}?')}"""
@@ -706,7 +710,9 @@ def areas_index(cfg: dict, draft: bool) -> str:
 
 def gallery_page(cfg: dict, draft: bool) -> str:
     section = gallery_section(cfg) or '<section class="section"><div class="wrap"><p>Photos of recent jobs are on their way.</p></div></section>'
-    body = f'<section class="page-head"><div class="wrap"><h1>Our work</h1><p class="lede">Recent jobs, photographed on site.</p></div></section>{section}{cta_band(cfg)}'
+    posts = cfg.get("_posts") or []
+    jobs = f'<section class="section"><div class="wrap"><h2>Recent jobs, written up</h2>{job_links(posts[:12])}<p><a class="text-link" href="/work/">All recent jobs</a></p></div></section>' if posts else ""
+    body = f'<section class="page-head"><div class="wrap"><h1>Our work</h1><p class="lede">Recent jobs, photographed on site.</p></div></section>{section}{jobs}{cta_band(cfg)}'
     return page(cfg, path="/gallery.html", title=f"Our work | {cfg['business']}", description=f"Recent work by {cfg['business']}.",
                 body=body, crumbs=[("/", "Home"), ("/gallery.html", "Our work")], draft=draft)
 
@@ -770,6 +776,64 @@ def privacy_html(cfg: dict) -> str:
 <p class="small">Last updated {date.today().strftime('%B %Y')}.</p>"""
 
 
+# ---------------------------------------------------------------- job posts
+
+JOB_POSTS_FILE = "job-posts.json"
+JOB_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+# Only the dashboard's own photo storage - a post can't put someone else's images on a client's site.
+JOB_PHOTO = re.compile(r"^https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/project-photos/[A-Za-z0-9/_.-]+$")
+
+
+def load_job_posts(folder: Path) -> list[dict]:
+    """The approved job posts job_posts.py saved for this site, checked - a bad one is left out, never built."""
+    try:
+        raw = json.loads((folder / JOB_POSTS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out = []
+    for p in raw if isinstance(raw, list) else []:
+        if not isinstance(p, dict) or not JOB_SLUG.match(str(p.get("slug") or "")) or not p.get("title") or not p.get("body"):
+            continue
+        photos = [ph for ph in p.get("photos") or [] if isinstance(ph, dict) and JOB_PHOTO.match(str(ph.get("url") or ""))]
+        out.append({**p, "photos": photos[:8]})
+    return out
+
+
+def _same_town(a: str | None, b: str | None) -> bool:
+    return bool(a and b and slugify(a) == slugify(b))
+
+
+def job_links(posts: list[dict]) -> str:
+    return '<ul class="job-list">' + "".join(
+        f'<li><a href="/work/{p["slug"]}.html">{esc(p["title"])}</a></li>' for p in posts) + "</ul>"
+
+
+def work_page(cfg: dict, post: dict, draft: bool) -> str:
+    town = post.get("town") or ""
+    paras = "".join(f"<p>{esc(t.strip())}</p>" for t in re.split(r"\n\s*\n", str(post["body"])) if t.strip())
+    photos = "".join(f'<figure>{img(ph["url"], None, None, ph.get("alt") or post["title"])}</figure>' for ph in post["photos"])
+    area = next((a for a in cfg["areas"] if _same_town(a["town"], town)), None)
+    more = f'<p><a class="text-link" href="/areas/{slugify(area["town"])}.html">More about our work in {esc(area["town"])}</a></p>' if area else ""
+    body = f"""<section class="page-head"><div class="wrap narrow">
+  <p class="eyebrow">Recent job{f" in {esc(town)}" if town else ""}</p>
+  <h1>{esc(post["title"])}</h1>
+</div></section>
+<section class="section"><div class="wrap narrow prose">{paras}{more}</div></section>
+{f'<section class="section"><div class="wrap"><div class="gallery">{photos}</div></div></section>' if photos else ''}
+{cta_band(cfg, f"Need something similar{f' in {town}' if town else ''}?")}"""
+    path = f"/work/{post['slug']}.html"
+    first = re.split(r"(?<=[.!?])\s", " ".join(str(post["body"]).split()), maxsplit=1)[0][:155]
+    return page(cfg, path=path, title=f"{post['title']} | {cfg['business']}", description=first, body=body,
+                crumbs=[("/", "Home"), ("/work/", "Recent jobs"), (path, post["title"])], draft=draft)
+
+
+def work_index(cfg: dict, posts: list[dict], draft: bool) -> str:
+    body = (f'<section class="page-head"><div class="wrap"><h1>Recent jobs</h1><p class="lede">Work we\'ve finished lately, written up '
+            f'with photos from the job.</p></div></section><section class="section"><div class="wrap">{job_links(posts)}</div></section>{cta_band(cfg)}')
+    return page(cfg, path="/work/", title=f"Recent jobs | {cfg['business']}", description=f"Recent jobs by {cfg['business']}, with photos.",
+                body=body, crumbs=[("/", "Home"), ("/work/", "Recent jobs")], draft=draft)
+
+
 # ---------------------------------------------------------------- build
 
 
@@ -794,6 +858,7 @@ def build(folder: Path, draft: bool = False) -> dict:
     described += [(s["photo"], s["_photo"][0]) for s in cfg["services"] if s.get("_photo")]
     described += list(zip((cfg.get("gallery") or {}).get("photos") or [], (u for u, _, _ in cfg["_gallery"])))
     describe_photos(folder, described, cfg.get("trade") or "")
+    cfg["_posts"] = sorted(load_job_posts(folder), key=lambda p: str(p.get("approved_at") or ""), reverse=True)
 
     pages: dict[str, str] = {
         "index.html": home(cfg, draft),
@@ -811,6 +876,10 @@ def build(folder: Path, draft: bool = False) -> dict:
     }
     for a in cfg["areas"]:
         pages[f"areas/{slugify(a['town'])}.html"] = area_page(cfg, a, draft)
+    for post in cfg["_posts"]:
+        pages[f"work/{post['slug']}.html"] = work_page(cfg, post, draft)
+    if cfg["_posts"]:
+        pages["work/index.html"] = work_index(cfg, cfg["_posts"], draft)
 
     for rel, text in pages.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -832,7 +901,7 @@ def build(folder: Path, draft: bool = False) -> dict:
         + "</urlset>\n", encoding="utf-8")
     (out / "robots.txt").write_text("User-agent: *\n" + ("Disallow: /\n" if draft else f"Allow: /\n\nSitemap: {base}/sitemap.xml\n"), encoding="utf-8")
     redirects = [f"{src} {dst} 301" for src, dst in (cfg.get("redirects") or [])]
-    redirects += ["/index.html / 301", "/areas /areas/ 301"]
+    redirects += ["/index.html / 301", "/areas /areas/ 301"] + (["/work /work/ 301"] if cfg["_posts"] else [])
     (out / "_redirects").write_text("\n".join(redirects) + "\n", encoding="utf-8")
     (out / "_headers").write_text("""/*
   X-Content-Type-Options: nosniff

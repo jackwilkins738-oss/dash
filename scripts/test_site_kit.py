@@ -93,6 +93,38 @@ class SiteKit(unittest.TestCase):
         for f in ["site.css", "sitemap.xml", "robots.txt", "_redirects", "_headers", "favicon.svg"]:
             self.assertTrue((self.folder / "site" / f).exists(), f)
 
+    def test_approved_job_posts_become_pages_linked_from_their_town(self):
+        photo = "https://abcd.supabase.co/storage/v1/object/public/project-photos/t/1.jpg"
+        posts = [
+            {"slug": "new-slate-roof-in-maidstone", "title": "New slate roof in <Maidstone>", "town": "maidstone",
+             "body": "We stripped the old roof.\n\nThen we laid new slate.", "photos": [
+                 {"url": photo, "alt": "Slate roof"}, {"url": "https://evil.example/x.jpg", "alt": "x"}]},
+            {"slug": "Bad Slug", "title": "x", "body": "y"},
+            {"slug": "flat-roof-in-ashford", "title": "Flat roof in Ashford", "town": "Ashford", "body": "GRP roof.", "photos": []},
+        ]
+        (self.folder / sk.JOB_POSTS_FILE).write_text(json.dumps(posts), encoding="utf-8")
+        pages = self.build()["pages"]
+        self.assertIn("work/new-slate-roof-in-maidstone.html", pages)
+        self.assertIn("work/flat-roof-in-ashford.html", pages)
+        self.assertIn("work/index.html", pages)
+        self.assertEqual(len([p for p in pages if p.startswith("work/")]), 3)  # the bad slug is never built
+        job = self.page("work/new-slate-roof-in-maidstone.html")
+        self.assertIn("&lt;Maidstone&gt;", job)
+        self.assertIn("<p>Then we laid new slate.</p>", job)
+        self.assertIn(photo, job)
+        self.assertNotIn("evil.example", job)
+        self.assertIn('href="/areas/maidstone.html"', job)
+        self.assertIn('href="/work/new-slate-roof-in-maidstone.html"', self.page("areas/maidstone.html"))
+        self.assertNotIn("/work/", self.page("areas/tunbridge-wells.html"))
+        self.assertIn("/work/flat-roof-in-ashford.html", self.page("gallery.html"))
+        self.assertIn("/work/new-slate-roof-in-maidstone.html", self.page("sitemap.xml"))
+        self.assertIn("/work /work/ 301", self.page("_redirects"))
+
+    def test_no_job_posts_no_work_pages(self):
+        pages = self.build()["pages"]
+        self.assertFalse([p for p in pages if p.startswith("work/")])
+        self.assertNotIn("/work", self.page("_redirects"))
+
     def test_no_broken_internal_links(self):
         self.build()
         site = self.folder / "site"
