@@ -85,9 +85,9 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
                "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"}
 # A run this long gets a phone alert when it ends (if Telegram is set up).
 ALERT_AFTER_S = 180
-RUN_ALL_BATCH = 10
+RUN_ALL_BATCH = 40  # speed checks per step of Run the whole list - each step is pushed, so stopping loses nothing
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "94"
+PANEL_VERSION = "95"
 MAX_LOG_LINES = 5000
 
 
@@ -1241,6 +1241,9 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
         at = str(new.get("time") or cfg["time"])
         if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", at):
             return {"error": "The time must look like 07:30."}, 400
+        until = str(new.get("time_to") or "").strip()
+        if until and (not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", until) or until <= at):
+            return {"error": "The second time must look like 07:00 and be later than the first (or leave it blank)."}, 400
         try:
             batch, fsize, fdays = int(new.get("batch_size") or 20), int(new.get("followup_size") or 20), int(new.get("followup_after_days") or 5)
         except ValueError:
@@ -1263,7 +1266,8 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
             return {"error": "Minutes apart 0-60, and pick an inbox (or All inboxes)."}, 400
         cfg.update({"time": at, "batch_size": batch, "followups": bool(new.get("followups")), "followup_size": fsize,
                     "followup_after_days": fdays, "auto_send": bool(new.get("auto_send")), "send_gap": gap,
-                    "send_from": send_from, **({"find": find} if find is not None else {})})
+                    "send_from": send_from, "time_to": until, "send_when": "last" if new.get("send_when") == "last" else "first",
+                    "gap_per_inbox": bool(new.get("gap_per_inbox")), **({"find": find} if find is not None else {})})
         if action == "on":
             err = autopilot.install(at)
             if err:
@@ -1271,9 +1275,12 @@ def autopilot_action(body: dict) -> tuple[dict, int]:
                 return {"error": err}, 400
             cfg["enabled"] = True
         autopilot.save_config(cfg)
-        sends = (f" It sends the batch itself, {gap:g} min apart{' from ' + send_from if send_from else ''}." if cfg["auto_send"]
+        per = " per inbox, taking turns" if cfg["gap_per_inbox"] and not send_from else ""
+        when = " after the search and list" if cfg["send_when"] == "last" else ""
+        sends = (f" It sends the batch itself{when}, {gap:g} min apart{per}{' from ' + send_from if send_from else ''}." if cfg["auto_send"]
                  else " It makes the batches; you press Send.")
-        return {"ok": True, "message": (f"Autopilot on: every day at {at}." + sends) if cfg.get("enabled") else "Saved."}, 200
+        start = f"at a random time between {at} and {until}" if until else f"at {at}"
+        return {"ok": True, "message": (f"Autopilot on: every day {start}." + sends) if cfg.get("enabled") else "Saved."}, 200
     if action == "off":
         err = autopilot.remove()
         cfg["enabled"] = False

@@ -136,7 +136,7 @@ def rivals_for_query(query: str, places_key: str, psi_key: str, outreach: Path, 
             firms.append({"name": name, "domain": d})
     from concurrent.futures import ThreadPoolExecutor
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
         for f, s in zip(firms, pool.map(lambda f: score(f["domain"], psi_key), firms)):
             f["score"] = s
     out = {"at": date.today().isoformat(), "query": query, "order": order, "firms": firms}

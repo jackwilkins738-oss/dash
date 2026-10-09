@@ -405,7 +405,7 @@ class PushRun(unittest.TestCase):
 
             push_prospects.main()
         out = buf.getvalue()
-        self.assertEqual(peak[0], 4, out)  # four at a time, never more
+        self.assertEqual(peak[0], min(8, push_prospects.TEARDOWN_WORKERS), out)  # in parallel, never more than the cap
         self.assertIn("55/100, 1 issue - worst: there's no enquiry form on your homepage", out)
         self.assertIn("broken.co.uk: check failed (RuntimeError)", out)
     def test_a_preview_page_without_its_speed_check_gets_one(self):

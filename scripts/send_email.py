@@ -47,6 +47,7 @@ TEMPLATES = "email-templates.json"
 DAILY_CAP = 100  # first emails + follow-ups per inbox in one day, whatever the batch sizes say
 GAP_SECONDS = (40, 90)  # the default spacing when no "minutes apart" is chosen
 MAX_GAP_MINUTES = 60
+ANY_GAP = (5, 15)  # with a gap per inbox: inboxes send side by side, just never in the very same seconds
 
 
 def gap_range(minutes: float | None) -> tuple[float, float]:
@@ -327,7 +328,8 @@ def bounce_problem(outreach: Path, today: date) -> str:
 
 
 def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp=None, sleep=time.sleep,
-               today: date | None = None, out=print, gap_minutes: float | None = None, only_from: str = "") -> int:
+               today: date | None = None, out=print, gap_minutes: float | None = None, only_from: str = "",
+               per_inbox: bool = False, clock=time.monotonic) -> int:
     """Sends the waiting batch; returns how many were sent. Raises SendStopped on a run-ending problem."""
     today = today or date.today()
     your_name = os.environ.get("MAIL_FROM_NAME", "").strip()
@@ -424,7 +426,20 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
         if chosen:
             return chosen if used[chosen.address] < DAILY_CAP else None
         free = [a for a in inboxes if used[a.address] < DAILY_CAP]
+        if per_inbox:  # the inbox that's free soonest, so every one keeps its own gap
+            return min(free, key=lambda a: (ready.get(a.address, 0.0), used[a.address])) if free else None
         return min(free, key=lambda a: used[a.address]) if free else None
+
+    # "Gap per inbox": each inbox waits its own gap between its emails, and the inboxes take turns - so four
+    # inboxes 6 minutes apart send about four emails every 6 minutes, never two within ANY_GAP seconds.
+    ready: dict[str, float] = {}
+    last_any = [None]
+
+    def wait_turn(inbox: mail_accounts.Account) -> None:
+        now = clock()
+        due = max(ready.get(inbox.address, now), (last_any[0] + random.uniform(*ANY_GAP)) if last_any[0] is not None else now)
+        if due > now:
+            sleep(due - now)
 
     me = main_inbox.address
     sent = 0
@@ -450,6 +465,8 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
             if inbox is None:
                 out(f"[{i + 1}/{len(todo)}] {business}: waits for tomorrow - its inbox has reached today's {DAILY_CAP}.")
                 continue
+            if per_inbox and not test:
+                wait_turn(inbox)
             to = me if test else email
             if test:
                 subject = f"[TEST to yourself - would go to {email}{', version ' + variant if has_variant_b(templates) and variant else ''}] {subject}"
@@ -473,7 +490,10 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
                 eb.record_sent(outreach, row, batch_file.name, today, msg["Message-ID"], subject, variant, inbox.address)
             sent += 1
             out(f"[{i + 1}/{len(todo)}] sent to {business} ({email})" + (f" from {inbox.address}" if len(inboxes) > 1 else ""))
-            if i < len(todo) - 1:
+            if per_inbox:
+                ready[inbox.address] = clock() + random.uniform(*gap_range(gap_minutes))
+                last_any[0] = clock()
+            elif i < len(todo) - 1:
                 sleep(random.uniform(*gap_range(gap_minutes)))
     finally:
         for c in [smtp] if smtp is not None else conns.values():
@@ -572,16 +592,20 @@ def main() -> None:
     ap.add_argument("--gap-minutes", type=float, default=0,
                     help=f"spread the emails this many minutes apart (varied a little each time; up to {MAX_GAP_MINUTES}). "
                          "Leave out for 40-90 seconds")
+    ap.add_argument("--gap-per-inbox", action="store_true",
+                    help="the gap is per inbox: the inboxes take turns, each waiting its own gap between its emails")
     args = ap.parse_args()
     outreach = eb.outreach_dir()
     what = "follow-ups" if args.followups else "emails"
     if not args.test:
         waiting = len(eb._rows(outreach / (eb.FOLLOWUP_PENDING if args.followups else eb.PENDING))[1])
-        print(f"Sending the waiting {what}, {describe_gap(args.gap_minutes, waiting)}. "
+        how = (f"each inbox about {args.gap_minutes:g} min apart, taking turns" if args.gap_per_inbox and args.gap_minutes
+               else describe_gap(args.gap_minutes, waiting))
+        print(f"Sending the waiting {what}, {how}. "
               "Stop any time - pressing Send again carries on.", flush=True)
     try:
         n = send_batch(outreach, followups=args.followups, test=args.test, out=lambda s: print(s, flush=True),
-                       gap_minutes=args.gap_minutes, only_from=args.only_from)
+                       gap_minutes=args.gap_minutes, only_from=args.only_from, per_inbox=args.gap_per_inbox)
     except SendStopped as e:
         sys.exit(str(e))
     if not args.test:

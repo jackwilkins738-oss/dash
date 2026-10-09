@@ -89,6 +89,9 @@ AGE_BANDS = {
 }
 
 DEFAULT_EXCLUDE = "holdings, investments, estates, lettings, capital, finance"
+# Firms worked on at once while finding websites, emails and phones - mostly waiting on their sites. (The
+# Companies House calls among them share one throttle at the register's own limit, whatever this is.)
+FIRM_WORKERS = 12
 
 # ---------------------------------------------------------------- register search
 
@@ -671,12 +674,12 @@ def main(argv: list[str] | None = None) -> None:
                     write_workbook(out, rows)
 
     try:
-        with ThreadPoolExecutor(max_workers=6) as pool:
+        with ThreadPoolExecutor(max_workers=FIRM_WORKERS) as pool:
             pending = {}
             queue = iter(keep)
             while True:
-                # Keep six firms in flight; stop starting new ones once there are enough.
-                while len(pending) < 6 and len(rows) < args.max:
+                # Keep FIRM_WORKERS firms in flight; stop starting new ones once there are enough.
+                while len(pending) < FIRM_WORKERS and len(rows) < args.max:
                     nxt = next(queue, None)
                     if nxt is None:
                         break

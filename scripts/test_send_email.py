@@ -212,6 +212,25 @@ class MultipleInboxes(SendEmail):
         self.assertEqual(list(self.by_inbox), ["jack@getscalar.co.uk"])
         self.assertTrue(all(r["sent_from"] == "jack@getscalar.co.uk" for r in read(self.out / eb.SENT)))
 
+    def test_gap_per_inbox_inboxes_take_turns_each_keeping_its_own_gap(self):
+        clock = [0.0]
+        sleeps = []
+
+        def sleep(seconds):
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        with mock.patch.object(se.random, "uniform", lambda lo, hi: lo):  # every gap its shortest: a fixed order to check
+            n = se.send_batch(self.out, sleep=sleep, today=TODAY, out=lambda s: None, gap_minutes=6, per_inbox=True,
+                              clock=lambda: clock[0])
+        self.assertEqual(n, 3)
+        rows = read(self.out / eb.SENT)
+        inboxes = [r["sent_from"] for r in rows]
+        self.assertEqual(inboxes[0], inboxes[2])  # the third email goes back to the first inbox...
+        self.assertNotEqual(inboxes[0], inboxes[1])  # ...after the other one took its turn
+        # 2nd email: only the few seconds kept between any two; 3rd: the first inbox's own gap (6 min, shortest 4.8)
+        self.assertEqual(sleeps, [5, 4.8 * 60 - 5])
+
     def test_send_from_an_unknown_inbox_stops_before_sending(self):
         with self.assertRaises(se.SendStopped):
             se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None, only_from="nobody@example.com")
