@@ -24,6 +24,34 @@ describe('teardownFindings', () => {
     assert.deepEqual(ids, ['tap-to-call', 'contact-form', 'local-schema', 'whatsapp'])
   })
 
+  it('puts the new, bigger problems first and replaces tap-to-call when there is no number at all', () => {
+    const ids = teardownFindings(
+      t({ checks: { tapToCall: false, phoneShown: false, mobileViewport: false, indexable: false, contactForm: false } }),
+      YEAR,
+    ).map((f) => f.id)
+    assert.deepEqual(ids, ['noindex', 'not-mobile', 'no-phone', 'contact-form'])
+  })
+
+  it('names heavy pages, slow servers and jumpy pages only past their thresholds', () => {
+    const f = teardownFindings(t({ pageWeightKb: 6200, imageSavingsKb: 3000, serverResponseMs: 2412, layoutShift100: 31 }), YEAR)
+    assert.deepEqual(f.map((x) => x.title), [
+      'Your homepage is 6.2 MB to download',
+      'Your server takes 2.4s to start answering',
+      'The page jumps about while it loads',
+    ])
+    assert.deepEqual(teardownFindings(t({ pageWeightKb: 1800, serverResponseMs: 400, layoutShift100: 5 }), YEAR), [])
+  })
+
+  it('leaves the reviews finding to the Google block when there is a rating', () => {
+    assert.equal(teardownFindings(t({ checks: { showsReviews: false } }), YEAR)[0].id, 'no-reviews')
+    assert.deepEqual(teardownFindings(t({ checks: { showsReviews: false }, google: { rating: 4.8, reviews: 40 } }), YEAR), [])
+  })
+
+  it('words photo descriptions and a free email address plainly', () => {
+    const ids = teardownFindings(t({ checks: { imageAlt: false, businessEmail: false } }), YEAR).map((f) => f.id)
+    assert.deepEqual(ids, ['image-alt', 'free-email'])
+  })
+
   it(`caps the list at ${MAX_FINDINGS}`, () => {
     const all = t({
       checks: {

@@ -19,21 +19,47 @@ class AnalyseHtml(unittest.TestCase):
         html = page(
             '<a href="tel:01483000000">Call</a><a href="https://wa.me/447700900000">WhatsApp</a>'
             '<form><input type="email" name="email"><textarea></textarea></form>',
-            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"RoofingContractor"}</script>',
+            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"RoofingContractor"}</script>'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
         )
         checks = analyse_html(html, "https://example.com/")["checks"]
         self.assertEqual(
             checks,
             {
                 "tapToCall": True,
+                "phoneShown": True,
                 "whatsapp": True,
                 "contactForm": True,
                 "showsReviews": False,
                 "localSchema": True,
+                "mobileViewport": True,
+                "indexable": True,
                 "https": True,
                 "secureAssets": True,
             },
         )
+
+    def test_phone_number_shown_or_not(self):
+        written = analyse_html(page("<p>Ring 01483 000 000 or 07700-900123</p>"), "https://example.com/")["checks"]
+        self.assertEqual((written["tapToCall"], written["phoneShown"]), (False, True))
+        self.assertTrue(analyse_html(page("<p>+44 (0)1483 000000</p>"), "https://example.com/")["checks"]["phoneShown"])
+        none = analyse_html(page("<p>Established 1985. Over 2000 roofs.</p>"), "https://example.com/")["checks"]
+        self.assertEqual((none["tapToCall"], none["phoneShown"]), (False, False))
+
+    def test_business_or_free_email(self):
+        gmail = analyse_html(page('<a href="mailto:jblroofing@gmail.com">Email us</a>'), "https://example.com/")["checks"]
+        self.assertFalse(gmail["businessEmail"])
+        own = analyse_html(page("<p>office@jblroofing.co.uk or jbl@hotmail.co.uk</p>"), "https://example.com/")["checks"]
+        self.assertTrue(own["businessEmail"])
+        self.assertNotIn("businessEmail", analyse_html(page("<p>No email here</p>"), "https://example.com/")["checks"])
+        self.assertNotIn("businessEmail", analyse_html(page('<img src="logo@2x.png">'), "https://example.com/")["checks"])
+
+    def test_phone_layout_and_noindex(self):
+        phone = '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        self.assertTrue(analyse_html(page("", phone), None)["checks"]["mobileViewport"])
+        self.assertFalse(analyse_html(page("", '<meta name="viewport" content="width=1024">'), None)["checks"]["mobileViewport"])
+        self.assertFalse(analyse_html(page("", '<meta name="robots" content="noindex, nofollow">'), None)["checks"]["indexable"])
+        self.assertTrue(analyse_html(page("", '<meta name="robots" content="index, follow">'), None)["checks"]["indexable"])
 
     def test_sees_reviews_on_the_homepage(self):
         for shown in ('<h2>What our customers say</h2><h3>Reviews</h3>', '<div class="trustindex-widget"></div>',
@@ -205,3 +231,34 @@ class PsiErrors(unittest.TestCase):
         self.assertIn("no DNS", psi_error(500, body("Lighthouse returned error: DNS_FAILURE. DNS servers could not resolve the provided domain.")))
         self.assertIn("certificate", psi_error(500, body("Lighthouse returned error: INSECURE_DOCUMENT_REQUEST.")))
         self.assertIn("never finished drawing", psi_error(500, body("Lighthouse returned error: NO_FCP.")))
+
+
+class GoogleTest(unittest.TestCase):
+    def test_reads_the_new_checks_and_numbers_from_googles_test(self):
+        import io
+        import json
+        from unittest import mock
+
+        import site_teardown
+
+        audits = {
+            "is-crawlable": {"score": 0, "scoreDisplayMode": "binary"},
+            "viewport": {"score": 1, "scoreDisplayMode": "binary"},
+            "image-alt": {"score": 0, "scoreDisplayMode": "binary"},
+            "server-response-time": {"numericValue": 2412.6},
+            "cumulative-layout-shift": {"numericValue": 0.314},
+            "total-byte-weight": {"numericValue": 6_200_000},
+        }
+        body = json.dumps({"lighthouseResult": {"categories": {"performance": {"score": 0.95}}, "audits": audits}}).encode()
+
+        class Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch.object(site_teardown.urllib.request, "urlopen", lambda *a, **k: Resp(body)):
+            out = site_teardown.run_pagespeed("https://example.com/", "key")
+        self.assertEqual(out["checks"], {"indexable": False, "mobileViewport": True, "imageAlt": False})
+        self.assertEqual((out["serverResponseMs"], out["layoutShift100"], out["pageWeightKb"]), (2413, 31, 6200))
