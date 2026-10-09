@@ -106,7 +106,9 @@ DEFAULT_TENANT = "abdc6408-1fd5-4fb6-9c4c-53600b571a6d"
 SKIP_STATUSES = {"Removed - parked / unsuitable", "Lost / not interested"}
 LETTER_COMPANY_TYPES = {"sole trader", "partnership", "none", "no record", "unsure"}
 EMAIL_RECHECK_DAYS = 30
-TEARDOWN_WORKERS = 4
+# Google's PageSpeed API allows 400 requests per 100 seconds; each check is one request that takes
+# 20-60s, so 10 at once stays far inside it while getting through a list about 2.5x faster.
+TEARDOWN_WORKERS = 10
 
 
 def slugify(text: str) -> str:
@@ -915,7 +917,7 @@ def main() -> None:
                     "checked_at": datetime.now(timezone.utc).isoformat()}
 
         added = {"email": 0, "phone": 0, "contact": 0}
-        with ThreadPoolExecutor(max_workers=6) as pool:
+        with ThreadPoolExecutor(max_workers=12) as pool:
             for i, (p, found) in enumerate(zip(todo, pool.map(contacts_for, todo)), 1):
                 contacts_found[p["website"]] = found
                 new = []
@@ -1020,8 +1022,7 @@ def main() -> None:
         from findings import all_issues
         from site_teardown import teardown  # same folder as this script
 
-        # Four at once: each check is mostly waiting on Google, and four stays
-        # well inside the PageSpeed API's limits.
+        # TEARDOWN_WORKERS at once: each check is mostly waiting on Google.
         print(f"Speed checking {len(selected)} sites, {TEARDOWN_WORKERS} at a time ...", flush=True)
         with ThreadPoolExecutor(max_workers=TEARDOWN_WORKERS) as pool:
             futures = {pool.submit(teardown, p["website"], psi_key): p for p in selected}
@@ -1122,7 +1123,7 @@ def main() -> None:
             print(f"{mm.name} is empty - nothing to check.")
             return
         print(f"Checking all {len(rows)} preview links in {mm.name} ...", flush=True)
-        with ThreadPoolExecutor(max_workers=8) as pool:
+        with ThreadPoolExecutor(max_workers=16) as pool:
             results = list(pool.map(lambda r: check_preview(r["preview_url"]), rows))
         problems = [why for why, _ in results]
         bad = [(r, why) for r, why in zip(rows, problems) if why]

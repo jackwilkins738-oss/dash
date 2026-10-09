@@ -49,6 +49,12 @@ DEFAULTS = {
     "enabled": False, "time": "07:30", "find": None, "batch_size": 20,
     "followups": True, "followup_size": 20, "followup_after_days": 5,
     "auto_send": False, "send_from": "", "send_gap": 5,
+    # A start somewhere between "time" and "time_to" (e.g. 05:00-07:00), a different minute each day; blank = exactly "time".
+    "time_to": "",
+    # Send straight after checking replies ("first"), or after today's search and list run ("last").
+    "send_when": "first",
+    # The gap is per inbox: the inboxes take turns, each waiting its own gap.
+    "gap_per_inbox": False,
 }
 
 
@@ -254,7 +260,21 @@ def send_args(cfg: dict) -> list[str]:
     except (TypeError, ValueError):
         gap = 0.0
     frm = str(cfg.get("send_from") or "").strip().lower()
-    return ([f"--gap-minutes={gap:g}"] if gap else []) + (["--from", frm] if frm else [])
+    per_inbox = bool(cfg.get("gap_per_inbox")) and gap and not frm
+    return ([f"--gap-minutes={gap:g}"] if gap else []) + (["--from", frm] if frm else []) + (["--gap-per-inbox"] if per_inbox else [])
+
+
+def start_delay(cfg: dict, rand=None) -> int:
+    """Seconds to wait before a scheduled run starts: a random moment between "time" and "time_to"."""
+    import random
+
+    at, until = str(cfg.get("time") or ""), str(cfg.get("time_to") or "")
+    if not (re.fullmatch(r"\d{2}:\d{2}", at) and re.fullmatch(r"\d{2}:\d{2}", until)):
+        return 0
+    span = (int(until[:2]) * 60 + int(until[3:])) - (int(at[:2]) * 60 + int(at[3:]))
+    if span <= 0:
+        return 0
+    return int((rand or random.uniform)(0, span * 60))
 
 
 def morning_send(r: "Run", cfg: dict, settings: dict) -> bool:
@@ -273,7 +293,7 @@ def morning_send(r: "Run", cfg: dict, settings: dict) -> bool:
     return True
 
 
-def run() -> int:
+def run(scheduled: bool = False, sleep=time.sleep) -> int:
     panel.OUTREACH.mkdir(exist_ok=True)
     if is_running():
         print("Autopilot is already running.")
@@ -283,6 +303,17 @@ def run() -> int:
     cfg = load_config()
     r = Run(panel.OUTREACH / "autopilot-log.txt")
     panel.keep_awake(True)
+    try:
+        wait = start_delay(cfg) if scheduled else 0
+        if wait:
+            start_at = datetime.fromtimestamp(time.time() + wait)
+            r.note(f"Scheduled run: starting at {start_at:%H:%M} (a random time between {cfg['time']} and {cfg['time_to']}).")
+            sleep(wait)  # keep_awake holds the PC awake through the wait
+    except BaseException:
+        panel.keep_awake(False)
+        lock.unlink(missing_ok=True)
+        r.log.close()
+        raise
     started = time.time()
     try:
         r.note(f"Autopilot started {datetime.now().strftime('%A %d %B %Y %H:%M')}")
@@ -300,7 +331,8 @@ def run() -> int:
 
         if settings.get("MAIL_ADDRESS"):
             r.step(panel.SENDING_HEALTH, [])  # before anything is sent: a blocklisting stops the send
-        sent_early = morning_send(r, cfg, settings)
+        send_last = cfg.get("send_when") == "last"
+        sent_early = False if send_last else morning_send(r, cfg, settings)
 
         new_sheet = None
         find = cfg.get("find") or {}
@@ -313,6 +345,10 @@ def run() -> int:
                 r.step(panel.FIND, args)
                 made = set(panel.sheets()) - before
                 new_sheet = max(made, key=lambda n: (panel.OUTREACH / n).stat().st_mtime) if made else None
+                if new_sheet and settings.get("ANTHROPIC_API_KEY"):
+                    # "Possible" websites confirmed (or ruled out) before the list runs, so more of today's
+                    # firms get a preview and an email instead of waiting on the Review tab.
+                    r.step(panel.SITE_CHECK, ["--sheet", new_sheet])
         else:
             r.note("No saved search - skipping new firms (save one on the panel's Autopilot card).")
 
@@ -325,6 +361,10 @@ def run() -> int:
                     continue  # once per run, not per list
                 r.step(script, args)
 
+        if send_last:
+            if settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD"):
+                r.step(panel.REPLIES, [])  # anyone who said no while the list ran is left out of the send
+            sent_early = morning_send(r, cfg, settings)
         if not sent_early:
             make_batches(r, cfg)
         r.sent_early = sent_early
@@ -391,7 +431,7 @@ def install(at: str) -> str:
     exe = Path(sys.executable)
     quiet = exe.with_name("pythonw.exe")
     runner = quiet if quiet.exists() else exe
-    command = f'"{runner}" "{Path(__file__).resolve()}"'
+    command = f'"{runner}" "{Path(__file__).resolve()}" --scheduled'
     res = subprocess.run(["schtasks", "/Create", "/F", "/SC", "DAILY", "/TN", TASK_NAME, "/TR", command, "/ST", at],
                          capture_output=True, text=True)
     return "" if res.returncode == 0 else (res.stderr or res.stdout).strip() or "Task Scheduler refused."
@@ -409,13 +449,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--install", action="store_true")
     ap.add_argument("--remove", action="store_true")
+    ap.add_argument("--scheduled", action="store_true", help="started by the daily schedule: wait for the random start")
     args = ap.parse_args()
     if args.install:
         err = install(load_config().get("time") or "07:30")
         sys.exit(err or 0)
     if args.remove:
         sys.exit(remove() or 0)
-    sys.exit(run())
+    sys.exit(run(scheduled=args.scheduled))
 
 
 if __name__ == "__main__":
