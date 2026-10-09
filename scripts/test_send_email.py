@@ -220,16 +220,16 @@ class MultipleInboxes(SendEmail):
             sleeps.append(seconds)
             clock[0] += seconds
 
-        n = se.send_batch(self.out, sleep=sleep, today=TODAY, out=lambda s: None, gap_minutes=6, per_inbox=True,
-                          clock=lambda: clock[0])
+        with mock.patch.object(se.random, "uniform", lambda lo, hi: lo):  # every gap its shortest: a fixed order to check
+            n = se.send_batch(self.out, sleep=sleep, today=TODAY, out=lambda s: None, gap_minutes=6, per_inbox=True,
+                              clock=lambda: clock[0])
         self.assertEqual(n, 3)
         rows = read(self.out / eb.SENT)
         inboxes = [r["sent_from"] for r in rows]
         self.assertEqual(inboxes[0], inboxes[2])  # the third email goes back to the first inbox...
         self.assertNotEqual(inboxes[0], inboxes[1])  # ...after the other one took its turn
-        # 2nd email: only the few seconds kept between any two; 3rd: the first inbox's own 6-minute (4.8-7.2) gap
-        self.assertTrue(5 <= sleeps[0] <= 15, sleeps)
-        self.assertTrue(4.8 * 60 <= sleeps[0] + sleeps[1] <= 7.2 * 60, sleeps)
+        # 2nd email: only the few seconds kept between any two; 3rd: the first inbox's own gap (6 min, shortest 4.8)
+        self.assertEqual(sleeps, [5, 4.8 * 60 - 5])
 
     def test_send_from_an_unknown_inbox_stops_before_sending(self):
         with self.assertRaises(se.SendStopped):
