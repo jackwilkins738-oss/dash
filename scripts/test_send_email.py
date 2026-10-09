@@ -134,7 +134,8 @@ class SendEmail(unittest.TestCase):
         msg = smtp.sent[0]
         self.assertEqual(msg["Subject"], "Re: Kerr Roofing - quick look at your website")
         self.assertEqual(msg["In-Reply-To"], first_id)
-        self.assertIn("Just following up", msg.get_content())
+        self.assertIn("Did the preview for Kerr Roofing come through OK?", msg.get_content())
+        self.assertNotIn("\n\n\n", msg.get_content())  # an empty issue line leaves no gap
         self.assertEqual(read(self.out / eb.SENT)[0]["followup_sent"], "2026-10-05")
 
     def test_the_closing_email_goes_once_in_the_same_thread(self):
