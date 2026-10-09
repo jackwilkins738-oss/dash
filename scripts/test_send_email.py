@@ -239,6 +239,13 @@ class MultipleInboxes(SendEmail):
         self.assertIn("waits for tomorrow - every inbox has sent today's 1", lines[-1])
         self.assertTrue((self.out / eb.PENDING).exists())  # the third stays waiting for tomorrow
 
+    def test_inbox_plan_only_the_chosen_inboxes_each_its_own_number(self):
+        n = se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None,
+                          inbox_plan={"Jack@GetScalar.co.uk": 2, "jack@scalar.co.uk": 0})
+        self.assertEqual(n, 2)
+        self.assertEqual([r["sent_from"] for r in read(self.out / eb.SENT)], ["jack@getscalar.co.uk"] * 2)
+        self.assertEqual(se.parse_plan("a@x.co.uk=25, b@y.co.uk=15,junk,c@z=x"), {"a@x.co.uk": 25, "b@y.co.uk": 15})
+
     def test_send_from_an_unknown_inbox_stops_before_sending(self):
         with self.assertRaises(se.SendStopped):
             se.send_batch(self.out, sleep=self.sleeps.append, today=TODAY, out=lambda s: None, only_from="nobody@example.com")

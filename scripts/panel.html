@@ -212,6 +212,7 @@
       <div class="grid2">
         <div><label for="ap-time">Start between</label><div class="row" style="margin:0"><input type="text" id="ap-time" value="07:30" style="width:70px"> and <input type="text" id="ap-time-to" placeholder="(exactly)" style="width:80px"></div></div>
         <div><label for="ap-per-inbox-n">Emails per inbox a day</label><div class="row" style="margin:0"><input type="number" id="ap-per-inbox-n" min="0" max="100" placeholder="0 = off" style="width:80px"><span class="hint" id="ap-target"></span></div></div>
+        <div style="grid-column:1/-1"><label>Each inbox, today <span class="hint">- set a number per inbox (0 = that inbox sends no first emails; its follow-ups still go from it). Typing in "Emails per inbox" fills them all.</span></label><div id="ap-plan"></div></div>
         <div><label for="ap-batch">Emails a day (when per inbox is 0)</label><input type="number" id="ap-batch" value="20" min="1" max="500"></div>
       </div>
       <label class="check"><input type="checkbox" id="ap-followups" checked> Also follow-ups after <input type="number" id="ap-fdays" value="5" min="1" max="60" style="width:52px"> days, up to <input type="number" id="ap-fsize" value="20" min="1" max="500" style="width:60px"></label>
@@ -1026,7 +1027,10 @@ async function loadAutopilot() {
   const c = r.config || {};
   $("ap-time").value = c.time || "07:30"; $("ap-time-to").value = c.time_to || ""; $("ap-batch").value = c.batch_size || 20;
   $("ap-when").value = c.send_when || "first"; $("ap-per-inbox").checked = !!c.gap_per_inbox;
-  $("ap-per-inbox-n").value = c.per_inbox || ""; apTarget();
+  $("ap-per-inbox-n").value = c.per_inbox || "";
+  apPlanSaved = c.inbox_plan && Object.keys(c.inbox_plan).length ? c.inbox_plan
+    : Object.fromEntries(apInboxes().map((a) => [a, c.per_inbox || ""]));
+  apPlanRows();
   $("ap-followups").checked = c.followups !== false; $("ap-fdays").value = c.followup_after_days || 5; $("ap-fsize").value = c.followup_size || 20;
   $("ap-send").checked = !!c.auto_send; $("ap-gap").value = c.send_gap ?? 5;
   $("ap-from").dataset.want = c.send_from || "";
@@ -1042,18 +1046,41 @@ async function loadAutopilot() {
   $("ap-last").textContent = r.last || "";
   if (!r.windows) $("ap-on").title = "Scheduling needs Windows";
 }
-// "20 per inbox x 4 inboxes = 80 a day": the inboxes are the send-from list's options (bar "All inboxes").
-function apTarget() {
-  const n = Number($("ap-per-inbox-n").value) || 0;
-  const inboxes = $("ap-from").value ? 1 : Math.max(1, [...$("send-from").options].filter((o) => o.value).length);
-  $("ap-target").textContent = n ? `x ${inboxes} inbox${inboxes === 1 ? "" : "es"} = ${n * inboxes} a day - the search finds only what's missing` : "";
+// The inboxes are the send-from list's options (bar "All inboxes"). Each gets its own number for the day;
+// "Emails per inbox" fills them all; the total is today's target.
+let apPlanSaved = {};
+function apInboxes() { return [...$("send-from").options].map((o) => o.value).filter(Boolean); }
+function apPlanRows() {
+  const box = $("ap-plan");
+  document.querySelectorAll("#ap-plan [data-plan]").forEach((i) => { apPlanSaved[i.dataset.plan] = i.value; });  // keep what's typed
+  const inboxes = apInboxes();
+  if (!inboxes.length) { box.innerHTML = '<p class="hint">Your inboxes appear here once they\'re in Settings.</p>'; return; }
+  box.innerHTML = inboxes.map((a) => `<div class="row" style="margin:2px 0"><input type="number" min="0" max="100" data-plan="${esc(a)}" value="${esc(String(apPlanSaved[a] ?? ""))}" placeholder="0" style="width:70px"> <span>${esc(a)}</span></div>`).join("");
+  apTarget();
 }
-document.addEventListener("input", (e) => { if (e.target.id === "ap-per-inbox-n") apTarget(); });
+function apPlan() {
+  const plan = {};
+  document.querySelectorAll("#ap-plan [data-plan]").forEach((i) => { const n = Number(i.value) || 0; if (n > 0) plan[i.dataset.plan] = n; });
+  return plan;
+}
+function apTarget() {
+  const plan = apPlan();
+  const total = Object.values(plan).reduce((a, b) => a + b, 0);
+  const used = Object.keys(plan).length;
+  $("ap-target").textContent = total ? `${used} inbox${used === 1 ? "" : "es"}, ${total} a day - the search finds only what's missing` : "";
+}
+document.addEventListener("input", (e) => {
+  if (e.target.id === "ap-per-inbox-n") {
+    document.querySelectorAll("#ap-plan [data-plan]").forEach((i) => { i.value = e.target.value; });
+    apTarget();
+  }
+  if (e.target.dataset && e.target.dataset.plan !== undefined) apTarget();
+});
 document.addEventListener("change", (e) => { if (e.target.id === "ap-from") apTarget(); });
 async function saveAutopilot(action) {
   if (action === "on" && $("ap-send").checked && !confirm("Turn on automatic sending? Each day at " + $("ap-time").value + ($("ap-time-to").value ? "-" + $("ap-time-to").value : "") + " the autopilot will email today's batch without you pressing Send.")) return;
   const config = { time: $("ap-time").value.trim(), time_to: $("ap-time-to").value.trim(), send_when: $("ap-when").value,
-    gap_per_inbox: $("ap-per-inbox").checked, per_inbox: $("ap-per-inbox-n").value, batch_size: $("ap-batch").value, followups: $("ap-followups").checked,
+    gap_per_inbox: $("ap-per-inbox").checked, per_inbox: $("ap-per-inbox-n").value, inbox_plan: apPlan(), batch_size: $("ap-batch").value, followups: $("ap-followups").checked,
     auto_send: $("ap-send").checked, send_gap: $("ap-gap").value, send_from: $("ap-from").value,
     followup_after_days: $("ap-fdays").value, followup_size: $("ap-fsize").value, ...(apSearch ? { find: apSearch } : {}) };
   const r = await post("/api/autopilot", { action, config });
@@ -1288,6 +1315,7 @@ function fillSendFrom(settings) {
   const ap = $("ap-from"), want = ap.dataset.want ?? ap.value;
   ap.innerHTML = sel.innerHTML;
   ap.value = addrs.includes(want) ? want : "";
+  apPlanRows();
 }
 $("send-from").addEventListener("change", () => { try { localStorage.setItem("send-from", $("send-from").value); } catch (e) {} });
 // "Min apart" for sending is remembered on this PC between visits.
