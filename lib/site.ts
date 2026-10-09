@@ -20,7 +20,7 @@ export const SITE = {
 // (a date that changes on every build tells Google to ignore it).
 export const UPDATED = '2026-09-24'
 
-export const PRICES = { landing: 750, build: 2500, dashboardMonthly: 39 } as const
+export const PRICES = { landing: 750, build: 2500, dashboardMonthly: 39, growthMonthly: 149 } as const
 
 // Founding clients: the first Scalar builds get extras in return for a case study. When one signs,
 // raise `taken` and redeploy - the offer shows the places left, and disappears once none are.

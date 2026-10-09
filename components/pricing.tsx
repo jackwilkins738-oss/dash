@@ -73,6 +73,37 @@ export function Pricing() {
           />
         </Reveal>
 
+        <Reveal className="mt-10">
+          <h3 className="font-display text-xl font-bold tracking-tight sm:text-2xl">After launch: optional monthly plans</h3>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            Your site is yours either way. These keep it working for you, and you can stop any month.
+          </p>
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <PlanCard
+              name="Care"
+              price={PRICES.dashboardMonthly}
+              note="Free for your first 12 months with the Scalar build"
+              items={[
+                'Your private dashboard: enquiries, quotes, jobs and invoices',
+                'Your site checked every hour, and fixed if it goes down',
+                'Review requests sent to customers automatically after each job',
+                'A monthly report: visits, calls, enquiries and work won',
+              ]}
+            />
+            <PlanCard
+              name="Growth"
+              price={PRICES.growthMonthly}
+              note="Everything in Care, plus:"
+              items={[
+                'Every finished job written up as its own page on your site, from your photos, live once you OK it',
+                'A matching post for your Google Business Profile with each one',
+                'A ready-to-post reply to any Google review, good or bad, in seconds',
+                'Your report shows what the new pages brought in',
+              ]}
+            />
+          </div>
+        </Reveal>
+
         <Reveal className="mt-6">
           <FoundingOffer href="/contact?founding=1" />
         </Reveal>
@@ -85,6 +116,29 @@ export function Pricing() {
         </Reveal>
       </div>
     </section>
+  )
+}
+
+function PlanCard({ name, price, note, items }: { name: string; price: number; note: string; items: string[] }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card/40 p-6 sm:p-8">
+      <div className="flex items-end justify-between gap-3">
+        <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">{name}</span>
+        <span>
+          <span className="text-3xl font-bold tracking-tight">£{price}</span>
+          <span className="ml-1 font-mono text-xs uppercase tracking-[0.15em] text-muted-foreground">a month</span>
+        </span>
+      </div>
+      <p className="mt-3 text-sm text-muted-foreground">{note}</p>
+      <ul className="mt-4 space-y-3">
+        {items.map((f) => (
+          <li key={f} className="flex items-start gap-3 text-sm text-foreground/90">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-blueprint" strokeWidth={2.5} />
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
