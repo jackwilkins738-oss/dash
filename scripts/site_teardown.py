@@ -10,9 +10,14 @@ owner can verify for themselves:
      how much image weight could be saved, total page weight.
      (Not its HTTPS audit: that also fails on a secure site that loads one
      file over http://, which is a different problem - see secureAssets.)
-  2. The public HTML of their homepage: a tap-to-call link, a WhatsApp link,
-     an enquiry form, local business structured data, the copyright year in
-     the footer, and the platform it's built on.
+     Also: whether Google is allowed to list the page, photo descriptions (alt
+     text), how long their server takes to answer, and how much the page jumps
+     about while it loads.
+  2. The public HTML of their homepage: a tap-to-call link, a phone number at
+     all, a WhatsApp link, an enquiry form, reviews, a phone-sized layout
+     (viewport), a "don't list me" tag, the email address they show (their own
+     domain or Gmail/Hotmail), local business structured data, the copyright
+     year in the footer, and the platform it's built on.
 
 The rule throughout: when in doubt, leave it out. A page that's mostly built
 in the browser (little text in the raw HTML) doesn't get the link/form checks
@@ -150,6 +155,9 @@ def run_pagespeed(url: str, api_key: str, timeout: int = 180) -> dict:
         ("tapTargets", ("tap-targets", "target-size")),
         ("pageTitle", ("document-title",)),
         ("metaDescription", ("meta-description",)),
+        ("indexable", ("is-crawlable",)),
+        ("mobileViewport", ("viewport",)),
+        ("imageAlt", ("image-alt",)),
     ):
         result = _audit_pass(audits, *ids)
         if result is not None:
@@ -168,6 +176,15 @@ def run_pagespeed(url: str, api_key: str, timeout: int = 180) -> dict:
     weight = (audits.get("total-byte-weight") or {}).get("numericValue")
     if isinstance(weight, (int, float)):
         out["pageWeightKb"] = round(weight / 1000)
+
+    # How long their server takes to start answering (cheap or overloaded hosting shows here), and how
+    # much the page jumps about while loading (layout shift, x100 so it stays a whole number).
+    ttfb = (audits.get("server-response-time") or {}).get("numericValue")
+    if isinstance(ttfb, (int, float)):
+        out["serverResponseMs"] = round(ttfb)
+    cls = (audits.get("cumulative-layout-shift") or {}).get("numericValue")
+    if isinstance(cls, (int, float)):
+        out["layoutShift100"] = round(cls * 100)
 
     # The real thing, not an animation: frames of their site loading on Google's test phone, and
     # how it looks once it has - for the preview page. Only for slow sites (that's the story they
@@ -308,6 +325,26 @@ def same_origin_scripts(html: str, base_url: str, limit: int = 6) -> list[str]:
     return bodies
 
 
+# A UK phone number written on the page: 01/02/03 landlines and 07 mobiles, +44 or 0, any spacing.
+UK_PHONE = re.compile(r"(?:\+44\s?(?:\(0\)\s?)?|\b0)[1237](?:[\s.-]?\d){8,9}\b")
+EMAIL = re.compile(r"(?:mailto:)?([A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+))", re.I)
+FREE_MAIL = {"gmail.com", "googlemail.com", "hotmail.com", "hotmail.co.uk", "outlook.com", "live.co.uk", "live.com", "yahoo.com",
+             "yahoo.co.uk", "btinternet.com", "aol.com", "aol.co.uk", "icloud.com", "me.com", "sky.com", "talktalk.net",
+             "virginmedia.com", "ntlworld.com", "msn.com", "mail.com", "tiscali.co.uk", "blueyonder.co.uk"}
+
+
+def visible_text(html: str) -> str:
+    stripped = re.sub(r"<(script|style|noscript|svg)\b.*?</\1>", " ", html, flags=re.I | re.S)
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", stripped)).strip()
+
+
+def contact_emails(html: str) -> list[str]:
+    """The email addresses the homepage shows or links to (not script or image names)."""
+    found = {m.group(1).lower() for m in EMAIL.finditer(visible_text(html))}
+    found |= {m.lower() for m in re.findall(r"mailto:\s*([^\"'?>\s]+@[^\"'?>\s]+)", html, re.I)}
+    return sorted(e for e in found if not re.search(r"\.(png|jpe?g|gif|webp|svg)$|example\.|sentry|wixpress|@2x", e))
+
+
 REVIEWS_SHOWN = re.compile(
     r"aggregaterating|trustindex|elfsight|reviews\.io|trustpilot|featurable|reviewsonmywebsite|grwapi|"
     r"google-reviews|googlereviews|widget\.checkatrade|checkatrade\.com/[^\"']*(?:widget|badge)|ratedpeople\.com/[^\"']*widget|"
@@ -340,8 +377,21 @@ def analyse_html(html: str, final_url: str | None, script_bodies: list[str] | No
         # Reviews on the homepage: a review widget, rating markup, a row of stars, or a Reviews /
         # Testimonials heading or link. Only "none of these anywhere" counts as not showing them.
         checks["showsReviews"] = bool(REVIEWS_SHOWN.search(html) or REVIEWS_SHOWN.search(scripts))
+        # A number written anywhere they'd see it - "no phone number at all" is a bigger problem than "not tappable".
+        checks["phoneShown"] = checks["tapToCall"] or bool(UK_PHONE.search(visible_text(html)))
+        # The address they give customers: their own domain, or only a Gmail/Hotmail-type one. No address, no verdict.
+        emails = contact_emails(html)
+        if emails:
+            checks["businessEmail"] = any(e.split("@", 1)[1] not in FREE_MAIL for e in emails)
 
     checks["localSchema"] = any(LOCAL_TYPES.search(t) for t in _ld_types(html))
+
+    # Made for phones at all: without a viewport tag a phone shows the desktop page shrunk to fit.
+    checks["mobileViewport"] = bool(re.search(r"<meta[^>]+name\s*=\s*[\"']?viewport[^>]*width\s*=\s*device-width", html, re.I)
+                                    or re.search(r"<meta[^>]+width\s*=\s*device-width[^>]*name\s*=\s*[\"']?viewport", html, re.I))
+    # "Don't list me": a noindex robots tag on the homepage keeps it out of Google altogether.
+    robots = re.findall(r"<meta[^>]+name\s*=\s*[\"']?(?:robots|googlebot)[\"']?[^>]*>", html, re.I)
+    checks["indexable"] = not any(re.search(r"content\s*=\s*[\"'][^\"']*noindex", tag, re.I) for tag in robots)
 
     year = copyright_year(html)
     if year is not None:

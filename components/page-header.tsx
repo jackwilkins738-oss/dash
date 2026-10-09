@@ -63,9 +63,11 @@ export function PageHeader({ eyebrow, title, body, compact = false, actions }: P
 export function HeaderActions({
   secondary,
   primaryHref = '/contact',
+  primaryLabel = 'Start your build',
 }: {
   secondary?: { href: string; label: string }
   primaryHref?: string
+  primaryLabel?: string
 }) {
   return (
     <>
@@ -75,7 +77,7 @@ export function HeaderActions({
           data-magnetic
           className="btn-chamfer btn-sheen group inline-flex items-center justify-center gap-2 bg-blueprint px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
         >
-          Start your build
+          {primaryLabel}
           <span className="transition-transform group-hover:translate-x-1">&rarr;</span>
         </Link>
         {secondary ? (

@@ -24,6 +24,7 @@ import { LoadFilmstrip } from '@/components/load-filmstrip'
 import { PRICES } from '@/lib/site'
 import { reviewsView, rivalsView, stars, videoSrc } from '@/lib/preview-extras'
 import { SITE } from '@/lib/site'
+import { heroPitch, reportTiles } from '@/lib/preview-pitch'
 
 // A private page for one business Scalar is reaching out to: their real
 // Google speed score next to a concept of what a Scalar build would look
@@ -100,6 +101,21 @@ export default async function ProspectPreviewPage({ params }: Props) {
   // Their measured score and findings show even if the dashboard lost the web address - "your website" stands in.
   const siteName = p.website ?? 'your website'
   const video = videoSrc(p.video_url)
+  const pitch = heroPitch({
+    business: p.business_name,
+    site: p.website,
+    score: p.mobile_score,
+    lcp: p.lcp_s,
+    rivalsAhead: rivals?.ahead ?? 0,
+    findings: findings.length,
+  })
+  const tiles = reportTiles({
+    score: p.mobile_score,
+    lcp: p.lcp_s,
+    findings: findings.length,
+    mapsPosition: rivals?.position,
+    mapsQuery: rivals?.query,
+  })
   const checkedOn = checkedAt
     ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).format(checkedAt)
     : null
@@ -114,17 +130,39 @@ export default async function ProspectPreviewPage({ params }: Props) {
       </div>
       <PageHeader
         eyebrow={`Prepared for ${p.business_name}`}
-        title={slow ? `A faster, sharper website for ${p.business_name}.` : `A sharper website for ${p.business_name}.`}
-        body={`A concept of a Scalar build for ${tradePhrase(p)}${
-          p.website ? `, next to where ${p.website} stands on Google’s own speed test today` : ''
-        }. Nothing to sign up for — have a look around.`}
+        title={pitch.title}
+        body={pitch.body}
         actions={
           <HeaderActions
-            primaryHref={contactHref}
+            primaryHref="#reply"
+            primaryLabel="Yes, I want this"
             secondary={video ? { href: '#video', label: 'Watch my walkthrough' } : { href: '#preview', label: 'See the preview' }}
           />
         }
       />
+      {tiles.length > 0 && (
+        <section aria-label="Your site at a glance" className="pb-4">
+          <div className="mx-auto grid max-w-6xl grid-cols-2 gap-3 px-5 sm:px-8 lg:grid-cols-4">
+            {tiles.map((t) => (
+              <div
+                key={t.label}
+                className={`rounded-2xl border p-4 sm:p-5 ${
+                  t.tone === 'bad' ? 'border-destructive/40 bg-destructive/5' : t.tone === 'warn' ? 'border-amber-300/40 bg-amber-300/5' : 'border-emerald-400/40 bg-emerald-400/5'
+                }`}
+              >
+                <p
+                  className={`font-mono text-3xl font-bold tabular-nums sm:text-4xl ${
+                    t.tone === 'bad' ? 'text-destructive' : t.tone === 'warn' ? 'text-amber-300' : 'text-emerald-400'
+                  }`}
+                >
+                  {t.value}
+                </p>
+                <p className="mt-1 text-xs leading-snug text-muted-foreground sm:text-sm">{t.label}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       {video && <PreviewVideo src={video} firmName={p.business_name} />}
 
       <section id="preview" className="scroll-mt-20 py-20 sm:py-24">
@@ -186,6 +224,53 @@ export default async function ProspectPreviewPage({ params }: Props) {
         </div>
       </section>
 
+      {findings.length > 0 && (
+        <section id="findings" className="scroll-mt-20 border-t border-border py-20 sm:py-24">
+          <div className="mx-auto max-w-4xl px-5 sm:px-8">
+            <Reveal>
+              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
+                What we found
+              </span>
+              <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+                {findings.length === 1 ? 'One thing' : `${findings.length} things`} on {siteName} that could be losing you enquiries.
+              </h2>
+              <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
+                Checked on {checkedOn} with Google&apos;s own mobile test and a look at your public homepage
+                {passes > 0 ? ` — ${passes} other check${passes === 1 ? '' : 's'} came back fine` : ''}. Each of these
+                is something you can see for yourself.
+              </p>
+              <PrintButton className="mt-4" />
+            </Reveal>
+
+            <Reveal stagger className="mt-10 divide-y divide-border border-y border-border">
+              {findings.map((f, i) => (
+                <div key={f.id} className="grid gap-3 py-7 sm:grid-cols-[3rem_1fr] sm:gap-6">
+                  <span className="font-mono text-sm text-blueprint">{String(i + 1).padStart(2, '0')}</span>
+                  <div>
+                    <h3 className="font-display text-lg font-semibold sm:text-xl">{f.title}</h3>
+                    <p className="mt-2 text-pretty leading-relaxed text-muted-foreground">{f.detail}</p>
+                    <p className="mt-3 flex items-start gap-2 text-sm text-foreground/90">
+                      <span className="mt-0.5 font-mono text-blueprint" aria-hidden="true">
+                        &rarr;
+                      </span>
+                      <span>
+                        <span className="font-semibold">In a Scalar build:</span> {f.fix}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </Reveal>
+          </div>
+        </section>
+      )}
+
+      <section id="reply" className="scroll-mt-20 border-t border-border py-16 sm:py-20">
+        <div className="mx-auto max-w-3xl px-5 sm:px-8">
+          <QuickReply slug={p.slug} firmName={p.business_name} />
+        </div>
+      </section>
+
       {(rivals || reviews) && (
         <section id="google" className="scroll-mt-20 border-t border-border py-20 sm:py-24">
           <div className="mx-auto max-w-6xl px-5 sm:px-8">
@@ -193,7 +278,9 @@ export default async function ProspectPreviewPage({ params }: Props) {
               <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">You on Google</span>
               <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
                 {rivals
-                  ? `${rivals.ahead === 1 ? 'One firm' : `${rivals.ahead} firms`} near the top of Google Maps ${rivals.ahead === 1 ? 'loads' : 'load'} faster than you.`
+                  ? pitch.kind === 'rivals'
+                    ? 'Who you’re up against on Google Maps.'
+                    : `${rivals.ahead === 1 ? 'One firm' : `${rivals.ahead} firms`} near the top of Google Maps ${rivals.ahead === 1 ? 'loads' : 'load'} faster than you.`
                   : 'Your reviews are doing half the job.'}
               </h2>
             </Reveal>
@@ -292,11 +379,6 @@ export default async function ProspectPreviewPage({ params }: Props) {
         </section>
       )}
 
-      <section id="reply" className="scroll-mt-20 border-t border-border py-16 sm:py-20">
-        <div className="mx-auto max-w-3xl px-5 sm:px-8">
-          <QuickReply slug={p.slug} firmName={p.business_name} />
-        </div>
-      </section>
 
       {showRace && (
         <PreviewRace
@@ -308,47 +390,6 @@ export default async function ProspectPreviewPage({ params }: Props) {
           scalarMeasuredOn={SCALAR_BUILD.measuredOn}
           copy={raceCopy}
         />
-      )}
-
-      {findings.length > 0 && (
-        <section id="findings" className="scroll-mt-20 border-t border-border py-20 sm:py-24">
-          <div className="mx-auto max-w-4xl px-5 sm:px-8">
-            <Reveal>
-              <span className="draft-rule font-mono text-[11px] uppercase tracking-[0.25em] text-blueprint">
-                What we found
-              </span>
-              <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-                {findings.length === 1 ? 'One thing' : `${findings.length} things`} on {siteName} worth fixing.
-              </h2>
-              <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
-                Checked on {checkedOn} with Google&apos;s own mobile test and a look at your public homepage
-                {passes > 0 ? ` — ${passes} other check${passes === 1 ? '' : 's'} came back fine` : ''}. Each of these
-                is something you can see for yourself.
-              </p>
-              <PrintButton className="mt-4" />
-            </Reveal>
-
-            <Reveal stagger className="mt-10 divide-y divide-border border-y border-border">
-              {findings.map((f, i) => (
-                <div key={f.id} className="grid gap-3 py-7 sm:grid-cols-[3rem_1fr] sm:gap-6">
-                  <span className="font-mono text-sm text-blueprint">{String(i + 1).padStart(2, '0')}</span>
-                  <div>
-                    <h3 className="font-display text-lg font-semibold sm:text-xl">{f.title}</h3>
-                    <p className="mt-2 text-pretty leading-relaxed text-muted-foreground">{f.detail}</p>
-                    <p className="mt-3 flex items-start gap-2 text-sm text-foreground/90">
-                      <span className="mt-0.5 font-mono text-blueprint" aria-hidden="true">
-                        &rarr;
-                      </span>
-                      <span>
-                        <span className="font-semibold">In a Scalar build:</span> {f.fix}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </Reveal>
-          </div>
-        </section>
       )}
 
       {/* Ready to go ahead: the package picked, so the reply is a quote, not a question. */}

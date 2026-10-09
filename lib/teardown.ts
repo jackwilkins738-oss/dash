@@ -24,7 +24,12 @@ export type Teardown = {
       | 'metaDescription'
       | 'https'
       | 'secureAssets'
-      | 'showsReviews',
+      | 'showsReviews'
+      | 'phoneShown'
+      | 'mobileViewport'
+      | 'indexable'
+      | 'imageAlt'
+      | 'businessEmail',
       boolean
     >
   >
@@ -44,6 +49,10 @@ export type Teardown = {
   screenshot?: string
   imageSavingsKb?: number
   pageWeightKb?: number
+  /** How long their server took to start answering Google's test, in ms. */
+  serverResponseMs?: number
+  /** How much the page jumps about while loading (Google's layout shift, x100). */
+  layoutShift100?: number
   copyrightYear?: number
   platform?: 'wordpress' | 'wix' | 'squarespace' | 'godaddy' | 'webflow' | 'weebly' | 'duda' | 'shopify'
   wpPluginCount?: number
@@ -76,6 +85,12 @@ export type Finding = { id: string; title: string; detail: string; fix: string }
 
 export const MAX_FINDINGS = 6
 
+// The same thresholds as scripts/findings.py: a homepage over 4 MB, a server slower than 1.8s to
+// answer (Google's target is 0.6s), and layout shift past Google's "poor" line (0.25).
+export const HEAVY_PAGE_KB = 4000
+export const SLOW_SERVER_MS = 1800
+export const JUMPY_PAGE = 25
+
 const PLATFORM_NAMES: Record<NonNullable<Teardown['platform']>, string> = {
   wordpress: 'WordPress',
   wix: 'Wix',
@@ -99,7 +114,30 @@ export function teardownFindings(t: Teardown | null | undefined, currentYear: nu
   const c = t.checks
   const out: Finding[] = []
 
-  if (c.tapToCall === false) {
+  if (c.indexable === false) {
+    out.push({
+      id: 'noindex',
+      title: 'Your homepage tells Google not to list it',
+      detail: 'There’s a “noindex” instruction in the page, so Google leaves it out of search results altogether.',
+      fix: 'Every page built to be found, checked before launch.',
+    })
+  }
+  if (c.mobileViewport === false) {
+    out.push({
+      id: 'not-mobile',
+      title: 'Your site isn’t set up for phones',
+      detail: 'A phone shows the desktop page shrunk down, so visitors have to pinch and zoom to read anything.',
+      fix: 'Designed for a phone first, then scaled up for bigger screens.',
+    })
+  }
+  if (c.phoneShown === false) {
+    out.push({
+      id: 'no-phone',
+      title: 'There’s no phone number on your homepage',
+      detail: 'Someone ready to ring you has to go looking for how to get in touch.',
+      fix: 'Your number on every page, with a call button within thumb’s reach.',
+    })
+  } else if (c.tapToCall === false) {
     out.push({
       id: 'tap-to-call',
       title: 'Your phone number isn’t tap-to-call',
@@ -115,12 +153,44 @@ export function teardownFindings(t: Teardown | null | undefined, currentYear: nu
       fix: 'A 30-second quote form that lands on your phone the moment it’s sent.',
     })
   }
-  if (t.imageSavingsKb != null && t.imageSavingsKb >= 500) {
+  // The Google reviews block on the preview already makes this point when there's a rating to show.
+  if (c.showsReviews === false && !t.google) {
+    out.push({
+      id: 'no-reviews',
+      title: 'Your homepage doesn’t show any reviews',
+      detail: 'Most people check reviews before they ring, and they’ll go looking elsewhere for them.',
+      fix: 'Your best reviews next to the call button on every page.',
+    })
+  }
+  if (t.pageWeightKb != null && t.pageWeightKb >= HEAVY_PAGE_KB) {
+    out.push({
+      id: 'page-weight',
+      title: `Your homepage is ${mb(t.pageWeightKb)} to download`,
+      detail: 'Google’s test measured it — every visitor on a phone downloads all of it before they can use the page.',
+      fix: 'A homepage a fraction of that size, with every image sized for the screen.',
+    })
+  } else if (t.imageSavingsKb != null && t.imageSavingsKb >= 500) {
     out.push({
       id: 'images',
       title: `Images could be ${mb(t.imageSavingsKb)} lighter`,
       detail: 'Google’s test found that much could be saved on images alone — data every phone has to download first.',
       fix: 'Every image sized and compressed for the screen it’s shown on.',
+    })
+  }
+  if (t.serverResponseMs != null && t.serverResponseMs >= SLOW_SERVER_MS) {
+    out.push({
+      id: 'slow-server',
+      title: `Your server takes ${(t.serverResponseMs / 1000).toFixed(1)}s to start answering`,
+      detail: 'That’s before the page even begins to load — Google’s target is under 0.6s. Usually a sign of slow hosting.',
+      fix: 'Served from a global network, so the page starts arriving straight away.',
+    })
+  }
+  if (t.layoutShift100 != null && t.layoutShift100 >= JUMPY_PAGE) {
+    out.push({
+      id: 'layout-shift',
+      title: 'The page jumps about while it loads',
+      detail: 'Text and buttons move as things load in, so it’s easy to tap the wrong thing — Google rates it “poor”.',
+      fix: 'Everything has its space reserved, so nothing moves.',
     })
   }
   if (c.readableText === false) {
@@ -139,6 +209,14 @@ export function teardownFindings(t: Teardown | null | undefined, currentYear: nu
       fix: 'Buttons sized and spaced for a thumb, not a mouse.',
     })
   }
+  if (c.imageAlt === false) {
+    out.push({
+      id: 'image-alt',
+      title: 'Your photos have no descriptions',
+      detail: 'Google can’t see a photo — without a short description it can’t tell what work it shows, or show it in image search.',
+      fix: 'Every photo described: the job, the material, the place.',
+    })
+  }
   if (t.copyrightYear != null && t.copyrightYear < currentYear - 1) {
     out.push({
       id: 'copyright',
@@ -147,11 +225,19 @@ export function teardownFindings(t: Teardown | null | undefined, currentYear: nu
       fix: 'Dates that keep themselves current.',
     })
   }
+  if (c.businessEmail === false) {
+    out.push({
+      id: 'free-email',
+      title: 'Your email is a Gmail/Hotmail-style address',
+      detail: 'An address at your own web address looks more established, and comes free with your domain.',
+      fix: 'Email at your own domain, set up with the site.',
+    })
+  }
   if (c.localSchema === false) {
     out.push({
       id: 'local-schema',
-      title: 'Google can’t read your business details',
-      detail: 'There’s no structured information — trade, area, phone — for Google to use in local results.',
+      title: 'Google can’t read your trade and area from your site',
+      detail: 'Your site doesn’t give Google your trade, area and phone in the format it reads for local results.',
       fix: 'Local business details built into every page, the way Google asks for them.',
     })
   }
