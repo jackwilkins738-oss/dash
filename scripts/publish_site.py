@@ -96,6 +96,36 @@ def run(cmd: list[str], env: dict) -> tuple[int, str]:
     return proc.returncode, out
 
 
+class PublishError(Exception):
+    pass
+
+
+def publish_live(outreach: Path, folder: str, token: str, runner=None) -> str:
+    """Republishes an already-launched site, unattended (job_posts.py): the account and project saved by its
+    first publish, the same QA gate -> its pages.dev address. PublishError says why not."""
+    saved_path = outreach / "sites" / folder / "publish.json"
+    if not saved_path.exists():
+        raise PublishError("it hasn't been published from the panel yet")
+    try:
+        site = site_dir(outreach, folder)
+        account, project = settings_for(outreach, folder, "", "")
+    except ValueError as e:
+        raise PublishError(str(e)) from e
+    import site_qa
+
+    problems, _ = site_qa.check(site, preview=False)
+    if problems:
+        raise PublishError(f"pre-launch QA found {len(problems)} problem(s), first: {problems[0]}")
+    tool = npx()
+    if not tool:
+        raise PublishError("Node.js isn't installed (publishing needs it)")
+    env = {**os.environ, "CLOUDFLARE_API_TOKEN": token, "CLOUDFLARE_ACCOUNT_ID": account, "WRANGLER_SEND_METRICS": "false", "CI": "1"}
+    code, out = (runner or run)(deploy_command(tool, site, project), env)
+    if code != 0:
+        raise PublishError("Cloudflare refused: " + (out.strip().splitlines() or ["no message"])[-1][:200])
+    return f"https://{project}.pages.dev"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--folder", required=True)

@@ -222,7 +222,8 @@ class Bot:
         return True
 
     def morning(self) -> None:
-        """8:30: the day's plan, the week on Sundays, then each nudge, quote chaser and referral ask."""
+        """8:30: the day's plan, the week on Sundays, then each nudge, quote chaser and referral ask, then clients'
+        job posts (drafted, and approved ones published to their sites - job_posts.py)."""
         import email_batches
         import nudges
 
@@ -268,6 +269,13 @@ class Bot:
             self.ask_referrals()
         except Exception as e:  # noqa: BLE001
             self.send(f"Referral reminders didn't work: {type(e).__name__}: {e}")
+        try:
+            import job_posts
+
+            for line in job_posts.sync(p.OUTREACH, p.load_settings()):
+                self.send(line)
+        except Exception as e:  # noqa: BLE001
+            self.send(f"Clients' job posts didn't work: {type(e).__name__}: {e}")
 
     def self_test(self) -> None:
         """Every key, install and connection, checked (self_test.py) - read-only."""

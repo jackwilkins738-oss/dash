@@ -180,3 +180,5 @@ p { margin: 0 0 1em; }
 .pair figcaption { font-size: 0.9rem; color: var(--ink-2); margin-top: 6px; }
 @media (max-width: 520px) { .pair__photos { grid-template-columns: 1fr; } }
 .draft-banner { background: #ffe066; color: #3d3100; text-align: center; font-weight: 700; padding: 8px 12px; font-size: 0.9rem; }
+.job-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; }
+.job-list a { font-weight: 600; color: var(--ink); }
