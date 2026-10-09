@@ -55,6 +55,7 @@ AUTOPILOT = HERE / "autopilot.py"
 SEND = HERE / "send_email.py"
 LAUNCH = HERE / "launch_report.py"
 PUBLISH_SITE = HERE / "publish_site.py"
+JOB_POSTS = HERE / "job_posts.py"
 SITE_KIT = HERE / "site_kit.py"
 SCORECARD = HERE / "scorecard.py"
 GO_LIVE = HERE / "go_live.py"
@@ -87,7 +88,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 40  # speed checks per step of Run the whole list - each step is pushed, so stopping loses nothing
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "99"
+PANEL_VERSION = "100"
 MAX_LOG_LINES = 5000
 
 
@@ -386,6 +387,7 @@ ACTIONS = {
     "auto_video": "Make a walkthrough video",
     "install_video": "Install video maker",
     "self_test": "Self-test",
+    "job_posts": "Clients' job posts",
     "dr_find": "Data request: find",
     "dr_export": "Data request: export",
     "dr_erase": "Data request: erase",
@@ -694,6 +696,8 @@ def build_steps(body: dict, settings: dict[str, str]):
         return (lambda job: [("pip", ["install", "faster-whisper"])]), ""
     if action == "self_test":
         return (lambda job: [(SELF_TEST, [])]), ""
+    if action == "job_posts":
+        return (lambda job: [(JOB_POSTS, [])]), ""
     if action == "install_video":
         return (lambda job: [("pip", ["install", "playwright", "imageio-ffmpeg"]), ("pip-module", ["playwright", "install", "chromium"])]), ""
     if action == "auto_video":

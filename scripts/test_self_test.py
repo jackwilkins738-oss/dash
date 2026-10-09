@@ -24,7 +24,7 @@ class Checks(unittest.TestCase):
         env = {"PROSPECTS_API_SECRET": "x" * 40, "MAIL_ADDRESS": "a@b.co.uk", "MAIL_APP_PASSWORD": "p", "MAIL_FROM_NAME": "Jack",
                "TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "1", "ANTHROPIC_API_KEY": "k", "PAGESPEED_API_KEY": "p",
                "GOOGLE_PLACES_API_KEY": "g", "BOOKING_LINK": "https://cal.com/x", "REVIEW_LINK": "https://g.page/r/x", "BACKUP_DIR": "D:/b"}
-        got = self.run_with(env, {"/activity": (200, {"prospects": [1, 2]}), "/quotes": (200, {}), "telegram": (200, {"ok": True, "result": {"username": "scalarbot"}}),
+        got = self.run_with(env, {"/activity": (200, {"prospects": [1, 2]}), "/quotes": (200, {}), "/job-posts": (200, {}), "telegram": (200, {"ok": True, "result": {"username": "scalarbot"}}),
                                   "anthropic": (200, {}), "pagespeed": (200, {})})
         self.assertEqual(got["Dashboard"], (st.OK, "connected - 2 preview pages"))
         self.assertEqual(got["Telegram"], (st.OK, "@scalarbot"))
@@ -47,6 +47,11 @@ class Checks(unittest.TestCase):
         self.assertEqual(got["Quote chaser"], (st.BAD, "Run migration 057 (Supabase -> SQL Editor)"))
         got = self.run_with({"PROSPECTS_API_SECRET": "x" * 40}, {"/activity": (200, {}), "/quotes": (500, {"error": "column quotes.view_count does not exist"})})
         self.assertIn("column quotes.view_count does not exist", got["Quote chaser"][1])
+
+    def test_job_posts_names_the_missing_migration(self):
+        got = self.run_with({"PROSPECTS_API_SECRET": "x" * 40}, {"/job-posts": (500, {"error": "Run migration 065 (job posts) in Supabase first"})})
+        self.assertEqual(got["Job posts"], (st.BAD, "HTTP 500 - Run migration 065 (job posts) in Supabase first"))
+        self.assertEqual(self.run_with({"PROSPECTS_API_SECRET": "x" * 40}, {"/job-posts": (200, {})})["Job posts"][0], st.OK)
 
 
 if __name__ == "__main__":
