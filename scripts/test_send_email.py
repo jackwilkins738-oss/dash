@@ -421,5 +421,14 @@ class SendGap(unittest.TestCase):
         self.assertEqual(se.describe_gap(0, 20), "40-90 seconds apart - roughly 20 min for 20")
 
 
+class Rendering(unittest.TestCase):
+    def test_no_name_says_hi_there_and_links_count_as_email(self):
+        out = se.render("Hi {{greeting_name}},\n\n{{preview_url}}", {"greeting_name": "", "preview_url": "https://s.co/for/x-1?src=letter"}, "Jack")
+        self.assertEqual(out, "Hi there,\n\nhttps://s.co/for/x-1?src=email\n")
+        self.assertEqual(se.email_link("https://s.co/for/x-1"), "https://s.co/for/x-1?src=email")
+        self.assertEqual(se.email_link("https://s.co/for/x-1?a=1&src=dashboard"), "https://s.co/for/x-1?a=1&src=email")
+        self.assertEqual(se.email_link("https://s.co/for/x-1?src=email"), "https://s.co/for/x-1?src=email")
+
+
 if __name__ == "__main__":
     unittest.main()
