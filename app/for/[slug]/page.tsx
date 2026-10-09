@@ -19,6 +19,7 @@ import { FoundingOffer } from '@/components/founding-offer'
 import { Founder } from '@/components/founder'
 import { PreviewVideo } from '@/components/preview-video'
 import { QuickReply } from '@/components/quick-reply'
+import { StickyReply } from '@/components/sticky-reply'
 import { LoadFilmstrip } from '@/components/load-filmstrip'
 import { PRICES } from '@/lib/site'
 import { reviewsView, rivalsView, stars, videoSrc } from '@/lib/preview-extras'
@@ -439,6 +440,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
           {SITE.email} · {SITE.phone.replace('+44', '0').replace(/^(\d{5})(\d+)$/, '$1 $2')} · {SITE.url.replace('https://', '')}
         </p>
       </div>
+      <StickyReply slug={p.slug} firmName={p.business_name} />
     </main>
   )
 }
