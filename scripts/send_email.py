@@ -190,9 +190,24 @@ def save_templates(outreach: Path, templates: dict[str, str]) -> str:
     return ""
 
 
+def email_link(url: str) -> str:
+    """A preview link marked as clicked from an email: ?src=email, replacing any other source."""
+    url = url.strip()
+    if re.search(r"[?&]src=", url):
+        return re.sub(r"([?&])src=[^&#]*", r"\1src=email", url)
+    return url + ("&" if "?" in url else "?") + "src=email" if "/for/" in url else url
+
+
 def render(text: str, row: dict, your_name: str) -> str:
     values = {"booking_link": os.environ.get("BOOKING_LINK", "").strip(), **{k: str(v or "") for k, v in row.items() if v},
               "your_name": your_name}
+    # No contact name on file: "Hi there," - never "Hi ,".
+    if not values.get("greeting_name", "").strip():
+        values["greeting_name"] = "there"
+    # Every email's link counts as an email view, whichever list the firm's details came from (a firm
+    # that was also sent a letter has the ?src=letter link in its newest list).
+    if values.get("preview_url"):
+        values["preview_url"] = email_link(values["preview_url"])
     # A line offering the booking link means nothing without one - drop it rather than leave "pick a time: ".
     if not values.get("booking_link"):
         text = "\n".join(line for line in text.split("\n") if not re.search(r"\{\{\s*booking_link\s*\}\}", line))
