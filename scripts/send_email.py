@@ -89,15 +89,14 @@ If you'd rather not hear from me again, just reply and say so and I won't get in
     "followup_subject": "Following up - {{business}}",
     "followup_body": """Hi {{greeting_name}},
 
-Just following up on my note last week about {{business}}'s website. {{issue_line}}
-
-The preview I put together is still here if you'd like a look - no sign-up:
+Did the preview for {{business}} come through OK?
 
 {{preview_url}}
 
-If it's not for you, just reply and say so and I won't get in touch again.
+{{issue_line}} {{why_line}}
 
-Kind regards,
+If you'd like it fixed, just reply "yes" and I'll ring you for 10 minutes at a time that suits - nothing to fill in. If not, reply "no" and you won't hear from me again.
+
 {{your_name}}
 Scalar Digital · 07401 696272""",
 }
@@ -198,8 +197,10 @@ def render(text: str, row: dict, your_name: str) -> str:
     if not values.get("booking_link"):
         text = "\n".join(line for line in text.split("\n") if not re.search(r"\{\{\s*booking_link\s*\}\}", line))
     out = PLACEHOLDER.sub(lambda m: values.get(m.group(1), ""), text)
-    # An empty {{score_line}} {{issue_line}} or {{first_line}} leaves stray spaces; tidy them, keep line breaks.
-    return "\n".join(re.sub(r"[ \t]{2,}", " ", line).strip() for line in out.split("\n")).strip() + "\n"
+    # An empty {{score_line}} {{issue_line}} or {{first_line}} leaves stray spaces, or a paragraph with
+    # nothing in it; tidy both, keep the paragraph breaks.
+    tidy = "\n".join(re.sub(r"[ \t]{2,}", " ", line).strip() for line in out.split("\n")).strip()
+    return re.sub(r"\n{3,}", "\n\n", tidy) + "\n"
 
 
 # ---------------------------------------------------------------- sending
