@@ -61,7 +61,15 @@ DEFAULTS = {
     # Which inboxes send first emails, and how many each ({address: n}). Set, it overrides per_inbox and
     # send_from: an inbox at 0 (or left out) sends none - its follow-ups still go from it, in the same thread.
     "inbox_plan": {},
+    # Each inbox's number warmed up and protected (inbox_guard.py): new inboxes ramp up by themselves,
+    # one with bounces or a domain problem is paused.
+    "protect_inboxes": False,
+    # Saturday and Sunday: replies and the lists only - no search, nothing sent.
+    "weekdays_only": False,
+    # A walkthrough video, made before the morning nudges, for each firm that opened its preview 2+ times.
+    "auto_videos": False,
 }
+VIDEOS_A_MORNING = 5
 FIND_BUFFER = 1.5  # not every firm found has an email - search for half as many again as are missing
 
 
@@ -282,6 +290,78 @@ def search_size(cfg: dict, settings: dict, waiting: int) -> int:
     return 0 if short <= 0 else min(1000, math.ceil(short * FIND_BUFFER))
 
 
+def guarded(cfg: dict, settings: dict, r: "Run", today) -> tuple[dict, bool]:
+    """(today's config, whether anything may be sent): the inbox plan after warm-up and protection."""
+    import inbox_guard
+    import mail_accounts
+
+    if not cfg.get("protect_inboxes"):
+        return cfg, True
+    inboxes = [a.address for a in mail_accounts.accounts(settings)]
+    base = plan_of(cfg)
+    if not base and int(cfg.get("per_inbox") or 0) > 0:
+        frm = str(cfg.get("send_from") or "").strip().lower()
+        base = {a: int(cfg["per_inbox"]) for a in ([frm] if frm else inboxes)}
+    if not base:
+        return cfg, True
+    plan, notes = inbox_guard.plan_for_today(base, panel.OUTREACH, inboxes[0] if inboxes else "", today)
+    for line in notes:
+        r.note(line)
+    live = {k: v for k, v in plan.items() if v > 0}
+    if not live:
+        r.note("Inbox plan: every inbox is paused today - nothing will be sent (see above).")
+        return {**cfg, "inbox_plan": {}}, False
+    return {**cfg, "inbox_plan": live}, True
+
+
+def video_targets(settings: dict, today, made: set[str]) -> list[str]:
+    """Firms that opened their preview 2+ times in the last 3 days, have no video yet, and aren't won or lost."""
+    import calls
+
+    secret = settings.get("PROSPECTS_API_SECRET", "")
+    api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
+    tenant = os.environ.get("SCALAR_TENANT_ID", "abdc6408-1fd5-4fb6-9c4c-53600b571a6d")
+    try:
+        activity = calls.fetch_activity(api, secret, tenant)
+    except calls.DashboardMissing:
+        return []
+    out = []
+    for slug, a in activity.items():
+        last = str(a.get("last_viewed_at") or "")[:10]
+        try:
+            recent = (today - datetime.fromisoformat(last).date()).days <= 3
+        except ValueError:
+            recent = False
+        if int(a.get("view_count") or 0) >= 2 and recent and a.get("status") not in ("won", "lost") and slug not in made:
+            out.append((a.get("last_viewed_at") or "", slug))
+    return [s for _, s in sorted(out, reverse=True)][:VIDEOS_A_MORNING]
+
+
+def make_videos(r: "Run", settings: dict, today) -> None:
+    import importlib.util
+
+    import daily
+
+    if not (importlib.util.find_spec("playwright") and importlib.util.find_spec("imageio_ffmpeg")):
+        r.note("Walkthrough videos are on, but the video maker isn't installed - Settings -> Install video maker.")
+        return
+    made = {row.get("slug") for row in _csv_rows(panel.OUTREACH / daily.VIDEOS)}
+    targets = video_targets(settings, today, made)
+    if targets:
+        r.note(f"--- Walkthrough videos for {len(targets)} repeat viewer(s)")
+    for slug in targets:
+        r.step(panel.AUTO_VIDEO, ["--link", slug])
+
+
+def _csv_rows(path: Path) -> list[dict]:
+    import csv
+
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
 def make_batches(r: "Run", cfg: dict, settings: dict | None = None) -> None:
     size = daily_target(cfg, settings or {}) if settings is not None else int(cfg.get("batch_size") or 20)
     r.step(panel.BATCHES, ["--size", str(size)])
@@ -374,11 +454,21 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
 
         if settings.get("MAIL_ADDRESS"):
             r.step(panel.SENDING_HEALTH, [])  # before anything is sent: a blocklisting stops the send
+        today = datetime.now().date()
+        weekend = bool(cfg.get("weekdays_only")) and today.weekday() >= 5
+        if weekend:
+            r.note("Weekend: replies and the lists only today - no search, nothing sent (Weekdays only is on).")
+        cfg, may_send = guarded(cfg, settings, r, today)
+        sending_today = may_send and not weekend
+        if cfg.get("auto_videos"):
+            make_videos(r, settings, today)  # before the 8:30 nudges, so the video's on the page when you follow up
         send_last = cfg.get("send_when") == "last"
-        sent_early = False if send_last else morning_send(r, cfg, settings)
+        sent_early = False if send_last or not sending_today else morning_send(r, cfg, settings)
 
         new_sheet = None
         find = cfg.get("find") or {}
+        if weekend or not may_send:
+            find = {}
         if find.get("trades") and find.get("areas") and (int(cfg.get("per_inbox") or 0) > 0 or plan_of(cfg)):
             import email_batches
 
@@ -402,7 +492,7 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
                     # "Possible" websites confirmed (or ruled out) before the list runs, so more of today's
                     # firms get a preview and an email instead of waiting on the Review tab.
                     r.step(panel.SITE_CHECK, ["--sheet", new_sheet])
-        elif not cfg.get("find"):
+        elif not cfg.get("find") and sending_today:
             r.note("No saved search - skipping new firms (save one on the panel's Autopilot card).")
 
         for name in lists_to_run(new_sheet):
@@ -414,11 +504,11 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
                     continue  # once per run, not per list
                 r.step(script, args)
 
-        if send_last:
+        if send_last and sending_today:
             if settings.get("MAIL_ADDRESS") and settings.get("MAIL_APP_PASSWORD"):
                 r.step(panel.REPLIES, [])  # anyone who said no while the list ran is left out of the send
             sent_early = morning_send(r, cfg, settings)
-        if not sent_early:
+        if not sent_early and sending_today:
             make_batches(r, cfg, settings)
         r.sent_early = sent_early
         r.step(panel.EXPORT, [])
@@ -434,7 +524,7 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
         r.log.close()
 
 
-SUMMARY_LINE = re.compile(r"^\s*(READY|Found \d+ new|Wrote .*(firms|\.xlsx)|List done|No follow-ups|Nobody left|  \d+ (added|bounced))")
+SUMMARY_LINE = re.compile(r"^\s*(READY|Inbox plan:|Weekend:|Found \d+ new|Wrote .*(firms|\.xlsx)|List done|No follow-ups|Nobody left|  \d+ (added|bounced))")
 
 
 def summarise(r: Run, settings: dict, seconds: float) -> int:
@@ -445,7 +535,7 @@ def summarise(r: Run, settings: dict, seconds: float) -> int:
     body = [head]
     if replies:
         body.append("Replies: " + replies.split(": ", 1)[-1])
-    body += [ln for ln in picked if ln.startswith("READY")]
+    body += [ln for ln in picked if ln.startswith(("READY", "Inbox plan:", "Weekend:"))]
     if r.failed:
         body.append(f"{len(r.failed)} step(s) had problems - see autopilot-log.txt")
     sent = [ln.strip() for ln in r.lines if ln.strip().startswith("Done: ") and " sent" in ln]
