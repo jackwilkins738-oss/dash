@@ -71,6 +71,12 @@ def checks(env: dict, outreach: Path, get=_get, have=installed) -> list[tuple[st
         else:
             add(BAD, "Quote chaser", f"HTTP {code or 'no answer'}" + (f" - {str(body['error'])[:120]}" if body.get("error") else " - redeploy the dashboard"))
 
+        code, body = get(f"{api}/api/job-posts?tenant_id={TENANT}", {"Authorization": f"Bearer {secret}"})
+        if code == 200:
+            add(OK, "Job posts", "readable - Growth clients' finished jobs are written up each morning")
+        else:
+            add(BAD, "Job posts", f"HTTP {code or 'no answer'}" + (f" - {str(body['error'])[:120]}" if body.get("error") else " - redeploy the dashboard"))
+
     if env.get("MAIL_ADDRESS") and env.get("MAIL_APP_PASSWORD"):
         add(OK if env.get("MAIL_FROM_NAME") else BAD, "Email", f"{env['MAIL_ADDRESS']}" + ("" if env.get("MAIL_FROM_NAME") else
             " - add MAIL_FROM_NAME (your sign-off)") + " (login is tested by Send a test to yourself)")
