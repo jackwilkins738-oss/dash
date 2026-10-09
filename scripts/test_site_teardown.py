@@ -194,3 +194,14 @@ class PsiErrors(unittest.TestCase):
         self.assertIn("switched off", psi_error(403, body("PageSpeed Insights API has not been used in project 1 before or it is disabled")))
         self.assertIn("restricted", psi_error(403, body("Requests from referer <empty> are blocked.")))
         self.assertEqual(psi_error(500, "not json"), "Google's speed test said: HTTP 500")
+
+    def test_a_site_google_could_not_load_is_named_as_that(self):
+        from site_teardown import psi_error
+
+        body = lambda m: '{"error": {"message": "%s"}}' % m  # noqa: E731
+        failed = psi_error(500, body("Lighthouse returned error: FAILED_DOCUMENT_REQUEST. Lighthouse was unable to reliably load the page you requested."))
+        self.assertIn("Google couldn't load their homepage", failed)
+        self.assertIn("ring them", failed)
+        self.assertIn("no DNS", psi_error(500, body("Lighthouse returned error: DNS_FAILURE. DNS servers could not resolve the provided domain.")))
+        self.assertIn("certificate", psi_error(500, body("Lighthouse returned error: INSECURE_DOCUMENT_REQUEST.")))
+        self.assertIn("never finished drawing", psi_error(500, body("Lighthouse returned error: NO_FCP.")))

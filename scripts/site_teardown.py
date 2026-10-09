@@ -72,6 +72,23 @@ def _audit_pass(audits: dict, *ids: str) -> bool | None:
     return None
 
 
+# Google's test couldn't load the site itself (Lighthouse's runtime errors) - one firm's problem, never
+# the panel's: the run carries on, the page still gets its homepage findings, and it's tried again next run.
+LIGHTHOUSE_ERRORS = [
+    (("DNS_FAILURE",), "their domain doesn't lead anywhere (no DNS) - the site may be gone; check it - a firm with a "
+     "dead site needs a new one, so ring them"),
+    (("INSECURE_DOCUMENT_REQUEST",), "their site's security certificate is broken, so Google wouldn't load it - "
+     "visitors get a warning too; a strong reason to ring them"),
+    (("FAILED_DOCUMENT_REQUEST", "ERRORED_DOCUMENT_REQUEST"), "Google couldn't load their homepage (the site is down, "
+     "very slow, or blocks Google's test) - tried again next run; if it keeps failing, open it yourself: a broken "
+     "site is a reason to ring them"),
+    (("NO_FCP", "NO_LCP", "PAGE_HUNG", "NO_NAVSTART"), "their homepage never finished drawing for Google's test - "
+     "tried again next run"),
+    (("NOT_HTML",), "their web address doesn't open a web page (a file or a redirect elsewhere) - check the Website "
+     "on the sheet"),
+]
+
+
 def psi_error(code: int, body: str) -> str:
     """Google's own reason, in a line (its messages never contain the key)."""
     try:
@@ -88,6 +105,9 @@ def psi_error(code: int, body: str) -> str:
         return "the PageSpeed Insights API is switched off for this key's Google Cloud project - enable it there"
     if "referer" in low or "referrer" in low or "blocked" in low:
         return "the key is restricted (websites/IPs) so the panel can't use it - allow PageSpeed Insights API without that restriction"
+    for codes, plain in LIGHTHOUSE_ERRORS:
+        if any(c.lower() in low for c in codes):
+            return plain
     return f"Google's speed test said: {message[:160] or f'HTTP {code}'}"
 
 
