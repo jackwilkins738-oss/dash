@@ -182,6 +182,14 @@ class Sending(unittest.TestCase):
         self.assertNotIn("{{", body)
         self.assertTrue(smtp.sent[0]["List-Unsubscribe"])
 
+    def test_preview_emails_show_the_address_from_the_panels_settings(self):
+        # The panel's own process has no POSTAL_ADDRESS in its environment - only in its saved settings.
+        settings = {"MAIL_ADDRESS": "jack@scalardigitalusa.com", "MAIL_APP_PASSWORD": "x", "MAIL_FROM_NAME": "Jack",
+                    "POSTAL_ADDRESS": "Scalar Digital, 1 Main St #2, Provo, UT 84601"}
+        out = se.preview_batch(self.out, env=settings)
+        self.assertTrue(out.get("ok"), out)
+        self.assertIn("1 Main St #2, Provo, UT 84601", out["emails"][0]["body"])
+
     def test_us_templates_without_the_address_are_refused(self):
         t = dict(se.US_DEFAULT_TEMPLATES)
         self.assertEqual(se.template_problem(t, "us"), "")

@@ -275,8 +275,11 @@ def email_link(url: str) -> str:
 
 
 def render(text: str, row: dict, your_name: str) -> str:
-    values = {"booking_link": os.environ.get("BOOKING_LINK", "").strip(), **{k: str(v or "") for k, v in row.items() if v},
-              "your_name": your_name, "postal_address": os.environ.get("POSTAL_ADDRESS", "").strip()}
+    # Settings first, then the row: the panel's Preview emails passes its saved settings in the row (the
+    # panel's own process doesn't have them in its environment), and a send gets them from the environment.
+    values = {"booking_link": os.environ.get("BOOKING_LINK", "").strip(),
+              "postal_address": os.environ.get("POSTAL_ADDRESS", "").strip(),
+              **{k: str(v or "") for k, v in row.items() if v}, "your_name": your_name}
     # No contact name on file: "Hi there," - never "Hi ,".
     if not values.get("greeting_name", "").strip():
         values["greeting_name"] = "there"
