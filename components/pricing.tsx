@@ -98,6 +98,7 @@ export function Pricing() {
                 'Every finished job written up as its own page on your site, from your photos, live once you OK it',
                 'A matching post for your Google Business Profile with each one',
                 'A ready-to-post reply to any Google review, good or bad, in seconds',
+                'Seasonal emails to your past customers, written for you, for repeat work',
                 'Your report shows what the new pages brought in',
               ]}
             />
