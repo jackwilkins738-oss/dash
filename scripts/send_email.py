@@ -284,9 +284,10 @@ def render(text: str, row: dict, your_name: str) -> str:
     if not values.get("greeting_name", "").strip():
         values["greeting_name"] = "there"
     # Every email's link counts as an email view, whichever list the firm's details came from (a firm
-    # that was also sent a letter has the ?src=letter link in its newest list).
+    # that was also sent a letter has the ?src=letter link in its newest list) - and is on this
+    # workspace's own domain, whenever its list was pushed (email_batches.on_site).
     if values.get("preview_url"):
-        values["preview_url"] = email_link(values["preview_url"])
+        values["preview_url"] = email_link(eb.on_site(values["preview_url"], values.get("site_url")))
     # A line offering the booking link means nothing without one - drop it rather than leave "pick a time: ".
     if not values.get("booking_link"):
         text = "\n".join(line for line in text.split("\n") if not re.search(r"\{\{\s*booking_link\s*\}\}", line))
@@ -677,6 +678,7 @@ def preview_batch(outreach: Path, followups: bool = False, env: dict | None = No
             row["booking_link"] = booking
         if postal:
             row["postal_address"] = postal
+        row["site_url"] = (env.get("SITE_URL") or "").strip()
         already = sent_rows.get(email, {})
         if already.get(_sent_col(followups, row)):
             continue
@@ -698,7 +700,8 @@ def preview_batch(outreach: Path, followups: bool = False, env: dict | None = No
         emails.append({"business": row.get("business", ""), "email": email, "from": sender, "subject": subject,
                        "body": render(final_t["body"] if final else templates[f"{kind}_body{suffix}"], row, your_name),
                        "variant": variant,
-                       "preview_url": row.get("preview_url", ""), "first_line": row.get("first_line", ""), "skip": skip})
+                       "preview_url": eb.on_site(row.get("preview_url", ""), row.get("site_url")),
+                       "first_line": row.get("first_line", ""), "skip": skip})
         if len(emails) >= PREVIEW_MAX:
             break
     return {"ok": True, "emails": emails, "ab": has_variant_b(templates) and not followups}
