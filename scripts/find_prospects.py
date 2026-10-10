@@ -76,6 +76,10 @@ TRADES: dict[str, dict] = {
     "roofing": {"label": "Roofing", "sic": ["43910"], "name_any": []},
     "landscaping": {"label": "Landscaping", "sic": ["81300"], "name_any": []},
     "building": {"label": "Building & extensions", "sic": ["41202", "43390", "41201"], "name_any": []},
+    # Heating and plumbing share one code: a firm named for heating or air con is HVAC, the rest plumbing.
+    "hvac": {"label": "HVAC", "sic": ["43220"], "name_any": ["heating", "air con", "hvac", "boiler", "gas", "cooling"]},
+    "plumbing": {"label": "Plumbing", "sic": ["43220"], "name_any": []},
+    "electrical": {"label": "Electrical", "sic": ["43210"], "name_any": []},
 }
 
 AGE_BANDS = {
@@ -159,6 +163,23 @@ def split_list(text: str) -> list[str]:
     return [w.strip() for w in re.split(r"[,;\n]", text or "") if w.strip()]
 
 
+def split_areas(text: str) -> list[str]:
+    """Areas to search. In the US a state follows its city after a comma, so "Provo, UT, Ogden, UT"
+    is two areas - Provo, UT and Ogden, UT - not four."""
+    import workspace
+
+    parts = split_list(text)
+    if workspace.market() != "us":
+        return parts
+    areas: list[str] = []
+    for p in parts:
+        if re.fullmatch(r"[A-Za-z]{2}", p) and areas and "," not in areas[-1]:
+            areas[-1] = f"{areas[-1]}, {p.upper()}"
+        else:
+            areas.append(p)
+    return areas
+
+
 # ---------------------------------------------------------------- already known
 
 
@@ -211,7 +232,8 @@ def known_firms(outreach: Path) -> tuple[set[str], set[str], set[str]]:
 # Where a guessed domain sometimes lands that isn't the firm's own site.
 NOT_THEIR_SITE = re.compile(
     r"checkatrade|facebook|yell\.|mybuilder|trustatrader|ratedpeople|bark\.com|google\.|instagram|linkedin|"
-    r"houzz|nextdoor|thomsonlocal|freeindex|cylex|192\.com|companieshouse|endole|opencorporates",
+    r"houzz|nextdoor|thomsonlocal|freeindex|cylex|192\.com|companieshouse|endole|opencorporates|"
+    r"yelp\.|angi\.com|homeadvisor|thumbtack|bbb\.org|porch\.com|buildzoom|yellowpages|mapquest|manta\.com",
     re.I,
 )
 PARKED = re.compile(
@@ -337,7 +359,9 @@ JUNK_EMAIL = re.compile(
 )
 PREFERRED_BOX = ["info", "enquiries", "enquiry", "office", "sales", "contact", "hello", "admin", "quotes", "mail"]
 FREE_MAIL = {"gmail.com", "googlemail.com", "hotmail.com", "hotmail.co.uk", "outlook.com", "live.co.uk", "yahoo.co.uk",
-             "yahoo.com", "btinternet.com", "icloud.com", "aol.com", "sky.com", "live.com", "msn.com"}
+             "yahoo.com", "btinternet.com", "icloud.com", "aol.com", "sky.com", "live.com", "msn.com",
+             # US
+             "comcast.net", "att.net", "sbcglobal.net", "verizon.net", "me.com", "protonmail.com", "q.com"}
 
 
 def decode_cloudflare(hexstr: str) -> str:
@@ -496,10 +520,9 @@ def output_path(outreach: Path, trades: list[str], areas: list[str]) -> Path:
 
 
 def outreach_dir() -> Path:
-    for parent in [HERE.parent, *HERE.parents]:
-        if (parent / "outreach").is_dir():
-            return parent / "outreach"
-    return HERE.parent / "outreach"
+    import workspace
+
+    return workspace.outreach_dir()
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -522,7 +545,7 @@ def main(argv: list[str] | None = None) -> None:
     args = ap.parse_args(argv)
 
     trades = [t for t in split_list(args.trades.lower()) if t in TRADES]
-    areas = split_list(args.areas)
+    areas = split_areas(args.areas)
     if not trades:
         sys.exit("Pick at least one trade: " + ", ".join(TRADES))
     if not areas:
@@ -531,6 +554,10 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit("--max must be 1-1000.")
     if (args.email_only or args.website_only) and args.no_websites:
         sys.exit("Only firms with an email / a website needs the website search - untick Skip the website search.")
+    import workspace
+
+    if workspace.market() != "uk" and args.source != "google":
+        sys.exit("Companies House is the UK's register - in the US workspace, search with Google Maps.")
     if args.source == "google":
         import places_finder
 

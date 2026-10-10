@@ -18,6 +18,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import workspace  # noqa: E402 - after the path setup
+
 OK, OPTIONAL, BAD = "✅", "⚠️", "❌"
 TENANT = os.environ.get("SCALAR_TENANT_ID", "abdc6408-1fd5-4fb6-9c4c-53600b571a6d")
 
@@ -133,7 +135,7 @@ def checks(env: dict, outreach: Path, get=_get, have=installed) -> list[tuple[st
 
 
 def main() -> int:
-    outreach = next((d / "outreach" for d in [HERE.parent, *HERE.parents] if (d / "outreach").is_dir()), HERE.parent / "outreach")
+    outreach = workspace.outreach_dir()
     rows = checks(dict(os.environ), outreach)
     for mark, name, detail in rows:
         print(f"{mark} {name}: {detail}", flush=True)

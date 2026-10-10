@@ -40,10 +40,9 @@ VIEWER_FOLLOWUP_DAYS = 10
 
 
 def outreach_dir() -> Path:
-    for parent in [HERE.parent, *HERE.parents]:
-        if (parent / "outreach").is_dir():
-            return parent / "outreach"
-    return HERE.parent / "outreach"
+    import workspace
+
+    return workspace.outreach_dir()
 
 
 def _rows(path: Path) -> tuple[list[str], list[dict]]:

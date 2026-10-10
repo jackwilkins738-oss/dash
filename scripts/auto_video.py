@@ -30,6 +30,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import workspace  # noqa: E402 - after the path setup
+
 PHONE = {"width": 390, "height": 844}  # recorded at this size: the preview page shows it about phone-width, so 1:1
 MAX_MB = 25
 
@@ -187,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(str(e)) from e
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    outreach = next((d / "outreach" for d in [HERE.parent, *HERE.parents] if (d / "outreach").is_dir()), HERE.parent / "outreach")
+    outreach = workspace.outreach_dir()
     daily.log_video(outreach, slug, date.today())
     print(f"READY: {size:.1f} MB video on {site}/for/{slug} - it's at the top of their page ({url}).")
     return 0

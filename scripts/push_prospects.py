@@ -134,8 +134,9 @@ def make_slug(business: str, key: str, secret: str) -> str:
     return f"{slugify(business)}-{tag}"
 
 
-def channel_for(row: dict, company_type: str | None = None, email_bad: bool = False) -> str:
-    """email or letter. company_type fills a blank sheet column; email_bad is our own email check."""
+def channel_for(row: dict, company_type: str | None = None, email_bad: bool = False, market: str = "uk") -> str:
+    """email or letter (UK), email or none (US). company_type fills a blank sheet column; email_bad is
+    our own email check."""
     company_type = str(row.get("Company type") or company_type or "").strip().lower()
     email = str(row.get("Email") or "").strip()
     status = str(row.get("Status") or "").lower()
@@ -146,6 +147,10 @@ def channel_for(row: dict, company_type: str | None = None, email_bad: bool = Fa
         and "wrong email" not in status
         and "invalid email" not in status
     )
+    if market == "us":
+        # CAN-SPAM lets any business be emailed (the email itself carries the address and opt-out);
+        # there's no letter to fall back on, so a firm with no good email isn't contacted at all.
+        return "email" if email_ok else "none"
     if company_type in LETTER_COMPANY_TYPES:
         return "letter"  # PECR: no cold email to sole traders or ordinary partnerships
     return "email" if email_ok else "letter"
@@ -211,15 +216,11 @@ def number(value):
 
 
 def main() -> None:
-    here = Path(__file__).resolve().parent
-    default_sheet = here.parent / "outreach" / "outreach-master.xlsx"
-    if not default_sheet.exists():
-        # Running from a git worktree: the sheet lives in the main checkout.
-        for parent in here.parents:
-            candidate = parent / "outreach" / "outreach-master.xlsx"
-            if candidate.exists():
-                default_sheet = candidate
-                break
+    import workspace
+
+    # This workspace's master sheet (outreach/, or outreach-us/ for the US panel) - found in the main
+    # checkout when running from a git worktree.
+    default_sheet = workspace.outreach_dir() / "outreach-master.xlsx"
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--sheet", type=Path, default=default_sheet)
@@ -263,6 +264,10 @@ def main() -> None:
             return []
         header = [str(h).strip() if h else "" for h in rows[0]]
         return [dict(zip(header, values)) for values in rows[1:]]
+
+    # The sheet's folder decides the market: outreach-us/ is the US (CAN-SPAM, no letters), else the UK.
+    market = workspace.market(args.sheet.parent)
+    market_cfg = workspace.config(args.sheet.parent)
 
     # Decisions from the panel's Review tab, applied without touching the sheet.
     decisions = overrides.load(args.sheet.parent, args.sheet.name)
@@ -361,7 +366,7 @@ def main() -> None:
             email = str(row.get("Email") or "").strip() or (found.get("email") or "").strip()
             if email and not row.get("Email"):
                 row = {**row, "Email": email}
-            channel = channel_for(row, looked_up_type, is_bad(email_result(email)) if email else False)
+            channel = channel_for(row, looked_up_type, is_bad(email_result(email)) if email else False, market)
             contact = str(row.get("Contact name") or "").strip() or (found.get("contact") or "").strip()
             out.append(
                 {
@@ -609,6 +614,9 @@ def main() -> None:
                 )
 
     def make_letters() -> None:
+        if not market_cfg["letters"]:
+            print("No letters in this workspace - they're UK A4 with UK postage. Firms with no email aren't contacted.")
+            return
         try:
             import letters
         except ImportError:
@@ -830,7 +838,7 @@ def main() -> None:
                 pages.append(extra)
         return "\n".join(pages)
 
-    if args.lookup_companies:
+    if args.lookup_companies and market_cfg["pecr"]:
         # Optional: a problem here is reported, and never stops the push.
         from company_lookup import LOGIC_VERSION, LookupFailed, key_problem, lookup
 

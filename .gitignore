@@ -22,6 +22,8 @@ tsconfig.tsbuildinfo
 
 # Local scratch/reference projects, not part of this app.
 outreach/
+# Other markets' workspaces (outreach-us/ ...): their prospect lists and inbox settings.
+outreach-*/
 scratch/
 SCALAR/
 

@@ -26,6 +26,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import workspace  # noqa: E402 - after the path setup
+
 LOG = "site-checks.csv"
 PAGE_CHARS = 4000
 
@@ -141,8 +143,7 @@ def run(outreach: Path, sheet: str, key: str, model: str = "", fetch=None, reque
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--sheet", required=True)
-    ap.add_argument("--outreach", type=Path, default=next(
-        (d / "outreach" for d in [HERE.parent, *HERE.parents] if (d / "outreach").is_dir()), HERE.parent / "outreach"))
+    ap.add_argument("--outreach", type=Path, default=workspace.outreach_dir())
     args = ap.parse_args(argv)
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:

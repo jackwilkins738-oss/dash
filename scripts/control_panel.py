@@ -80,7 +80,7 @@ SETTING_KEYS = [
     "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD",
     "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS",
     "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "REVIEW_LINK", "WEEKLY_TARGETS", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR",
-    "ANTHROPIC_API_KEY", "AI_MODEL",
+    "ANTHROPIC_API_KEY", "AI_MODEL", "POSTAL_ADDRESS",
 ]
 SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOKEN", "PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD",
                "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD"}
@@ -88,19 +88,18 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 40  # speed checks per step of Run the whole list - each step is pushed, so stopping loses nothing
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "103"
+PANEL_VERSION = "104"
 MAX_LOG_LINES = 5000
 
 
 def outreach_dir() -> Path:
-    # Same rule as push_prospects.py: this checkout, or the main one when run from a worktree.
-    for parent in [HERE.parent, *HERE.parents]:
-        if (parent / "outreach").is_dir():
-            return parent / "outreach"
-    return HERE.parent / "outreach"
+    import workspace
+
+    return workspace.outreach_dir()
 
 
 OUTREACH = outreach_dir()
+import workspace  # noqa: E402
 SETTINGS_FILE = OUTREACH / "panel.env"
 RUN_LOG = OUTREACH / "last-run-log.txt"
 
@@ -961,6 +960,9 @@ def quote_action(body: dict) -> tuple[dict, int]:
     import quotes
     from push_prospects import make_slug
 
+    if not workspace.config(OUTREACH)["online_quotes"]:
+        return {"error": "No online quotes in this workspace - the dashboard's quotes are in pounds with UK VAT and "
+                         "UK terms. Send the price in a reply instead (Reply -> How much?)."}, 400
     settings = load_settings()
     sheet, key = str(body.get("sheet") or ""), str(body.get("key") or "")
     business = str(body.get("business") or "").strip()[:120]
@@ -1042,6 +1044,8 @@ def quote_email_action(body: dict) -> tuple[dict, int]:
     import quotes
     import send_email
 
+    if not workspace.config(OUTREACH)["online_quotes"]:
+        return {"error": "No online quotes in this workspace - send the price in a reply instead."}, 400
     settings = load_settings()
     sheet, key = str(body.get("sheet") or ""), str(body.get("key") or "")
     to = str(body.get("to") or "").strip()
@@ -1078,6 +1082,7 @@ def reply_values(settings: dict, body: dict) -> dict[str, str]:
         except ValueError:
             return default
 
+    market = workspace.config(OUTREACH)
     preview = str(body.get("preview") or "")
     return {
         "greeting_name": saved_replies.first_name(str(body.get("contact") or "")),
@@ -1085,8 +1090,10 @@ def reply_values(settings: dict, body: dict) -> dict[str, str]:
         "your_name": settings.get("MAIL_FROM_NAME") or settings.get("LETTER_SIGNOFF") or "Scalar Digital",
         "preview_url": preview.replace("src=dashboard", "src=email") if preview.startswith("https://") else "",
         "booking_link": settings.get("BOOKING_LINK", ""),
-        "price_build": price("QUOTE_PRICE_BUILD", "2500"),
-        "price_landing": price("QUOTE_PRICE_LANDING", "750"),
+        "price_build": price("QUOTE_PRICE_BUILD", f"{market['prices']['build']:,}"),
+        "price_landing": price("QUOTE_PRICE_LANDING", f"{market['prices']['landing']:,}"),
+        "currency": market["currency"],
+        "market": workspace.market(OUTREACH),
     }
 
 
@@ -1462,6 +1469,7 @@ class Handler(BaseHTTPRequestHandler):
                 PAGE.replace("__TOKEN__", self.token)
                 .replace("__OUTREACH__", html.escape(str(OUTREACH)))
                 .replace("__VERSION__", PANEL_VERSION)
+                .replace("__MARKET__", "" if workspace.market(OUTREACH) == "uk" else f" · {workspace.config(OUTREACH)['label']}")
                 .replace("__HERE__", html.escape(str(HERE)))
             )
             return self._send(200, page.encode(), "text/html; charset=utf-8")

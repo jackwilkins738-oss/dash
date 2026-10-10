@@ -39,11 +39,9 @@ WRANGLER = "wrangler@3"
 
 
 def outreach_dir() -> Path:
-    # Same rule as the other scripts: this checkout, or the main one when run from a worktree.
-    for parent in [HERE.parent, *HERE.parents]:
-        if (parent / "outreach").is_dir():
-            return parent / "outreach"
-    return HERE.parent / "outreach"
+    import workspace
+
+    return workspace.outreach_dir()
 
 
 def site_dir(outreach: Path, folder: str) -> Path:

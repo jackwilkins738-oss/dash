@@ -21,6 +21,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import workspace  # noqa: E402 - after the path setup
+
 MOST = 40
 
 
@@ -144,8 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sheet", required=True)
     ap.add_argument("--area", default="")
     ap.add_argument("--most", type=int, default=MOST)
-    ap.add_argument("--outreach", type=Path, default=next(
-        (d / "outreach" for d in [HERE.parent, *HERE.parents] if (d / "outreach").is_dir()), HERE.parent / "outreach"))
+    ap.add_argument("--outreach", type=Path, default=workspace.outreach_dir())
     args = ap.parse_args(argv)
     try:
         import segno  # noqa: F401
