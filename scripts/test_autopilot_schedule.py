@@ -97,6 +97,46 @@ class Schedule(unittest.TestCase):
         self.assertIn("--gap-per-inbox", steps[[i for i, s in enumerate(steps) if s[0] == "send_email.py"][0]][1])
 
 
+    def _send_first_run(self, waiting):
+        steps = []
+
+        class R:
+            def __init__(self, path):
+                self.lines, self.log = [], mock.Mock()
+
+            def note(self, line):
+                steps.append(("note", line))
+
+            def step(self, script, args):
+                steps.append((getattr(script, "name", str(script)), tuple(args)))
+                return 0
+
+        cfg = {**autopilot.DEFAULTS, "auto_send": True, "send_when": "first", "followups": False}
+        settings = {"PROSPECTS_API_SECRET": "x" * 40, "MAIL_ADDRESS": "a@b.com", "MAIL_APP_PASSWORD": "p", "MAIL_FROM_NAME": "J"}
+        import email_batches
+
+        with mock.patch.object(autopilot, "is_running", lambda: False), mock.patch.object(autopilot, "load_config", lambda: cfg), \
+             mock.patch.object(autopilot, "Run", R), mock.patch.object(autopilot.panel, "keep_awake", lambda on: None), \
+             mock.patch.object(autopilot.panel, "load_settings", lambda: settings), \
+             mock.patch.object(autopilot.panel, "publish_quotes", lambda: (True, "")), \
+             mock.patch.object(email_batches, "remaining", lambda o, s=None: waiting), \
+             mock.patch.object(autopilot, "lists_to_run", lambda new: ["firms.xlsx"]), \
+             mock.patch.object(autopilot.panel, "run_all_steps", lambda r, p, n, s: [["--sheet", p]]), \
+             mock.patch.object(autopilot, "summarise", lambda r, s, t: 0), \
+             mock.patch.object(autopilot, "scorecard_day", lambda: False):
+            autopilot.run()
+        return [s[0] for s in steps if s[0] != "note"]
+
+    def test_send_first_with_nobody_waiting_sends_after_the_lists(self):
+        names = self._send_first_run(waiting=0)
+        self.assertEqual(names.count("send_email.py"), 1)
+        self.assertGreater(names.index("send_email.py"), names.index("push_prospects.py"))
+
+    def test_send_first_with_firms_waiting_sends_before_the_lists(self):
+        names = self._send_first_run(waiting=12)
+        self.assertEqual(names.count("send_email.py"), 1)
+        self.assertLess(names.index("send_email.py"), names.index("push_prospects.py"))
+
     def test_run_searches_only_for_the_shortfall(self):
         notes, asked = [], []
 

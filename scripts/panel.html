@@ -723,6 +723,12 @@ document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("cl
   if (action === "batch_sent" && !confirm("Mark the last batch as sent? Do this once Mailmeteor has sent it - they won't be picked again.")) return;
   if (action === "send_batch" && !confirm(`Send today's batch now, from your own email, ${$("send-gap").value ? $("send-gap").value + " min" : "about a minute"} apart? You can stop it any time.`)) return;
   if (action === "send_followups" && !confirm("Send the follow-ups now, from your own email?")) return;
+  if (action === "autopilot_now") {
+    // Runs what the card shows, not what was last saved - a ticked box isn't ignored for want of a Save.
+    if ($("ap-send").checked && !confirm("Run the autopilot now? \"Send them automatically\" is ticked, so it will email today's batch.")) return;
+    const saved = await saveAutopilot("save");
+    if (!saved || saved.error) return;
+  }
   if (action === "dr_erase" && !confirm(`Erase ${$("dr-who").value} everywhere - every list, every CSV and their preview page? This can't be undone.`)) return;
   if (action === "publish_site" && !confirm(`Publish outreach/sites/${$("publish-folder").value}/site live on their Cloudflare?`)) return;
   const r = await runOrStopAutopilot({ action, sheet: $("sheet").value, dry_run: dry, limit: $("limit").value, recheck: $("recheck").checked, only: $("only").value, letters_all: $("letters-all").checked, cards_area: $("cards-area").value,
@@ -1095,6 +1101,7 @@ async function saveAutopilot(action) {
   $("ap-msg").style.color = r.error ? "var(--bad)" : "var(--ok)";
   $("ap-msg").textContent = r.error || r.message;
   loadAutopilot();
+  return r;
 }
 $("ap-use-search").addEventListener("click", () => {
   apSearch = finderForm();
