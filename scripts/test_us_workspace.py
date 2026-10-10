@@ -119,6 +119,21 @@ class PanelLists(unittest.TestCase):
                 self.assertEqual(control_panel.latest_sheet(), "maps-roofing-provo-ut-2026-10-10.xlsx")
 
 
+class RunWholeList(unittest.TestCase):
+    def test_speed_check_batches_are_allowed_past_the_ten_site_guard(self):
+        import control_panel
+
+        left = iter([50, 0])
+        notes = []
+        job = mock.Mock(note=notes.append)
+        with mock.patch.object(control_panel, "progress", side_effect=lambda name: {"remaining": next(left, 0)}), \
+                mock.patch.object(control_panel, "replies_first", return_value=[]):
+            steps = list(control_panel.run_all_steps(job, "list.xlsx", "list.xlsx", {"PAGESPEED_API_KEY": "k"}))
+        teardown = next(s for s in steps if isinstance(s, list) and "--teardown" in s)
+        self.assertIn("--yes-all", teardown)
+        self.assertGreater(control_panel.RUN_ALL_BATCH, 10)  # why it's needed
+
+
 class Channel(unittest.TestCase):
     def test_us_sole_traders_get_email_and_no_one_gets_a_letter(self):
         row = {"Email": "mike@wasatchplumbing.com", "Company type": "Sole trader"}
