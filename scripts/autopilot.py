@@ -40,9 +40,22 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import control_panel as panel  # noqa: E402 - settings, list progress and the whole-list steps live there
+# A scheduled task can't set environment variables, so the US one names its workspace on the command
+# line - read before the panel is imported, because the panel picks its folder when it loads.
+if "--workspace" in sys.argv[:-1]:
+    os.environ["OUTREACH_DIR"] = sys.argv[sys.argv.index("--workspace") + 1]
 
-TASK_NAME = "Scalar Prospect Autopilot"
+import control_panel as panel  # noqa: E402 - settings, list progress and the whole-list steps live there
+import workspace  # noqa: E402
+
+
+def task_name() -> str:
+    """One Windows task per workspace, so the US autopilot never replaces the UK one."""
+    label = workspace.config(panel.OUTREACH)["label"]
+    return "Scalar Prospect Autopilot" + ("" if label == "UK" else f" ({label})")
+
+
+TASK_NAME = task_name()
 CONFIG = "autopilot.json"
 LOCK = ".autopilot.lock"
 DEFAULTS = {
@@ -575,6 +588,8 @@ def install(at: str) -> str:
     quiet = exe.with_name("pythonw.exe")
     runner = quiet if quiet.exists() else exe
     command = f'"{runner}" "{Path(__file__).resolve()}" --scheduled'
+    if workspace.folder_name() != workspace.DEFAULT:
+        command += f' --workspace "{workspace.folder_name()}"'
     res = subprocess.run(["schtasks", "/Create", "/F", "/SC", "DAILY", "/TN", TASK_NAME, "/TR", command, "/ST", at],
                          capture_output=True, text=True)
     return "" if res.returncode == 0 else (res.stderr or res.stdout).strip() or "Task Scheduler refused."
@@ -593,6 +608,7 @@ def main() -> None:
     ap.add_argument("--install", action="store_true")
     ap.add_argument("--remove", action="store_true")
     ap.add_argument("--scheduled", action="store_true", help="started by the daily schedule: wait for the random start")
+    ap.add_argument("--workspace", default="", help="outreach folder, e.g. outreach-us (read before anything loads)")
     args = ap.parse_args()
     if args.install:
         err = install(load_config().get("time") or "07:30")

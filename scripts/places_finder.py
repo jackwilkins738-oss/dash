@@ -36,12 +36,29 @@ SEARCH_WORDS = {
     "roofing": "roofer",
     "landscaping": "landscaper",
     "building": "builder",
+    "plumbing": "plumber",
+    "electrical": "electrician",
+    "hvac": "heating engineer",
+}
+# What a US customer types: "roofer in Provo" finds fewer firms than "roofing contractor in Provo, UT".
+US_SEARCH_WORDS = {
+    "driveways": "concrete contractor",
+    "roofing": "roofing contractor",
+    "landscaping": "landscaping company",
+    "building": "general contractor",
+    "plumbing": "plumber",
+    "electrical": "electrician",
+    "hvac": "HVAC contractor",
 }
 # Merchants, hire shops and chains that turn up for "builder" - never a prospect.
 NOT_A_PROSPECT = {"hardware_store", "home_improvement_store", "home_goods_store", "store", "furniture_store",
                   "real_estate_agency", "lodging", "shopping_mall", "warehouse_store"}
 CHAINS = re.compile(r"\b(wickes|b&q|travis perkins|jewson|screwfix|toolstation|selco|homebase|howdens|buildbase|"
-                    r"huws gray|ibstock|marshalls|topps tiles|speedy hire|hss hire|checkatrade|mybuilder|rated people)\b", re.I)
+                    r"huws gray|ibstock|marshalls|topps tiles|speedy hire|hss hire|checkatrade|mybuilder|rated people|"
+                    # US: merchants, lead sites and national franchises - not a small firm that buys its own site.
+                    r"home depot|lowe'?s|menards|ace hardware|ferguson|angi|homeadvisor|thumbtack|yelp|porch|"
+                    r"roto-rooter|mr\.? rooter|benjamin franklin plumbing|one hour heating|mr\.? electric|"
+                    r"ars rescue rooter|service experts|aire serv|mosquito joe)\b", re.I)
 EXTRA_HEADERS = ["Google rating", "Google reviews", "Source"]
 
 
@@ -50,11 +67,15 @@ class PlacesError(Exception):
 
 
 def search(query: str, key: str, post=None, pages: int = PAGES) -> list[dict]:
-    """Every result for one text search (up to 60), as Google returns them - or just the first page(s)."""
+    """Every result for one text search (up to 60), as Google returns them - or just the first page(s).
+    In this workspace's country: the UK, or the US from the US panel."""
+    import workspace
+
+    market = workspace.config()
     post = post or _post
     out, token = [], ""
     for _ in range(pages):
-        body = {"textQuery": query, "regionCode": "gb", "languageCode": "en-GB", "pageSize": 20}
+        body = {"textQuery": query, "regionCode": market["region"], "languageCode": market["language"], "pageSize": 20}
         if token:
             body["pageToken"] = token
         res = post(body, key)
@@ -94,6 +115,20 @@ def own_site(url: str) -> str:
     return "" if not url or NOT_THEIR_SITE.search(url) else url
 
 
+def area_label(area: str) -> str:
+    """"provo, ut" -> "Provo, UT"; "guildford" -> "Guildford"."""
+    m = re.fullmatch(r"\s*(.+?),\s*([A-Za-z]{2})\s*", area or "")
+    return f"{m.group(1).title()}, {m.group(2).upper()}" if m else (area or "").strip().title()
+
+
+def query_for(trade: str, area: str) -> str:
+    from find_prospects import TRADES
+    import workspace
+
+    words = US_SEARCH_WORDS if workspace.market() == "us" else SEARCH_WORDS
+    return f"{words.get(trade, TRADES[trade]['label'])} in {area}"
+
+
 def row_for(place: dict, trade_label: str, area: str) -> dict:
     site = own_site(place.get("websiteUri") or "")
     return {
@@ -101,7 +136,7 @@ def row_for(place: dict, trade_label: str, area: str) -> dict:
         "Website": site,
         "Status": "New",
         "Trade": trade_label,
-        "Area": area.strip().title(),
+        "Area": area_label(area),
         "Phone": (place.get("nationalPhoneNumber") or "").strip(),
         "Registered address": (place.get("formattedAddress") or "").strip(),
         "Website found": "Google Maps" if site else "",
@@ -134,7 +169,7 @@ def find(trades: list[str], areas: list[str], key: str, known: tuple[set, set, s
     rows: list[dict] = []
     for trade in trades:
         for area in areas:
-            query = f"{SEARCH_WORDS.get(trade, TRADES[trade]['label'])} in {area}"
+            query = query_for(trade, area)
             places = search(query, key, post)
             log(f"Google Maps: \"{query}\" - {len(places)} results")
             for p in places:
@@ -183,13 +218,13 @@ def write(path: Path, rows: list[dict]) -> None:
 
 
 def run(args, outreach: Path, key: str, post=None, log=print) -> Path | None:
-    from find_prospects import known_firms, split_list
+    from find_prospects import known_firms, split_areas, split_list
 
     if not key:
         raise PlacesError("Add GOOGLE_PLACES_API_KEY in Settings (or a PAGESPEED_API_KEY from a project with "
                           "Places API (New) enabled).")
     trades = [t.strip() for t in args.trades.split(",") if t.strip()]
-    areas = split_list(args.areas)
+    areas = split_areas(args.areas)
     include = [w.lower() for w in split_list(args.include)]
     exclude = [w.lower() for w in split_list(args.exclude)]
     rows = find(trades, areas, key, known_firms(outreach), 10_000 if args.count_only else args.max, include, exclude,

@@ -86,6 +86,31 @@ All the best,
 """
 
 
+# The US workspace's starting replies: dollars, US wording. The dashboard's price after its free first
+# year isn't set for the US yet, so it isn't quoted - only that the first 12 months are free.
+US_SWAPS = [
+    ("- £{{price_landing}}", "- ${{price_landing}}"),
+    ("- £{{price_build}} for a five-page site, plus your own dashboard for enquiries, quotes, jobs and invoices "
+     "(free for the first 12 months, then £39 a month if you want to keep it)",
+     "- ${{price_build}} for a five-page site, plus your own dashboard for leads, quotes, jobs and invoices "
+     "(free for the first 12 months)"),
+    ("and I'll ring you.", "and I'll call you."),
+    ("Enquiries come straight to your phone.", "Leads come straight to your phone."),
+    ("Kind regards,", "Thanks,"),
+]
+
+
+def default_for(outreach: Path | None = None) -> str:
+    import workspace
+
+    if workspace.market(outreach) != "us":
+        return DEFAULT
+    text = DEFAULT
+    for old, new in US_SWAPS:
+        text = text.replace(old, new)
+    return text
+
+
 def parse(text: str) -> dict[str, str]:
     """{"How much?": "Hi ...", ...} in the order written."""
     parts = HEADING.split(text or "")
@@ -108,7 +133,7 @@ def problem(text: str) -> str:
 
 def load(outreach: Path) -> str:
     path = outreach / FILE
-    return path.read_text(encoding="utf-8") if path.exists() else DEFAULT
+    return path.read_text(encoding="utf-8") if path.exists() else default_for(outreach)
 
 
 def save(outreach: Path, text: str) -> str:

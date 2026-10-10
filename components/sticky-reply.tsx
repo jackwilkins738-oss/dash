@@ -9,7 +9,8 @@ import { SITE } from '@/lib/site'
 // section, so the ask comes to them: it appears once they start scrolling,
 // steps aside while the full reply section is on screen, and goes for good
 // after a choice or a close. Same endpoint as QuickReply.
-export function StickyReply({ slug, firmName }: { slug: string; firmName: string }) {
+// us: a US preview - "call" not "ring", and no WhatsApp (the number is a UK one).
+export function StickyReply({ slug, firmName, us = false }: { slug: string; firmName: string; us?: boolean }) {
   const [scrolled, setScrolled] = useState(false)
   const [replyInView, setReplyInView] = useState(false)
   const [state, setState] = useState<'open' | 'rang' | 'closed'>('open')
@@ -44,7 +45,7 @@ export function StickyReply({ slug, firmName }: { slug: string; firmName: string
       <div className="mx-auto flex max-w-3xl items-center gap-3">
         {state === 'rang' ? (
           <p className="flex-1 text-sm font-semibold" role="status">
-            Thanks - I&apos;ll ring you shortly on the number on your website.
+            {us ? "Thanks - I'll call you shortly on the number on your website." : "Thanks - I'll ring you shortly on the number on your website."}
           </p>
         ) : (
           <>
@@ -58,8 +59,9 @@ export function StickyReply({ slug, firmName }: { slug: string; firmName: string
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-blueprint px-4 py-3 text-sm font-semibold text-white hover:bg-brass sm:flex-none"
             >
               <Phone className="h-4 w-4" aria-hidden />
-              Yes, ring me
+              {us ? 'Yes, call me' : 'Yes, ring me'}
             </button>
+            {!us && (
             <a
               href={whatsapp}
               target="_blank"
@@ -70,6 +72,7 @@ export function StickyReply({ slug, firmName }: { slug: string; firmName: string
               <MessageCircle className="h-4 w-4" aria-hidden />
               WhatsApp
             </a>
+            )}
           </>
         )}
         <button type="button" onClick={() => setState('closed')} aria-label="Close" className="p-2 text-muted-foreground hover:text-foreground">

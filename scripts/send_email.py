@@ -119,6 +119,77 @@ All the best,
 Scalar Digital · 07401 696272""",
 }
 
+# The US workspace's emails (outreach-us/): no UK phone number, US spelling, and what CAN-SPAM asks of
+# every commercial email - the sender's real postal address ({{postal_address}}, POSTAL_ADDRESS in
+# Settings) and a plain way to opt out. Sending refuses to start without the address.
+US_DEFAULT_TEMPLATES = {
+    "first_subject": "{{business}} - quick look at your website",
+    "first_body": """Hi {{greeting_name}},
+
+{{first_line}} I put together a preview of what a new website for {{business}} could look like, next to how your current one measures up:
+
+{{preview_url}}
+
+I checked your current site on my phone too. {{score_line}} {{issue_line}} {{why_line}}
+
+Worth a 10-minute call? Just reply here.
+Or pick a time that suits you: {{booking_link}}
+
+{{your_name}}
+Scalar Digital
+
+{{postal_address}}
+Don't want to hear from me again? Reply "no" and I'll take you off my list.""",
+    "followup_subject": "Following up - {{business}}",
+    "followup_body": """Hi {{greeting_name}},
+
+Did the preview for {{business}} come through OK?
+
+{{preview_url}}
+
+{{issue_line}} {{why_line}}
+
+If you'd like it fixed, reply "yes" and we'll set up a 10-minute call at a time that works for you. If not, reply "no" and you won't hear from me again.
+
+{{your_name}}
+Scalar Digital
+
+{{postal_address}}""",
+}
+US_FINAL_TEMPLATE = {
+    "subject": "Closing the file - {{business}}",
+    "body": """Hi {{greeting_name}},
+
+I haven't heard back, so I'll take it the timing isn't right and I won't follow up again.
+
+The page I made for {{business}} stays up for now, in case it's ever useful:
+
+{{preview_url}}
+
+If anything changes, just reply to this email.
+
+All the best,
+{{your_name}}
+Scalar Digital
+
+{{postal_address}}""",
+}
+# Every US email must show the postal address - checked on save and before every send.
+US_NEEDS = "{{postal_address}}"
+
+
+def defaults(outreach: Path) -> dict[str, str]:
+    import workspace
+
+    return US_DEFAULT_TEMPLATES if workspace.market(outreach) == "us" else DEFAULT_TEMPLATES
+
+
+def final_template(outreach: Path) -> dict[str, str]:
+    import workspace
+
+    return US_FINAL_TEMPLATE if workspace.market(outreach) == "us" else FINAL_TEMPLATE
+
+
 # An optional second version of the first email, tested against the first: each firm gets one
 # version, picked from its email address (so a re-send never switches it), and the scorecard
 # (scorecard.py) compares how each does. Leave both blank to send one version only.
@@ -126,7 +197,7 @@ VARIANT_B = {"first_subject_b": "", "first_body_b": ""}
 
 # What a template may use: the batch file's columns, plus your name.
 FIELDS = {"business", "greeting_name", "email", "mobile_score", "lcp_s", "preview_url", "status", "trade", "area",
-          "top_issue", "score_line", "issue_line", "why_line", "first_line", "your_name", "booking_link"}
+          "top_issue", "score_line", "issue_line", "why_line", "first_line", "your_name", "booking_link", "postal_address"}
 PLACEHOLDER = re.compile(r"\{\{\s*([a-z_]+)\s*\}\}")
 
 
@@ -142,7 +213,7 @@ def load_templates(outreach: Path) -> dict[str, str]:
         saved = json.loads((outreach / TEMPLATES).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         saved = {}
-    out = {k: str(saved.get(k) or v) for k, v in DEFAULT_TEMPLATES.items()}
+    out = {k: str(saved.get(k) or v) for k, v in defaults(outreach).items()}
     out.update({k: str(saved.get(k) or "") for k in VARIANT_B})
     return out
 
@@ -160,7 +231,7 @@ def variant_for(email: str, templates: dict[str, str]) -> str:
     return "B" if hashlib.sha256(email.strip().lower().encode()).digest()[0] % 2 else "A"
 
 
-def template_problem(templates: dict[str, str]) -> str:
+def template_problem(templates: dict[str, str], market: str = "uk") -> str:
     """Why these templates can't be saved/sent, or ''."""
     b = [k for k in VARIANT_B if templates.get(k, "").strip()]
     if len(b) == 1:
@@ -177,12 +248,17 @@ def template_problem(templates: dict[str, str]) -> str:
     for key in ("first_body", "followup_body", *(["first_body_b"] if b else [])):
         if "{{preview_url}}" not in templates[key].replace(" ", ""):
             return f"The {key.replace('_', ' ')} must include {{{{preview_url}}}}."
+        if market == "us" and US_NEEDS not in templates[key].replace(" ", ""):
+            return (f"The {key.replace('_', ' ')} must include {US_NEEDS} - US law (CAN-SPAM) needs your postal "
+                    "address in every email.")
     return ""
 
 
 def save_templates(outreach: Path, templates: dict[str, str]) -> str:
+    import workspace
+
     clean = {k: str(templates.get(k) or "").replace("\r\n", "\n")[:6000] for k in [*DEFAULT_TEMPLATES, *VARIANT_B]}
-    problem = template_problem(clean)
+    problem = template_problem(clean, workspace.market(outreach))
     if problem:
         return problem
     outreach.mkdir(exist_ok=True)
@@ -200,7 +276,7 @@ def email_link(url: str) -> str:
 
 def render(text: str, row: dict, your_name: str) -> str:
     values = {"booking_link": os.environ.get("BOOKING_LINK", "").strip(), **{k: str(v or "") for k, v in row.items() if v},
-              "your_name": your_name}
+              "your_name": your_name, "postal_address": os.environ.get("POSTAL_ADDRESS", "").strip()}
     # No contact name on file: "Hi there," - never "Hi ,".
     if not values.get("greeting_name", "").strip():
         values["greeting_name"] = "there"
@@ -352,10 +428,17 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
     your_name = os.environ.get("MAIL_FROM_NAME", "").strip()
     if not your_name:
         raise SendStopped("Add MAIL_FROM_NAME in Settings first - it's the name people see and your sign-off.")
+    import workspace
+
+    market = workspace.market(outreach)
+    if market == "us" and not os.environ.get("POSTAL_ADDRESS", "").strip():
+        raise SendStopped("Add POSTAL_ADDRESS in Settings first - US law (CAN-SPAM) needs a real postal address "
+                          "in every email (a virtual mailbox address is fine).")
     templates = load_templates(outreach)
-    problem = template_problem(templates)
+    problem = template_problem(templates, market)
     if problem:
         raise SendStopped(problem)
+    final_t = final_template(outreach)
     if not test:
         import sending_health
 
@@ -490,13 +573,13 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
             variant = "" if followups else variant_for(email, templates)
             suffix = "_b" if variant == "B" else ""
             final = followups and row.get("stage") == "final"
-            subject = render(FINAL_TEMPLATE["subject"] if final else templates[f"{kind}_subject{suffix}"], row, your_name).strip()
+            subject = render(final_t["subject"] if final else templates[f"{kind}_subject{suffix}"], row, your_name).strip()
             reply_to = ""
             if followups:
                 first = sent_rows.get(email, {})
                 if first.get("message_id") and first.get("subject"):
                     reply_to, subject = first["message_id"], "Re: " + first["subject"]
-            body = render(FINAL_TEMPLATE["body"] if final else templates[f"{kind}_body{suffix}"], row, your_name)
+            body = render(final_t["body"] if final else templates[f"{kind}_body{suffix}"], row, your_name)
             inbox = pick(email)
             if inbox is None:
                 if plan and not followups:
@@ -558,10 +641,14 @@ def preview_batch(outreach: Path, followups: bool = False, env: dict | None = No
     who'd be skipped and why. Reads only: nothing is sent or recorded. For the panel's "Preview emails"."""
     env = dict(os.environ) if env is None else env
     your_name = (env.get("MAIL_FROM_NAME") or "").strip() or "[your name - set MAIL_FROM_NAME in Settings]"
+    import workspace
+
     templates = load_templates(outreach)
-    problem = template_problem(templates)
+    problem = template_problem(templates, workspace.market(outreach))
     if problem:
         return {"error": problem}
+    final_t = final_template(outreach)
+    postal = (env.get("POSTAL_ADDRESS") or "").strip()
     kind = "followup" if followups else "first"
     pending = eb._rows(outreach / (eb.FOLLOWUP_PENDING if followups else eb.PENDING))[1]
     if not pending:
@@ -585,13 +672,15 @@ def preview_batch(outreach: Path, followups: bool = False, env: dict | None = No
         row = first_line.apply({**details.get(email, {}), **{k: v for k, v in p.items() if v}, "email": email}, lines)
         if booking and not row.get("booking_link"):
             row["booking_link"] = booking
+        if postal:
+            row["postal_address"] = postal
         already = sent_rows.get(email, {})
         if already.get(_sent_col(followups, row)):
             continue
         variant = "" if followups else variant_for(email, templates)
         suffix = "_b" if variant == "B" else ""
         final = followups and row.get("stage") == "final"
-        subject = render(FINAL_TEMPLATE["subject"] if final else templates[f"{kind}_subject{suffix}"], row, your_name).strip()
+        subject = render(final_t["subject"] if final else templates[f"{kind}_subject{suffix}"], row, your_name).strip()
         if followups and already.get("subject"):
             subject = "Re: " + already["subject"]
         skip = _still_ok(outreach, email, row.get("business", ""))
@@ -604,7 +693,7 @@ def preview_batch(outreach: Path, followups: bool = False, env: dict | None = No
             sender = min(used, key=lambda a: used[a])
             used[sender] += 1
         emails.append({"business": row.get("business", ""), "email": email, "from": sender, "subject": subject,
-                       "body": render(FINAL_TEMPLATE["body"] if final else templates[f"{kind}_body{suffix}"], row, your_name),
+                       "body": render(final_t["body"] if final else templates[f"{kind}_body{suffix}"], row, your_name),
                        "variant": variant,
                        "preview_url": row.get("preview_url", ""), "first_line": row.get("first_line", ""), "skip": skip})
         if len(emails) >= PREVIEW_MAX:

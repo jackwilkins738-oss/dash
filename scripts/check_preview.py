@@ -24,6 +24,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import workspace  # noqa: E402 - after the path setup
+
 SLUG = re.compile(r"/for/([a-z0-9]+(?:-[a-z0-9]+)*)")
 
 
@@ -190,8 +192,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--link", required=True)
-    ap.add_argument("--outreach", type=Path, default=next(
-        (d / "outreach" for d in [HERE.parent, *HERE.parents] if (d / "outreach").is_dir()), HERE.parent / "outreach"))
+    ap.add_argument("--outreach", type=Path, default=workspace.outreach_dir())
     args = ap.parse_args(argv)
     slug = slug_from(args.link)
     if not slug:

@@ -120,10 +120,9 @@ QUOTE_START = re.compile(r"^(on .+ wrote:|-{2,} ?original message|from: .+|sent 
 
 
 def outreach_dir() -> Path:
-    for parent in [HERE.parent, *HERE.parents]:
-        if (parent / "outreach").is_dir():
-            return parent / "outreach"
-    return HERE.parent / "outreach"
+    import workspace
+
+    return workspace.outreach_dir()
 
 
 # ---------------------------------------------------------------- who you've contacted

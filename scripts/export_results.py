@@ -41,10 +41,9 @@ COLUMNS = [
 
 
 def outreach_dir() -> Path:
-    for parent in [HERE.parent, *HERE.parents]:
-        if (parent / "outreach").is_dir():
-            return parent / "outreach"
-    return HERE.parent / "outreach"
+    import workspace
+
+    return workspace.outreach_dir()
 
 
 def list_sheets(outreach: Path) -> list[Path]:

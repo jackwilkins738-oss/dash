@@ -23,6 +23,24 @@ VERSION = "2023-06-01"
 MAX_REPLY_CHARS = 4000
 _model_cache: dict[str, str] = {}
 
+US_SYSTEM_SWAPS = [
+    ("a one-person UK web design business that builds fast, hand-coded websites for trades firms",
+     "a one-person web design business that builds fast, hand-coded websites for trades businesses in the US"),
+    ("British English.", "American English."),
+    ("a good time and number to ring them", "a good time and number to call them"),
+    ("(prices, what's included", "(prices in US dollars, what's included"),
+]
+
+
+def system_prompt(market: str = "uk") -> str:
+    """The rules: as written for UK prospects, or with US English and dollars for the US workspace."""
+    text = SYSTEM
+    if market == "us":
+        for old, new in US_SYSTEM_SWAPS:
+            text = text.replace(old, new)
+    return text
+
+
 SYSTEM = """You draft email replies for a one-person UK web design business that builds fast, hand-coded \
 websites for trades firms. A prospect has replied to a cold email. Write the answer the owner will send.
 
@@ -105,8 +123,8 @@ def brief(firm: dict, values: dict, saved: str) -> str:
         f"First name to greet: {values.get('greeting_name') or 'there'}",
         f"Their private preview page (made for them): {values.get('preview_url') or 'none'}",
         f"Booking link: {values.get('booking_link') or 'none - ask for a good time and number instead'}",
-        f"Price, single-page site: £{values.get('price_landing')}",
-        f"Price, five-page site with dashboard: £{values.get('price_build')}",
+        f"Price, single-page site: {values.get('currency') or '£'}{values.get('price_landing')}",
+        f"Price, five-page site with dashboard: {values.get('currency') or '£'}{values.get('price_build')}",
         f"Sender's name: {values.get('your_name')}",
     ]
     reply = (firm.get("message") or "").strip()[:MAX_REPLY_CHARS]
@@ -133,7 +151,7 @@ def draft(firm: dict, values: dict, saved: str, key: str, chosen_model: str = ""
     out = _request("/messages", key, {
         "model": model_for(key, chosen_model),
         "max_tokens": 700,
-        "system": SYSTEM,
+        "system": system_prompt(values.get("market") or "uk"),
         "messages": [{"role": "user", "content": brief(firm, values, saved)}],
     }, timeout=60)
     text = "".join(b.get("text", "") for b in out.get("content") or [] if isinstance(b, dict) and b.get("type") == "text")
@@ -151,32 +169,37 @@ TELEGRAM_MAX = 4000
 def env_values(env: dict, display_name: str = "") -> dict[str, str]:
     """The panel's reply facts from settings / environment - for alerts, where there's no Calls tab item."""
     from saved_replies import first_name
+    import workspace
 
-    def price(key: str, default: str) -> str:
+    market = workspace.config()
+
+    def price(key: str, default: int) -> str:
         try:
             return f"{float(env.get(key) or default):,.0f}"
         except ValueError:
-            return default
+            return f"{default:,}"
 
     return {
         "greeting_name": first_name(display_name),
         "preview_url": "",
         "booking_link": env.get("BOOKING_LINK", ""),
-        "price_build": price("QUOTE_PRICE_BUILD", "2500"),
-        "price_landing": price("QUOTE_PRICE_LANDING", "750"),
+        "price_build": price("QUOTE_PRICE_BUILD", market["prices"]["build"]),
+        "price_landing": price("QUOTE_PRICE_LANDING", market["prices"]["landing"]),
+        "currency": market["currency"],
+        "market": workspace.market(),
         "your_name": env.get("MAIL_FROM_NAME") or env.get("LETTER_SIGNOFF") or "Scalar Digital",
     }
 
 
 def try_draft(firm: dict, env: dict, display_name: str = "", saved: str = "") -> str:
     """A draft for a phone alert, or "" - no key, no credit or no connection never stops the alert."""
-    from saved_replies import DEFAULT
+    from saved_replies import default_for
 
     key = (env.get("ANTHROPIC_API_KEY") or "").strip()
     if not key:
         return ""
     try:
-        return draft(firm, env_values(env, display_name), saved or DEFAULT, key, env.get("AI_MODEL", ""))
+        return draft(firm, env_values(env, display_name), saved or default_for(), key, env.get("AI_MODEL", ""))
     except AIError:
         return ""
 

@@ -3,7 +3,7 @@ import { FOUNDER, SITE } from '@/lib/site'
 
 // Trades buy from a person: a face, a name and a mobile number, not just a brand. Renders nothing
 // until FOUNDER in lib/site.ts is filled in and switched on.
-export function Founder() {
+export function Founder({ phone: showPhone = true }: { phone?: boolean } = {}) {
   if (!FOUNDER.show || !FOUNDER.name || FOUNDER.lines.length === 0) return null
   const phone = SITE.phone.replace('+44', '0').replace(/^(\d{5})(\d+)$/, '$1 $2')
   return (
@@ -25,9 +25,11 @@ export function Founder() {
               {line}
             </p>
           ))}
-          <a href={`tel:${SITE.phone}`} className="mt-4 inline-block font-semibold text-blueprint underline-offset-4 hover:underline">
-            Ring me direct: {phone}
-          </a>
+          {showPhone && (
+            <a href={`tel:${SITE.phone}`} className="mt-4 inline-block font-semibold text-blueprint underline-offset-4 hover:underline">
+              Ring me direct: {phone}
+            </a>
+          )}
         </div>
       </div>
     </section>

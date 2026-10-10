@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prospect Control Panel</title>
+<title>Prospect Control Panel__MARKET__</title>
 <style>
   :root { --bg:#0f1115; --card:#171a21; --line:#262b35; --text:#e7e9ee; --dim:#8b93a3; --accent:#4f8cff; --ok:#3ecf8e; --bad:#ff6b6b; --warn:#f5b84b; }
   * { box-sizing: border-box; }
@@ -119,7 +119,7 @@
 </head>
 <body>
 <header>
-  <h1>Control Panel <span class="ver">v__VERSION__</span></h1>
+  <h1>Control Panel__MARKET__ <span class="ver">v__VERSION__</span></h1>
   <div class="jobbar">
     <span class="dot" id="dot"></span><b id="job-label">Nothing running</b><span id="job-time" class="dim"></span>
     <button class="danger" id="stop" disabled>Stop</button>
@@ -275,10 +275,13 @@
         <label class="chip"><input type="checkbox" value="driveways"> Driveways &amp; patios</label>
         <label class="chip"><input type="checkbox" value="landscaping"> Landscaping</label>
         <label class="chip"><input type="checkbox" value="building"> Building &amp; extensions</label>
+        <label class="chip"><input type="checkbox" value="plumbing"> Plumbing</label>
+        <label class="chip"><input type="checkbox" value="electrical"> Electrical</label>
+        <label class="chip"><input type="checkbox" value="hvac"> HVAC</label>
       </div>
       <label for="f-areas">Areas</label>
       <input type="text" id="f-areas" placeholder="Guildford, Woking, GU21">
-      <p class="hint">Towns or postcode districts, comma separated - matched to where the company is registered.</p>
+      <p class="hint">Towns or postcode districts, comma separated - matched to where the company is registered. In the US panel: city and state, e.g. Provo, UT; Ogden, UT.</p>
       <div class="grid2">
         <div>
           <label for="f-age">Company age</label>
@@ -521,6 +524,9 @@ Scalar Digital · 07401 696272</textarea>
       </div>
       <label>Letters and proposals: signed as / email / phone <code>LETTER_SIGNOFF / LETTER_EMAIL / LETTER_PHONE</code></label>
       <div class="grid3"><input type="text" id="LETTER_SIGNOFF" placeholder="e.g. Scalar Digital"><input type="text" id="LETTER_EMAIL" placeholder="e.g. hello@scalardigital.co.uk"><input type="text" id="LETTER_PHONE" placeholder="e.g. 07401 696272"></div>
+      <label>Postal address for emails <code>POSTAL_ADDRESS</code></label>
+      <input type="text" id="POSTAL_ADDRESS" placeholder="e.g. Scalar Digital, 123 Main St #456, Provo, UT 84601">
+      <p class="hint">US panel only: CAN-SPAM needs a real postal address in every email ({{postal_address}} in the templates) - a virtual mailbox is fine. US sending won't start without it.</p>
     </div>
 
     <div class="card">
@@ -655,7 +661,7 @@ function render() {
     $("DASHBOARD_API_URL").value = s.settings.DASHBOARD_API_URL || "";
     $("SITE_URL").value = s.settings.SITE_URL || "";
     $("TELEGRAM_CHAT_ID").value = s.settings.TELEGRAM_CHAT_ID || "";
-    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "REVIEW_LINK", "WEEKLY_TARGETS", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "AI_MODEL"]) $(k).value = s.settings[k] || "";
+    for (const k of ["LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_3_ADDRESS", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "BOOKING_LINK", "REVIEW_LINK", "WEEKLY_TARGETS", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "AI_MODEL", "POSTAL_ADDRESS"]) $(k).value = s.settings[k] || "";
     quotePrices = { build: s.settings.QUOTE_PRICE_BUILD || "2500", landing: s.settings.QUOTE_PRICE_LANDING || "750" };
     fillSendFrom(s.settings);
     if (!s.settings.PROSPECTS_API_SECRET) showTab("settings");  // nothing works until it's set
@@ -1299,7 +1305,7 @@ $("open-results").addEventListener("click", async () => { const r = await post("
 $("sheet").addEventListener("change", () => { try { localStorage.setItem("sheet", $("sheet").value); } catch (e) {} loadProgress(); loadReview(); loadLetters(); loadBatch(); if (callsWanted()) loadCalls(); });
 $("save").addEventListener("click", async () => {
   const body = {};
-  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "REVIEW_LINK", "WEEKLY_TARGETS", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "ANTHROPIC_API_KEY", "AI_MODEL"]) body[k] = $(k).value;
+  for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "LETTER_SIGNOFF", "LETTER_EMAIL", "LETTER_PHONE", "MAIL_ADDRESS", "MAIL_APP_PASSWORD", "MAIL_IMAP_HOST", "MAIL_FROM_NAME", "MAIL_EXTRA_1_ADDRESS", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_ADDRESS", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_ADDRESS", "MAIL_EXTRA_3_PASSWORD", "QUOTE_PRICE_BUILD", "QUOTE_PRICE_LANDING", "QUOTE_VAT_RATE", "QUOTE_DEPOSIT_PERCENT", "QUOTE_EXTRAS", "DASHBOARD_API_URL", "SITE_URL", "BOOKING_LINK", "REVIEW_LINK", "WEEKLY_TARGETS", "CLOUDFLARE_API_TOKEN", "CLOUD_REPLY_ALERTS", "BACKUP_DIR", "ANTHROPIC_API_KEY", "AI_MODEL", "POSTAL_ADDRESS"]) body[k] = $(k).value;
   const r = await post("/api/settings", body);
   for (const k of ["PROSPECTS_API_SECRET", "PAGESPEED_API_KEY", "GOOGLE_PLACES_API_KEY", "COMPANIES_HOUSE_API_KEY", "TELEGRAM_BOT_TOKEN", "MAIL_APP_PASSWORD", "MAIL_EXTRA_1_PASSWORD", "MAIL_EXTRA_2_PASSWORD", "MAIL_EXTRA_3_PASSWORD", "ANTHROPIC_API_KEY"]) $(k).value = "";
   fillSendFrom(body);

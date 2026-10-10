@@ -31,6 +31,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import workspace  # noqa: E402 - after the path setup
+
 CACHE = "area-scout-cache.json"
 OUT = "area-scout.xlsx"
 FRESH_DAYS = 30
@@ -209,8 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Rank towns by how many busy trade firms have slow websites.")
     ap.add_argument("--trades", default="roofing")
     ap.add_argument("--areas", default="", help="towns, comma separated (blank: South East commuter towns)")
-    ap.add_argument("--outreach", type=Path, default=next(
-        (d / "outreach" for d in [HERE.parent, *HERE.parents] if (d / "outreach").is_dir()), HERE.parent / "outreach"))
+    ap.add_argument("--outreach", type=Path, default=workspace.outreach_dir())
     args = ap.parse_args(argv)
     trades = [t.strip() for t in args.trades.split(",") if t.strip() in TRADES]
     if not trades:

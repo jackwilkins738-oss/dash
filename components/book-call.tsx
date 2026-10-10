@@ -67,8 +67,9 @@ export function BookCallSection() {
   )
 }
 
-/** The preview pages' band: message, or book a call on the calendar right here. */
-export function BookCallBand({ contactHref, firmName }: { contactHref: string; firmName: string }) {
+/** The preview pages' band: message, or book a call on the calendar right here. No contactHref: the
+ *  calendar only (the US previews, whose contact page would be the UK one). */
+export function BookCallBand({ contactHref, firmName }: { contactHref?: string; firmName: string }) {
   return (
     <section id="book" data-print="hide" className="scroll-mt-24 border-t border-border py-16 sm:py-20">
       <div className="mx-auto max-w-4xl px-5 sm:px-8">
@@ -77,16 +78,20 @@ export function BookCallBand({ contactHref, firmName }: { contactHref: string; f
             Like what you see for {firmName}?
           </h2>
           <p className="mt-3 text-pretty leading-relaxed text-muted-foreground">
-            Pick a time below for a 15-minute call, or send a quick message - no obligation, nothing to prepare.
+            {contactHref
+              ? 'Pick a time below for a 15-minute call, or send a quick message - no obligation, nothing to prepare.'
+              : 'Pick a time below for a 15-minute call - no obligation, nothing to prepare.'}
           </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href={contactHref}
-              className="btn-chamfer inline-flex items-center justify-center gap-2 bg-blueprint px-6 py-3 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
-            >
-              Send a message
-            </Link>
-          </div>
+          {contactHref && (
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href={contactHref}
+                className="btn-chamfer inline-flex items-center justify-center gap-2 bg-blueprint px-6 py-3 font-mono text-sm font-semibold uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-brass hover:text-background"
+              >
+                Send a message
+              </Link>
+            </div>
+          )}
         </Reveal>
         <BookingCalendar className="mt-6" />
       </div>

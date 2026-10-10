@@ -21,6 +21,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import workspace  # noqa: E402 - after the path setup
+
 PLAYERS = ("loom.com/", "youtube.com/", "youtu.be/", "vimeo.com/")
 
 
@@ -72,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         from datetime import date
 
         import daily
-        outreach = next((d / "outreach" for d in [HERE.parent, *HERE.parents] if (d / "outreach").is_dir()), HERE.parent / "outreach")
+        outreach = workspace.outreach_dir()
         daily.log_video(outreach, slug, date.today())  # counts towards the week's videos target
     print(f"Video on: {site}/for/{slug}" if out.get("video_url") else f"Video taken off {site}/for/{slug}")
     return 0
