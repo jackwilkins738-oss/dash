@@ -88,7 +88,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 40  # speed checks per step of Run the whole list - each step is pushed, so stopping loses nothing
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "104"
+PANEL_VERSION = "105"
 MAX_LOG_LINES = 5000
 
 
@@ -99,6 +99,7 @@ def outreach_dir() -> Path:
 
 
 OUTREACH = outreach_dir()
+import area_scout  # noqa: E402
 import workspace  # noqa: E402
 SETTINGS_FILE = OUTREACH / "panel.env"
 RUN_LOG = OUTREACH / "last-run-log.txt"
@@ -268,7 +269,10 @@ def sheets() -> list[str]:
     # A list saved as CSV gets a matching .xlsx made (and topped up) so it can be picked and run.
     for note in csv_lists.import_all(OUTREACH):
         print(note, flush=True)
-    names = sorted(p.name for p in OUTREACH.glob("*.xlsx") if not p.name.startswith("~$") and p.name != RESULTS_NAME and not p.name.endswith(".tmp.xlsx"))
+    # Not lists: the results export and the area scout's ranking of towns (no firms in either) - the
+    # scout's file is often the newest, which would make it the list picked by default.
+    reports = {RESULTS_NAME, area_scout.OUT}
+    names = sorted(p.name for p in OUTREACH.glob("*.xlsx") if not p.name.startswith("~$") and p.name not in reports and not p.name.endswith(".tmp.xlsx"))
     # The master list first, as it's the default.
     return sorted(names, key=lambda n: n != "outreach-master.xlsx")
 
@@ -416,7 +420,9 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
         job.note("")
     yield from replies_first(settings)
     first = ["--sheet", sheet, "--find-contacts", "--check-emails", "--guess-trades"]
-    if settings.get("COMPANIES_HOUSE_API_KEY"):
+    if not workspace.config(OUTREACH)["pecr"]:
+        pass  # email-or-letter by company type is a UK rule (PECR) - nothing to look up elsewhere
+    elif settings.get("COMPANIES_HOUSE_API_KEY"):
         first.append("--lookup-companies")
     else:
         job.note("No COMPANIES_HOUSE_API_KEY in Settings - skipping the company type lookup.")

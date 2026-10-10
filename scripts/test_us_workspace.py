@@ -106,6 +106,19 @@ class Scout(unittest.TestCase):
         self.assertEqual(rows[0]["Opportunity"], 0)  # no letters in the US: a firm without a website adds nothing
 
 
+class PanelLists(unittest.TestCase):
+    def test_the_scout_report_is_never_offered_as_a_list(self):
+        import control_panel
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            for name in ("maps-roofing-provo-ut-2026-10-10.xlsx", "area-scout.xlsx", "outreach-results.xlsx"):
+                (out / name).write_bytes(b"")
+            with mock.patch.object(control_panel, "OUTREACH", out):
+                self.assertEqual(control_panel.sheets(), ["maps-roofing-provo-ut-2026-10-10.xlsx"])
+                self.assertEqual(control_panel.latest_sheet(), "maps-roofing-provo-ut-2026-10-10.xlsx")
+
+
 class Channel(unittest.TestCase):
     def test_us_sole_traders_get_email_and_no_one_gets_a_letter(self):
         row = {"Email": "mike@wasatchplumbing.com", "Company type": "Sole trader"}
