@@ -187,6 +187,12 @@ class Channel(unittest.TestCase):
 
 
 class Sending(unittest.TestCase):
+    def test_us_emails_pitch_owning_leads_and_stay_legal(self):
+        t = se.US_DEFAULT_TEMPLATES
+        self.assertIn("Angi", t["first_body"])
+        self.assertIn("Angi", t["followup_body"])
+        self.assertEqual(se.template_problem(t, "us"), "")
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.out = Path(self.tmp.name) / "outreach-us"

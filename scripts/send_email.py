@@ -132,6 +132,8 @@ US_DEFAULT_TEMPLATES = {
 
 I checked your current site on my phone too. {{score_line}} {{issue_line}} {{why_line}}
 
+Most contractors I talk to are paying Angi, Thumbtack or Google for leads their own website should be bringing in for free. That's what this is built to fix.
+
 Worth a 10-minute call? Just reply here.
 Or pick a time that suits you: {{booking_link}}
 
@@ -147,7 +149,7 @@ Did the preview for {{business}} come through OK?
 
 {{preview_url}}
 
-{{issue_line}} {{why_line}}
+{{issue_line}} {{why_line}} Every lead your own site brings in is one you don't pay Angi for.
 
 If you'd like it fixed, reply "yes" and we'll set up a 10-minute call at a time that works for you. If not, reply "no" and you won't hear from me again.
 

@@ -381,7 +381,7 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
               </h2>
               <p className="mx-auto mt-5 max-w-2xl text-pretty leading-relaxed text-muted-foreground">
                 Three moments from Google&apos;s own mobile test{checkedOn ? ` on ${checkedOn}` : ''}. Someone searching for{' '}
-                {p.trade ? `a ${p.trade.toLowerCase()}` : 'a tradesman'} on their phone is looking at this while they decide
+                {p.trade ? `a ${p.trade.toLowerCase()}` : us ? 'a contractor' : 'a tradesman'} on their phone is looking at this while they decide
                 whether to wait or try the next result.
               </p>
             </Reveal>
