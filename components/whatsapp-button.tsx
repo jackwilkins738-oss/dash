@@ -17,6 +17,7 @@ export function WhatsAppButton() {
   return (
     <a
       data-print="hide"
+      data-uk-only
       href={SITE.whatsapp}
       target="_blank"
       rel="noopener noreferrer"

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import { PageHeader, HeaderActions } from '@/components/page-header'
 import { SiteShowcase } from '@/components/site-showcase'
@@ -22,6 +23,7 @@ import { QuickReply } from '@/components/quick-reply'
 import { StickyReply } from '@/components/sticky-reply'
 import { LoadFilmstrip } from '@/components/load-filmstrip'
 import { PRICES } from '@/lib/site'
+import { formatPrice, marketFor, pricesFor } from '@/lib/market'
 import { reviewsView, rivalsView, stars, videoSrc } from '@/lib/preview-extras'
 import { SITE } from '@/lib/site'
 import { heroPitch, reportTiles } from '@/lib/preview-pitch'
@@ -36,7 +38,7 @@ import { heroPitch, reportTiles } from '@/lib/preview-pitch'
 // Every figure on the page is theirs and measured, or a band Google itself
 // publishes. Nothing here claims a result for them.
 
-type Props = { params: Promise<{ slug: string }> }
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ m?: string | string[] }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
@@ -70,10 +72,18 @@ function tradePhrase(p: Prospect) {
   return [trade ? `${article} ${trade} firm` : 'a trade firm', p.area ? `in ${p.area}` : null].filter(Boolean).join(' ')
 }
 
-export default async function ProspectPreviewPage({ params }: Props) {
+export default async function ProspectPreviewPage({ params, searchParams }: Props) {
   const { slug } = await params
   const p = await getProspect(slug)
   if (!p) notFound()
+
+  // US firms get their link on the US domain (lib/market.ts): dollars, no UK phone or WhatsApp, and no
+  // online quote - the dashboard's quotes are in pounds with UK VAT - so "yes" is a reply instead.
+  const market = marketFor((await headers()).get('host'), (await searchParams).m)
+  const us = market === 'us'
+  const prices = pricesFor(market)
+  const locale = us ? 'en-US' : 'en-GB'
+  const ring = us ? 'call' : 'ring'
 
   const sceneId = showcaseIdForTradeText(p.trade) ?? undefined
   const contactHref = `/contact?firm=${encodeURIComponent(p.business_name)}`
@@ -117,11 +127,13 @@ export default async function ProspectPreviewPage({ params }: Props) {
     mapsQuery: rivals?.query,
   })
   const checkedOn = checkedAt
-    ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }).format(checkedAt)
+    ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: us ? 'UTC' : 'Europe/London' }).format(checkedAt)
     : null
 
   return (
     <main>
+      {/* The site's header, footer, WhatsApp button and call bar are the UK's (data-uk-only). */}
+      {us && <style>{'[data-uk-only]{display:none!important}'}</style>}
       <PreviewBeacon slug={p.slug} />
       {/* On paper only: whose report this is, and where the live version lives. */}
       <div data-print="only" className="border-b border-border px-5 pb-3 pt-1 text-xs text-muted-foreground">
@@ -200,7 +212,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
                   <p className="font-display text-2xl font-semibold">Built to win the jobs worth having.</p>
                   <p className="mt-4 leading-relaxed text-muted-foreground">
                     Hand-coded from a blank page for {p.business_name}: fast on a phone, clear about what you do and
-                    where, and wired so every enquiry reaches you the moment it lands.
+                    where, and wired so every {us ? 'lead' : 'enquiry'} reaches you the moment it lands.
                   </p>
                 </div>
               )}
@@ -232,7 +244,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
                 What we found
               </span>
               <h2 className="mt-4 font-display text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-                {findings.length === 1 ? 'One thing' : `${findings.length} things`} on {siteName} that could be losing you enquiries.
+                {findings.length === 1 ? 'One thing' : `${findings.length} things`} on {siteName} that could be losing you {us ? 'leads' : 'enquiries'}.
               </h2>
               <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">
                 Checked on {checkedOn} with Google&apos;s own mobile test and a look at your public homepage
@@ -267,7 +279,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
 
       <section id="reply" className="scroll-mt-20 border-t border-border py-16 sm:py-20">
         <div className="mx-auto max-w-3xl px-5 sm:px-8">
-          <QuickReply slug={p.slug} firmName={p.business_name} />
+          <QuickReply slug={p.slug} firmName={p.business_name} us={us} />
         </div>
       </section>
 
@@ -324,7 +336,7 @@ export default async function ProspectPreviewPage({ params }: Props) {
                   <p className="mt-4 font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-muted-foreground/70">
                     Measured with Google PageSpeed Insights (mobile)
                     {rivals.checkedAt
-                      ? ` in ${new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${rivals.checkedAt}T12:00:00Z`))}`
+                      ? ` in ${new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${rivals.checkedAt}T12:00:00Z`))}`
                       : ''}
                     .
                     Scores move a little from run to run.
@@ -339,13 +351,13 @@ export default async function ProspectPreviewPage({ params }: Props) {
                   <p className="mt-3 font-display text-3xl font-bold">
                     {reviews.rating.toFixed(1)}{' '}
                     <span className="text-lg font-semibold text-muted-foreground">
-                      from {reviews.reviews.toLocaleString('en-GB')} Google reviews
+                      from {reviews.reviews.toLocaleString(locale)} Google reviews
                     </span>
                   </p>
                   <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
                     {reviews.shownOnSite === false
-                      ? `That's the strongest thing ${p.business_name} has - and your homepage doesn't show any of it. Most people check reviews before they ring.`
-                      : `That's the strongest thing ${p.business_name} has, and most people check reviews before they ring.`}
+                      ? `That's the strongest thing ${p.business_name} has - and your homepage doesn't show any of it. Most people check reviews before they ${ring}.`
+                      : `That's the strongest thing ${p.business_name} has, and most people check reviews before they ${ring}.`}
                   </p>
                   <p className="mt-4 text-sm text-foreground/90">
                     <span className="font-semibold">In a Scalar build:</span> your rating and your best reviews sit on
@@ -401,9 +413,28 @@ export default async function ProspectPreviewPage({ params }: Props) {
               Want this for {p.business_name}?
             </h2>
             <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
-              Pick one and your fixed-price quote opens straight away - accept it online whenever you&apos;re ready.
-              Nothing is charged until you&apos;ve read it and said yes.
+              {us
+                ? "Tell me which one and your fixed-price quote comes back in writing. Nothing is charged until you've read it and said yes."
+                : "Pick one and your fixed-price quote opens straight away - accept it online whenever you're ready. Nothing is charged until you've read it and said yes."}
             </p>
+            {us ? (
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                <a href="#reply" className="group rounded-2xl border border-blueprint/50 bg-card p-6 transition-colors hover:border-blueprint">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-blueprint">The Scalar build</span>
+                  <span className="mt-2 block font-display text-3xl font-bold">{formatPrice(market, prices.build)}</span>
+                  <span className="mt-2 block text-sm text-muted-foreground">
+                    Five pages plus your own dashboard for leads, quotes and invoices.
+                  </span>
+                  <span className="mt-4 inline-block font-semibold text-blueprint">I want this &rarr;</span>
+                </a>
+                <a href="#reply" className="group rounded-2xl border border-border bg-card/50 p-6 transition-colors hover:border-blueprint">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Landing page</span>
+                  <span className="mt-2 block font-display text-3xl font-bold">{formatPrice(market, prices.landing)}</span>
+                  <span className="mt-2 block text-sm text-muted-foreground">One fast page, built to turn visitors into calls.</span>
+                  <span className="mt-4 inline-block font-semibold text-blueprint">I want this &rarr;</span>
+                </a>
+              </div>
+            ) : (
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <StartQuote
                 slug={slug}
@@ -430,10 +461,13 @@ export default async function ProspectPreviewPage({ params }: Props) {
                 <span className="mt-4 inline-block font-semibold text-blueprint">See my quote &rarr;</span>
               </StartQuote>
             </div>
+            )}
           </Reveal>
-          <Reveal className="mt-6">
-            <FoundingOffer href={`${contactHref}&founding=1`} />
-          </Reveal>
+          {!us && (
+            <Reveal className="mt-6">
+              <FoundingOffer href={`${contactHref}&founding=1`} />
+            </Reveal>
+          )}
           <Reveal className="mt-12">
             <h3 className="font-display text-2xl font-bold tracking-tight">What happens next</h3>
             <ol className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -453,11 +487,13 @@ export default async function ProspectPreviewPage({ params }: Props) {
           </Reveal>
           <dl className="mt-12 divide-y divide-border border-y border-border">
             {[
-              ['Is the price fixed?', `Yes. £${PRICES.landing.toLocaleString('en-GB')} or £${PRICES.build.toLocaleString('en-GB')}, agreed before anything starts, and it doesn't move. No monthly fee on the website itself.`],
+              ['Is the price fixed?', `Yes. ${formatPrice(market, prices.landing)} or ${formatPrice(market, prices.build)}, agreed before anything starts, and it doesn't move. No monthly fee on the website itself.`],
               ['Do I own it?', 'Yes - the code and the domain are yours outright once it’s paid for. No being locked to me to make a change.'],
               ['What do I have to do?', 'A short call, then one page of details and some photos of your work. You check the whole site on your phone before anything goes live.'],
               ['Will my email keep working?', 'Yes. Your email settings are checked and carried over before your domain is pointed at the new site, and your current site stays up until then.'],
-              ['What about the dashboard?', `It comes with The Scalar build, free for the first 12 months, then £${PRICES.dashboardMonthly} a month only if you want to keep it. The website works without it.`],
+              ['What about the dashboard?', us
+                ? 'It comes with The Scalar build, free for the first 12 months. The website works without it.'
+                : `It comes with The Scalar build, free for the first 12 months, then £${PRICES.dashboardMonthly} a month only if you want to keep it. The website works without it.`],
             ].map(([q, a]) => (
               <div key={q} className="py-5">
                 <dt className="font-semibold">{q}</dt>
@@ -471,17 +507,19 @@ export default async function ProspectPreviewPage({ params }: Props) {
         </div>
       </section>
 
-      <Founder />
-      <BookCallBand contactHref={contactHref} firmName={p.business_name} />
+      <Founder phone={!us} />
+      <BookCallBand contactHref={us ? undefined : contactHref} firmName={p.business_name} />
       {p.website && <SpeedCheck initialUrl={p.website} />}
-      <CtaBand />
+      {!us && <CtaBand />}
       <div data-print="only" className="border-t border-border px-5 py-6 text-sm">
         <p className="font-semibold">Questions, or want to go ahead?</p>
         <p className="mt-1 text-muted-foreground">
-          {SITE.email} · {SITE.phone.replace('+44', '0').replace(/^(\d{5})(\d+)$/, '$1 $2')} · {SITE.url.replace('https://', '')}
+          {us
+            ? SITE.email
+            : `${SITE.email} · ${SITE.phone.replace('+44', '0').replace(/^(\d{5})(\d+)$/, '$1 $2')} · ${SITE.url.replace('https://', '')}`}
         </p>
       </div>
-      <StickyReply slug={p.slug} firmName={p.business_name} />
+      <StickyReply slug={p.slug} firmName={p.business_name} us={us} />
     </main>
   )
 }
