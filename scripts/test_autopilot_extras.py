@@ -1,4 +1,4 @@
-"""Inbox guard (warm-up, auto-pause), weekdays only and automatic videos - offline.
+"""Inbox guard (warm-up, auto-pause) and weekdays only - offline.
 
 Run: python -m unittest scripts/test_autopilot_extras.py
 """
@@ -52,7 +52,7 @@ class Guard(unittest.TestCase):
 
 
 class Run(unittest.TestCase):
-    def go(self, cfg, today=TODAY, activity=None, installed=True):
+    def go(self, cfg, today=TODAY, activity=None):
         steps, notes = [], []
 
         class R:
@@ -75,7 +75,6 @@ class Run(unittest.TestCase):
                 return datetime(today.year, today.month, today.day, 6, 0)
 
         import calls
-        import importlib.util as iu
 
         with mock.patch.object(autopilot, "is_running", lambda: False), mock.patch.object(autopilot, "load_config", lambda: cfg), \
              mock.patch.object(autopilot, "Run", R), mock.patch.object(autopilot, "datetime", FakeDate), \
@@ -84,7 +83,6 @@ class Run(unittest.TestCase):
              mock.patch.object(autopilot.panel, "publish_quotes", lambda: (True, "")), \
              mock.patch.object(autopilot.panel, "OUTREACH", Path(tempfile.mkdtemp())), \
              mock.patch.object(calls, "fetch_activity", lambda api, s, t: activity or {}), \
-             mock.patch.object(iu, "find_spec", lambda name: object() if installed else None), \
              mock.patch.object(autopilot, "lists_to_run", lambda new: []), \
              mock.patch.object(autopilot, "summarise", lambda r, s, t: 0), mock.patch.object(autopilot, "scorecard_day", lambda: False):
             autopilot.run()
@@ -102,16 +100,11 @@ class Run(unittest.TestCase):
         self.assertIn("--inbox-plan=a@a.co.uk=10", send[1])  # a brand-new inbox starts at 10
         self.assertTrue(any("warming up" in n for n in notes))
 
-    def test_videos_for_repeat_viewers_only(self):
-        recent = (datetime(2026, 10, 11, 20, 0)).isoformat()
-        activity = {"hot-1": {"view_count": 3, "last_viewed_at": recent, "status": "viewed"},
-                    "once-1": {"view_count": 1, "last_viewed_at": recent, "status": "viewed"},
-                    "won-1": {"view_count": 5, "last_viewed_at": recent, "status": "won"},
-                    "old-1": {"view_count": 4, "last_viewed_at": "2026-09-01T10:00:00", "status": "viewed"}}
-        names, steps, _ = self.go({"auto_videos": True}, activity=activity)
-        self.assertEqual([s[1] for s in steps if s[0] == "auto_video.py"], [("--link", "hot-1")])
-        _, _, notes = self.go({"auto_videos": True}, activity=activity, installed=False)
-        self.assertTrue(any("Install video maker" in n for n in notes))
+    def test_an_old_config_asking_for_videos_makes_none(self):
+        # The automatic walkthrough videos were dropped; a saved autopilot.json may still say "auto_videos".
+        recent = datetime(2026, 10, 11, 20, 0).isoformat()
+        names, _, _ = self.go({"auto_videos": True}, activity={"hot-1": {"view_count": 3, "last_viewed_at": recent, "status": "viewed"}})
+        self.assertFalse(any("video" in n for n in names))
 
 
 if __name__ == "__main__":

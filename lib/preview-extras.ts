@@ -33,14 +33,11 @@ export function stars(rating: number): string {
 }
 
 // The personal video on a preview: only the three players the dashboard stores (migration 062),
-// checked again here so nothing else is ever framed on the page.
+// checked again here so nothing else is ever framed on the page. The panel's automatic recordings
+// (.mp4s in the dashboard's storage, migration 063) were dropped - pages that still have one show no
+// video at all.
 const VIDEO = /^https:\/\/(www\.loom\.com\/embed\/[a-f0-9]{32}|www\.youtube-nocookie\.com\/embed\/[A-Za-z0-9_-]{11}|player\.vimeo\.com\/video\/[0-9]{6,12})$/
 
-// ...or a walkthrough the panel recorded (dashboard migration 063), from the dashboard's own storage only.
-const OWN_VIDEO = /^https:\/\/wfyzsnyfliohevpjpuib\.supabase\.co\/storage\/v1\/object\/public\/preview-videos\/[a-z0-9-]{1,100}\.mp4$/
-
 export function videoSrc(url: string | null | undefined): string | null {
-  return typeof url === 'string' && (VIDEO.test(url) || OWN_VIDEO.test(url)) ? url : null
+  return typeof url === 'string' && VIDEO.test(url) ? url : null
 }
-
-export const isVideoFile = (src: string) => src.endsWith('.mp4')

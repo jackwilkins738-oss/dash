@@ -79,10 +79,7 @@ DEFAULTS = {
     "protect_inboxes": False,
     # Saturday and Sunday: replies and the lists only - no search, nothing sent.
     "weekdays_only": False,
-    # A walkthrough video, made before the morning nudges, for each firm that opened its preview 2+ times.
-    "auto_videos": False,
 }
-VIDEOS_A_MORNING = 5
 FIND_BUFFER = 1.5  # not every firm found has an email - search for half as many again as are missing
 
 
@@ -327,54 +324,6 @@ def guarded(cfg: dict, settings: dict, r: "Run", today) -> tuple[dict, bool]:
     return {**cfg, "inbox_plan": live}, True
 
 
-def video_targets(settings: dict, today, made: set[str]) -> list[str]:
-    """Firms that opened their preview 2+ times in the last 3 days, have no video yet, and aren't won or lost."""
-    import calls
-
-    secret = settings.get("PROSPECTS_API_SECRET", "")
-    api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
-    tenant = os.environ.get("SCALAR_TENANT_ID", "abdc6408-1fd5-4fb6-9c4c-53600b571a6d")
-    try:
-        activity = calls.fetch_activity(api, secret, tenant)
-    except calls.DashboardMissing:
-        return []
-    out = []
-    for slug, a in activity.items():
-        last = str(a.get("last_viewed_at") or "")[:10]
-        try:
-            recent = (today - datetime.fromisoformat(last).date()).days <= 3
-        except ValueError:
-            recent = False
-        if int(a.get("view_count") or 0) >= 2 and recent and a.get("status") not in ("won", "lost") and slug not in made:
-            out.append((a.get("last_viewed_at") or "", slug))
-    return [s for _, s in sorted(out, reverse=True)][:VIDEOS_A_MORNING]
-
-
-def make_videos(r: "Run", settings: dict, today) -> None:
-    import importlib.util
-
-    import daily
-
-    if not (importlib.util.find_spec("playwright") and importlib.util.find_spec("imageio_ffmpeg")):
-        r.note("Walkthrough videos are on, but the video maker isn't installed - Settings -> Install video maker.")
-        return
-    made = {row.get("slug") for row in _csv_rows(panel.OUTREACH / daily.VIDEOS)}
-    targets = video_targets(settings, today, made)
-    if targets:
-        r.note(f"--- Walkthrough videos for {len(targets)} repeat viewer(s)")
-    for slug in targets:
-        r.step(panel.AUTO_VIDEO, ["--link", slug])
-
-
-def _csv_rows(path: Path) -> list[dict]:
-    import csv
-
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8") as f:
-        return list(csv.DictReader(f))
-
-
 def make_batches(r: "Run", cfg: dict, settings: dict | None = None) -> None:
     size = daily_target(cfg, settings or {}) if settings is not None else int(cfg.get("batch_size") or 20)
     r.step(panel.BATCHES, ["--size", str(size)])
@@ -473,8 +422,6 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
             r.note("Weekend: replies and the lists only today - no search, nothing sent (Weekdays only is on).")
         cfg, may_send = guarded(cfg, settings, r, today)
         sending_today = may_send and not weekend
-        if cfg.get("auto_videos"):
-            make_videos(r, settings, today)  # before the 8:30 nudges, so the video's on the page when you follow up
         send_last = cfg.get("send_when") == "last"
         sent_early = False if send_last or not sending_today else morning_send(r, cfg, settings)
 
