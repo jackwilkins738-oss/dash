@@ -193,6 +193,19 @@ def need(row: dict, ratings: dict) -> float:
     return (100 - score) + busy
 
 
+def on_site(url: str, site: str | None = None) -> str:
+    """A preview link moved onto this workspace's SITE_URL: links are written when a list is pushed, so a
+    list pushed before SITE_URL was set (or changed) would otherwise keep the old domain - for the US
+    workspace, the UK site with pounds on it. Anything that isn't a /for/ link, or no SITE_URL, is left."""
+    import os
+    import re
+
+    site = (os.environ.get("SITE_URL", "") if site is None else site).strip().rstrip("/")
+    if not site or not re.match(r"^https?://[^/]+/for/", url or ""):
+        return url
+    return re.sub(r"^https?://[^/]+", site, url)
+
+
 def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, today: date | None = None,
                verify=None) -> tuple[Path | None, list[str]]:
     """(batch file, notes). check(url) -> None if the link loads, else why not. verify(email, cache) ->
@@ -215,7 +228,7 @@ def make_batch(outreach: Path, size: int, sheet: str | None = None, check=None, 
             if email in stop:
                 notes.append(f"skipped {r.get('business')}: {stop[email]}")
                 continue
-            waiting.append({**r, "_source": src.name})
+            waiting.append({**r, "preview_url": on_site(r.get("preview_url") or ""), "_source": src.name})
     # Neediest first: the slowest sites, and among them the firms Google shows are busiest.
     ratings = _ratings(outreach)
     waiting.sort(key=lambda r: -need(r, ratings))

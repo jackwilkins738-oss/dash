@@ -147,6 +147,35 @@ class PreviewDomain(unittest.TestCase):
         self.assertIn("SITE_URL", str(stop.exception))
 
 
+class OldLinks(unittest.TestCase):
+    def test_links_pushed_before_site_url_was_set_move_to_it(self):
+        old = "https://www.scalardigital.co.uk/for/wasatch-a1b2c3?src=email"
+        self.assertEqual(eb.on_site(old, "https://scalardigitalusa.com/"), "https://scalardigitalusa.com/for/wasatch-a1b2c3?src=email")
+        self.assertEqual(eb.on_site(old, ""), old)  # no SITE_URL: left alone (the UK panel's default)
+        self.assertEqual(eb.on_site("https://example.com/x", "https://scalardigitalusa.com"), "https://example.com/x")
+
+    def test_batches_and_previews_use_the_current_domain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "outreach-us"
+            out.mkdir()
+            row = {**FIRMS[0], "preview_url": "https://www.scalardigital.co.uk/for/kerr-1"}
+            write(out / "mailmeteor-old-list.csv", list(row), [row])
+            with mock.patch.dict(os.environ, {"SITE_URL": "https://scalardigitalusa.com"}):
+                path, _ = eb.make_batch(out, 5, check=lambda url: None, today=TODAY)
+            batch = list(csv.DictReader(path.open(encoding="utf-8")))
+            self.assertEqual(batch[0]["preview_url"], "https://scalardigitalusa.com/for/kerr-1")
+            settings = {"MAIL_ADDRESS": "a@scalardigitalusa.com", "MAIL_APP_PASSWORD": "x", "MAIL_FROM_NAME": "J",
+                        "POSTAL_ADDRESS": "1 Main St, Provo, UT", "SITE_URL": "https://scalardigitalusa.com"}
+            # An older pending batch, still on the UK domain, previews on the US one too.
+            write(out / eb.PENDING, ["email", "business", "preview_url", "batch"],
+                  [{"email": row["email"], "business": row["business"], "preview_url": row["preview_url"], "batch": path.name}])
+            write(path, list(row), [row])
+            email = se.preview_batch(out, env=settings)["emails"][0]
+        self.assertTrue(email["preview_url"].startswith("https://scalardigitalusa.com/for/kerr-1"), email["preview_url"])
+        self.assertIn("https://scalardigitalusa.com/for/kerr-1?src=email", email["body"])
+        self.assertNotIn("scalardigital.co.uk", email["body"])
+
+
 class Channel(unittest.TestCase):
     def test_us_sole_traders_get_email_and_no_one_gets_a_letter(self):
         row = {"Email": "mike@wasatchplumbing.com", "Company type": "Sole trader"}
