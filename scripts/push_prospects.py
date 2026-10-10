@@ -247,7 +247,14 @@ def main() -> None:
         sys.exit("Set PROSPECTS_API_SECRET (32+ characters, same value as in Vercel) first.")
     api = os.environ.get("DASHBOARD_API_URL", "https://admin.scalardigital.co.uk").rstrip("/")
     tenant = os.environ.get("SCALAR_TENANT_ID", DEFAULT_TENANT)
-    site = os.environ.get("SITE_URL", "https://www.scalardigital.co.uk").rstrip("/")
+    site = os.environ.get("SITE_URL", "").strip().rstrip("/")
+    if not site:
+        # Outside the UK, every link must be on that market's own domain (lib/market.ts): the UK site
+        # would show a US firm pounds, a UK phone number and the UK's quotes.
+        if workspace.market(args.sheet.parent) != "uk":
+            sys.exit("Set SITE_URL in Settings -> Advanced to this market's own domain (e.g. https://scalardigitalusa.com) "
+                     "first - without it every preview link would go to the UK site.")
+        site = "https://www.scalardigital.co.uk"
 
     if not args.sheet.exists():
         sys.exit(f"Can't find the sheet at {args.sheet} - pass --sheet PATH")

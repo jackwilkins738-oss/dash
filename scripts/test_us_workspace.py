@@ -134,6 +134,19 @@ class RunWholeList(unittest.TestCase):
         self.assertGreater(control_panel.RUN_ALL_BATCH, 10)  # why it's needed
 
 
+class PreviewDomain(unittest.TestCase):
+    def test_the_us_panel_never_builds_links_on_the_uk_site(self):
+        import sys
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sheet = Path(tmp) / "outreach-us" / "maps-hvac.xlsx"
+            env = {"PROSPECTS_API_SECRET": "x" * 40, "SITE_URL": ""}
+            with mock.patch.dict(os.environ, env), mock.patch.object(sys, "argv", ["p", "--sheet", str(sheet)]):
+                with self.assertRaises(SystemExit) as stop:
+                    push_prospects.main()
+        self.assertIn("SITE_URL", str(stop.exception))
+
+
 class Channel(unittest.TestCase):
     def test_us_sole_traders_get_email_and_no_one_gets_a_letter(self):
         row = {"Email": "mike@wasatchplumbing.com", "Company type": "Sole trader"}
