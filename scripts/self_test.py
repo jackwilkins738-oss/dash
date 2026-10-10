@@ -125,8 +125,7 @@ def checks(env: dict, outreach: Path, get=_get, have=installed) -> list[tuple[st
         add(OK if env.get(setting) else (BAD if setting == "BACKUP_DIR" else OPTIONAL), setting, "set" if env.get(setting) else why)
 
     for module, name, button in (("openpyxl", "Spreadsheets", "python -m pip install openpyxl"), ("segno", "Letters & cards (QR codes)", "Install segno"),
-                                 ("PIL", "Photo processing", "python -m pip install pillow"), ("faster_whisper", "Voice notes", "Install voice notes"),
-                                 ("playwright", "Video maker", "Install video maker"), ("imageio_ffmpeg", "Video maker (MP4)", "Install video maker")):
+                                 ("PIL", "Photo processing", "python -m pip install pillow"), ("faster_whisper", "Voice notes", "Install voice notes")):
         add(OK if have(module) else OPTIONAL, name, "installed" if have(module) else f"not installed - Settings -> {button}")
 
     stop = outreach / "do-not-contact.csv"

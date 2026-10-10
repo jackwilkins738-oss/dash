@@ -88,8 +88,6 @@ const nextConfig = {
               // The personal walkthrough video on a preview page (components/preview-video.tsx) - only
               // these three players, the same ones the dashboard will store.
               "frame-src https://cal.com https://app.cal.com https://www.loom.com https://www.youtube-nocookie.com https://player.vimeo.com",
-              // A walkthrough video the panel recorded plays straight from the dashboard's storage.
-              "media-src 'self' https://wfyzsnyfliohevpjpuib.supabase.co",
               "frame-ancestors 'none'",
               "object-src 'none'",
               "base-uri 'self'",
