@@ -525,6 +525,17 @@
     grid-template-columns: repeat(4, 1fr);
   }
 }
+/* A prospect's own preview-only trade (HVAC, plumbing, electrical) makes a fifth tab: one row of
+   five on wider screens, slightly tighter so "Landscaping" still fits. */
+@media (min-width: 640px) {
+  .sc-tabs[data-count='5'] {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  .sc-tabs[data-count='5'] .sc-tab {
+    padding-inline: 4px;
+    letter-spacing: 0.08em;
+  }
+}
 .sc-tab {
   position: relative;
   overflow: hidden;

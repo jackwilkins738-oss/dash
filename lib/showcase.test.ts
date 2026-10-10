@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  ALL_SCENES,
+  PREVIEW_ONLY_TRADES,
   SHOWCASE_CYCLE_MS,
   SHOWCASE_TRADES,
   nextShowcaseIndex,
@@ -14,14 +16,14 @@ describe('SHOWCASE_TRADES', () => {
   })
 
   it('uses unique ids and tab labels', () => {
-    const ids = SHOWCASE_TRADES.map((t) => t.id)
-    const tabs = SHOWCASE_TRADES.map((t) => t.tab)
+    const ids = ALL_SCENES.map((t) => t.id)
+    const tabs = ALL_SCENES.map((t) => t.tab)
     assert.equal(new Set(ids).size, ids.length)
     assert.equal(new Set(tabs).size, tabs.length)
   })
 
   it('gives every trade all of its copy', () => {
-    for (const t of SHOWCASE_TRADES) {
+    for (const t of ALL_SCENES) {
       for (const key of ['tab', 'descriptor', 'eyebrow', 'headline', 'sub', 'cta', 'enquiry'] as const) {
         assert.ok(t[key].trim().length > 0, `${t.id}: ${key} is empty`)
       }
@@ -33,14 +35,14 @@ describe('SHOWCASE_TRADES', () => {
   it('gives each trade its own accent and its own artwork', () => {
     // The switcher's job is to show the site re-theming itself. Two trades
     // with the same colour or the same scene would make a tab look broken.
-    const accents = SHOWCASE_TRADES.map((t) => t.accent)
-    const arts = SHOWCASE_TRADES.map((t) => t.art)
+    const accents = ALL_SCENES.map((t) => t.accent)
+    const arts = ALL_SCENES.map((t) => t.art)
     assert.equal(new Set(accents).size, accents.length)
     assert.equal(new Set(arts).size, arts.length)
   })
 
   it('defines both colours as oklch, which the stylesheet transitions between', () => {
-    for (const t of SHOWCASE_TRADES) {
+    for (const t of ALL_SCENES) {
       assert.match(t.accent, /^oklch\(/, `${t.id}: accent`)
       assert.match(t.accentUi, /^oklch\(/, `${t.id}: accentUi`)
     }
@@ -50,7 +52,7 @@ describe('SHOWCASE_TRADES', () => {
     // The preview is an illustration of a site, not a testimonial. lib/trades.ts
     // holds the same rule: nothing here may claim a result, client or credential.
     const banned = /\d+\s*(\+|%|years|reviews|jobs|customers|clients)|\b(best|no\.?\s*1|award|rated|guaranteed)\b/i
-    for (const t of SHOWCASE_TRADES) {
+    for (const t of ALL_SCENES) {
       for (const text of [t.headline, t.sub, t.cta, t.eyebrow, t.enquiry, ...t.tiles]) {
         assert.doesNotMatch(text, banned, `${t.id}: "${text}" reads as a claim`)
       }
@@ -137,7 +139,7 @@ describe('showcaseIndexForTrade', () => {
   })
 
   it('returns null for an unrecognised or missing value, so the caller keeps the default', () => {
-    assert.equal(showcaseIndexForTrade('plumbers'), null)
+    assert.equal(showcaseIndexForTrade('carpenters'), null)
     assert.equal(showcaseIndexForTrade(''), null)
     assert.equal(showcaseIndexForTrade(undefined), null)
     assert.equal(showcaseIndexForTrade(null), null)
@@ -159,15 +161,39 @@ describe('showcaseIdForTradeText', () => {
   })
 
   it('every id it can return is a real scene', () => {
-    for (const text of ['roof', 'loft', 'drive', 'garden']) {
+    for (const text of ['roof', 'loft', 'drive', 'garden', 'hvac', 'plumbing', 'electrician']) {
       const id = showcaseIdForTradeText(text)
-      assert.ok(SHOWCASE_TRADES.some((t) => t.id === id), `${text} -> ${id}`)
+      assert.ok(ALL_SCENES.some((t) => t.id === id), `${text} -> ${id}`)
     }
   })
 
   it('returns null for an unknown or empty trade', () => {
-    assert.equal(showcaseIdForTradeText('Plumbing'), null)
+    assert.equal(showcaseIdForTradeText('Carpentry'), null)
     assert.equal(showcaseIdForTradeText(''), null)
     assert.equal(showcaseIdForTradeText(null), null)
+  })
+})
+
+describe('preview-only scenes', () => {
+  it('come after the homepage rotation, so its tab indices never move', () => {
+    assert.deepEqual(ALL_SCENES.slice(0, SHOWCASE_TRADES.length), SHOWCASE_TRADES)
+    for (const t of PREVIEW_ONLY_TRADES) assert.ok(!SHOWCASE_TRADES.includes(t))
+  })
+
+  it('match the trades the US and UK finders produce', () => {
+    // find_prospects.TRADES labels, and the wording firms use for themselves
+    assert.equal(showcaseIdForTradeText('HVAC'), 'hvac')
+    assert.equal(showcaseIdForTradeText('Heating & air conditioning'), 'hvac')
+    assert.equal(showcaseIdForTradeText('Plumbing'), 'plumbing')
+    assert.equal(showcaseIdForTradeText('Plumbing & heating'), 'plumbing')
+    assert.equal(showcaseIdForTradeText('Electrical'), 'electrical')
+    assert.equal(showcaseIdForTradeText('Electrical contractors'), 'electrical')
+    assert.equal(showcaseIdForTradeText('Roofing'), 'roofing')
+  })
+
+  it('resolve from a link to their own index', () => {
+    assert.equal(showcaseIndexForTrade('hvac'), ALL_SCENES.findIndex((t) => t.id === 'hvac'))
+    assert.equal(showcaseIndexForTrade('plumbers'), ALL_SCENES.findIndex((t) => t.id === 'plumbing'))
+    assert.equal(showcaseIndexForTrade('electrician'), ALL_SCENES.findIndex((t) => t.id === 'electrical'))
   })
 })

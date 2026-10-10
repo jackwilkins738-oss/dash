@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import {
+  ALL_SCENES,
   SHOWCASE_CYCLE_MS,
   SHOWCASE_TRADES,
   nextShowcaseIndex,
@@ -49,8 +50,11 @@ function personalise(scene: ShowcaseTrade, firm?: { services?: string[]; accent?
 export function SiteShowcase({
   initialTrade,
   firm,
+  us = false,
 }: {
   initialTrade?: string
+  /** A US prospect's preview (lib/market.ts): "New lead" rather than "New enquiry". */
+  us?: boolean
   /**
    * A real prospect's name and domain, on their private preview page (app/for/[slug]) -
    * and, when their homepage made them clear, their own service names and brand colour,
@@ -66,7 +70,15 @@ export function SiteShowcase({
   const tiltRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const ownIndex = firm && initialTrade ? showcaseIndexForTrade(initialTrade) : null
-  const trade = active === ownIndex ? personalise(SHOWCASE_TRADES[active], firm) : SHOWCASE_TRADES[active]
+  const trade = active === ownIndex ? personalise(ALL_SCENES[active], firm) : ALL_SCENES[active]
+  // The homepage's trades, plus a preview-only scene (HVAC, plumbing, electrical) as an extra tab
+  // when that's the one being shown - their own trade on a prospect's page, or a ?trade= link.
+  const [extra, setExtra] = useState(() => {
+    const i = showcaseIndexForTrade(initialTrade)
+    return i !== null && i >= SHOWCASE_TRADES.length ? i : null
+  })
+  // Their own trade comes first: it's the one the page is about.
+  const tabs = extra !== null ? [extra, ...SHOWCASE_TRADES.keys()] : [...SHOWCASE_TRADES.keys()]
 
   // Auto-rotation is driven by the switcher's own CSS progress bar: when its
   // animation ends, move on. That keeps the visible bar and the actual
@@ -92,6 +104,7 @@ export function SiteShowcase({
     // the "don't setState synchronously in an effect" warning doesn't apply.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (idx !== null) setActive(idx)
+    if (idx !== null && idx >= SHOWCASE_TRADES.length) setExtra(idx)
     // Mount-only: this is meant to read the URL the page was loaded with,
     // not to react to later client-side navigation within the SPA.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,16 +208,17 @@ export function SiteShowcase({
   }
 
   // Arrow-key navigation across the tabs, per the WAI-ARIA tabs pattern.
-  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
-    const n = SHOWCASE_TRADES.length
+  // `pos` is the tab's place in the row; `tabs` maps it to its scene.
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, pos: number) => {
+    const n = tabs.length
     let to = -1
-    if (e.key === 'ArrowRight') to = (i + 1) % n
-    else if (e.key === 'ArrowLeft') to = (i - 1 + n) % n
+    if (e.key === 'ArrowRight') to = (pos + 1) % n
+    else if (e.key === 'ArrowLeft') to = (pos - 1 + n) % n
     else if (e.key === 'Home') to = 0
     else if (e.key === 'End') to = n - 1
     if (to < 0) return
     e.preventDefault()
-    choose(to)
+    choose(tabs[to])
     tabRefs.current[to]?.focus()
   }
 
@@ -306,7 +320,7 @@ export function SiteShowcase({
           <div key={`t-${trade.id}`} className="sc-layer sc-toast sc-pop" style={{ '--z': '62px' } as Vars} aria-hidden="true">
             <span className="sc-toast-head">
               <span className="sc-chip-dot" />
-              New enquiry
+              {us ? 'New lead' : 'New enquiry'}
             </span>
             <span className="sc-toast-title">{trade.enquiry}</span>
             <span className="sc-toast-meta">Just now · in your dashboard</span>
@@ -331,21 +345,22 @@ export function SiteShowcase({
         </div>
       </div>
 
-      <div role="tablist" aria-label="Choose a trade to preview" className="sc-tabs">
-        {SHOWCASE_TRADES.map((t, i) => {
+      <div role="tablist" aria-label="Choose a trade to preview" className="sc-tabs" data-count={tabs.length}>
+        {tabs.map((i, pos) => {
+          const t = ALL_SCENES[i]
           const on = i === active
           return (
             <button
               key={t.id}
               ref={(el) => {
-                tabRefs.current[i] = el
+                tabRefs.current[pos] = el
               }}
               type="button"
               role="tab"
               aria-selected={on}
               tabIndex={on ? 0 : -1}
               onClick={() => choose(i)}
-              onKeyDown={(e) => onTabKey(e, i)}
+              onKeyDown={(e) => onTabKey(e, pos)}
               className="sc-tab"
               data-magnetic
             >
@@ -448,6 +463,78 @@ function TradeArt({ kind }: { kind: ShowcaseArt }) {
           <path d="M132 62V34h22v26z" fill="var(--accent)" opacity="0.78" />
           <path d="M128 34h30" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" />
           <path d="M0 196h200v19H0z" fill="var(--accent)" opacity="0.1" />
+        </>
+      )}
+
+      {kind === 'unit' && (
+        <>
+          <circle cx="160" cy="40" r="15" fill="var(--accent)" opacity="0.14" />
+          {/* house wall with a window, the outdoor unit on its pad, air moving */}
+          <path d="M0 40h92v135H0z" fill="#fff" opacity="0.9" />
+          <rect x="22" y="62" width="44" height="34" fill="var(--accent)" opacity="0.22" />
+          <path d="M44 62v34M22 79h44" stroke="var(--accent)" strokeWidth="1.4" opacity="0.6" />
+          <rect x="104" y="112" width="78" height="62" rx="5" fill="#fff" opacity="0.95" />
+          <rect x="104" y="112" width="78" height="62" rx="5" fill="none" stroke="var(--accent)" strokeWidth="2.6" />
+          <circle cx="143" cy="143" r="22" fill="none" stroke="var(--accent)" strokeWidth="2" opacity="0.8" />
+          <g stroke="var(--accent)" strokeWidth="1.4" opacity="0.55">
+            <path d="M121 143h44M143 121v44M127.4 127.4l31.2 31.2M158.6 127.4l-31.2 31.2" />
+          </g>
+          <circle cx="143" cy="143" r="5" fill="var(--accent)" opacity="0.85" />
+          <path d="M98 174h92v8H98z" fill="var(--accent)" opacity="0.45" />
+          <g fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" opacity="0.5">
+            <path d="M116 100c8-6 14 6 22 0s14 6 22 0" />
+            <path d="M124 88c8-6 14 6 22 0s14 6 22 0" />
+          </g>
+          {/* thermostat on the wall */}
+          <circle cx="44" cy="128" r="12" fill="var(--accent)" opacity="0.85" />
+          <circle cx="44" cy="128" r="6" fill="#fff" opacity="0.9" />
+          <path d="M0 182h200v33H0z" fill="var(--accent)" opacity="0.1" />
+        </>
+      )}
+
+      {kind === 'pipes' && (
+        <>
+          <circle cx="40" cy="40" r="13" fill="var(--accent)" opacity="0.14" />
+          {/* a pipe run with elbows and joints, ending at a tap with a drop */}
+          <g fill="none" stroke="var(--accent)" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M0 160h70v-70h70v40" strokeWidth="12" opacity="0.32" />
+            <path d="M0 160h70v-70h70v40" strokeWidth="4" opacity="0.85" />
+          </g>
+          <g fill="var(--accent)">
+            <rect x="60" y="150" width="20" height="20" rx="3" opacity="0.8" />
+            <rect x="60" y="80" width="20" height="20" rx="3" opacity="0.8" />
+            <rect x="130" y="80" width="20" height="20" rx="3" opacity="0.8" />
+            <rect x="34" y="153" width="8" height="14" rx="2" opacity="0.6" />
+            <rect x="100" y="83" width="8" height="14" rx="2" opacity="0.6" />
+          </g>
+          <path d="M126 128h28v10h-28z" fill="var(--accent)" opacity="0.9" />
+          <path d="M136 122h8v8h-8z" fill="var(--accent)" opacity="0.7" />
+          <path d="M140 146c-5 8-8 12-8 16a8 8 0 0 0 16 0c0-4-3-8-8-16z" fill="var(--accent)" opacity="0.55" />
+          <path d="M0 192h200v23H0z" fill="var(--accent)" opacity="0.1" />
+        </>
+      )}
+
+      {kind === 'circuit' && (
+        <>
+          {/* a breaker panel beside a lit bulb */}
+          <rect x="22" y="58" width="74" height="110" rx="5" fill="#fff" opacity="0.94" />
+          <rect x="22" y="58" width="74" height="110" rx="5" fill="none" stroke="var(--accent)" strokeWidth="2.6" />
+          <g fill="var(--accent)">
+            {[0, 1, 2, 3, 4].map((row) => (
+              <g key={row}>
+                <rect x="34" y={72 + row * 18} width="20" height="10" rx="2" opacity={row % 2 ? 0.45 : 0.8} />
+                <rect x="64" y={72 + row * 18} width="20" height="10" rx="2" opacity={row % 2 ? 0.8 : 0.45} />
+              </g>
+            ))}
+          </g>
+          <path d="M96 100h20c10 0 10-30 26-30" fill="none" stroke="var(--accent)" strokeWidth="2.4" opacity="0.6" />
+          <circle cx="150" cy="70" r="20" fill="var(--accent)" opacity="0.85" />
+          <circle cx="150" cy="70" r="30" fill="var(--accent)" opacity="0.14" />
+          <rect x="143" y="90" width="14" height="12" rx="2" fill="var(--accent)" opacity="0.6" />
+          <g stroke="var(--accent)" strokeWidth="2.4" strokeLinecap="round" opacity="0.55">
+            <path d="M150 28v-10M184 70h10M176 44l7-7M124 44l-7-7M176 96l7 7" />
+          </g>
+          <path d="M0 186h200v29H0z" fill="var(--accent)" opacity="0.1" />
         </>
       )}
 
