@@ -88,7 +88,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 40  # speed checks per step of Run the whole list - each step is pushed, so stopping loses nothing
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "105"
+PANEL_VERSION = "106"
 MAX_LOG_LINES = 5000
 
 
@@ -455,7 +455,9 @@ def run_all_steps(job: "Job", sheet: str, name: str, settings: dict[str, str]):
             return
         last = remaining
         job.note(f"{remaining} sites still to speed check.")
-        yield ["--sheet", sheet, "--teardown", "--limit", str(RUN_ALL_BATCH)]
+        # --yes-all: push_prospects refuses more than 10 speed checks without it (a guard for typed commands),
+        # and a batch here is RUN_ALL_BATCH.
+        yield ["--sheet", sheet, "--teardown", "--limit", str(RUN_ALL_BATCH), "--yes-all"]
 
 
 SAFE_TEXT = re.compile(r"^[A-Za-z0-9 ,;'&.\-]*$")
