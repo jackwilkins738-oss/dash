@@ -423,6 +423,14 @@ def run(scheduled: bool = False, sleep=time.sleep) -> int:
         cfg, may_send = guarded(cfg, settings, r, today)
         sending_today = may_send and not weekend
         send_last = cfg.get("send_when") == "last"
+        if not send_last and sending_today and cfg.get("auto_send"):
+            import email_batches
+
+            if not email_batches.remaining(panel.OUTREACH, None):
+                # A new workspace, or yesterday's firms all sent: sending first would find nobody, and
+                # today's firms would wait a day. Send them once the search and lists have made them.
+                r.note("Nobody checked and waiting yet - sending after today's search and lists instead.")
+                send_last = True
         sent_early = False if send_last or not sending_today else morning_send(r, cfg, settings)
 
         new_sheet = None
