@@ -6,7 +6,7 @@
 // done. That is the same rule lib/trades.ts holds itself to: nothing here
 // claims a result, client or credential the business doesn't have.
 
-export type ShowcaseArt = 'blocks' | 'roofline' | 'slate' | 'hills'
+export type ShowcaseArt = 'blocks' | 'roofline' | 'slate' | 'hills' | 'unit' | 'pipes' | 'circuit'
 
 export type ShowcaseTrade = {
   id: string
@@ -88,6 +88,57 @@ export const SHOWCASE_TRADES: ShowcaseTrade[] = [
   },
 ]
 
+// Scenes for trades the homepage doesn't rotate through - only shown on a prospect's own preview
+// page (app/for/[slug]), as an extra tab, for the firms the outreach finds in those trades. They
+// come after SHOWCASE_TRADES in ALL_SCENES, so the homepage's tab indices are unchanged.
+export const PREVIEW_ONLY_TRADES: ShowcaseTrade[] = [
+  {
+    id: 'hvac',
+    tab: 'HVAC',
+    descriptor: 'Heating & cooling',
+    eyebrow: 'Heating & air',
+    headline: 'Comfortable all year, whatever the weather.',
+    sub: 'Installs, repairs and servicing.',
+    cta: 'Book a service',
+    accent: 'oklch(0.5 0.1 195)',
+    accentUi: 'oklch(0.76 0.11 195)',
+    art: 'unit',
+    tiles: ['Air conditioning', 'Heating', 'Heat pumps'],
+    enquiry: 'AC repair',
+  },
+  {
+    id: 'plumbing',
+    tab: 'Plumbing',
+    descriptor: 'Plumbing & drains',
+    eyebrow: 'Plumbing',
+    headline: 'Leaks fixed fast, and fixed properly.',
+    sub: 'Repairs, installs and emergencies.',
+    cta: 'Request a plumber',
+    accent: 'oklch(0.5 0.15 275)',
+    accentUi: 'oklch(0.75 0.12 275)',
+    art: 'pipes',
+    tiles: ['Leak repairs', 'Water heaters', 'Drains'],
+    enquiry: 'Leak repair',
+  },
+  {
+    id: 'electrical',
+    tab: 'Electrical',
+    descriptor: 'Electrical contractors',
+    eyebrow: 'Electrical',
+    headline: 'Safe, tidy electrical work.',
+    sub: 'Rewires, panels, lighting and repairs.',
+    cta: 'Get a quote',
+    accent: 'oklch(0.48 0.1 95)',
+    accentUi: 'oklch(0.8 0.13 95)',
+    art: 'circuit',
+    tiles: ['Rewiring', 'Lighting', 'EV chargers'],
+    enquiry: 'EV charger install',
+  },
+]
+
+/** Every scene: the homepage's rotation first, then the preview-only ones. */
+export const ALL_SCENES: ShowcaseTrade[] = [...SHOWCASE_TRADES, ...PREVIEW_ONLY_TRADES]
+
 /** How long each trade is shown before the preview moves on by itself, in ms. */
 export const SHOWCASE_CYCLE_MS = 5600
 
@@ -124,11 +175,19 @@ const TRADE_ALIASES: Record<string, ShowcaseTrade['id']> = {
   'builder': 'lofts',
   'extension': 'lofts',
   'extensions': 'lofts',
+  // the preview-only scenes
+  'hvac-contractors': 'hvac',
+  'heating': 'hvac',
+  'air-conditioning': 'hvac',
+  'plumbers': 'plumbing',
+  'plumber': 'plumbing',
+  'electricians': 'electrical',
+  'electrician': 'electrical',
 }
 
 /**
- * Resolve a `?trade=` value (or similar) from a URL to a SHOWCASE_TRADES
- * index, so the hero preview can open on the right trade instead of always
+ * Resolve a `?trade=` value (or similar) from a URL to an ALL_SCENES
+ * index (the homepage's own trades keep their SHOWCASE_TRADES index), so the hero preview can open on the right trade instead of always
  * starting from the first tab. Accepts the trade-page slugs, this preview's
  * own ids, and a few plain-English variants; anything unrecognised falls
  * back to the default rotation. Case/whitespace-insensitive since it's
@@ -138,9 +197,9 @@ export function showcaseIndexForTrade(query?: string | string[] | null): number 
   const value = Array.isArray(query) ? query[0] : query
   if (!value) return null
   const key = value.trim().toLowerCase()
-  const id = SHOWCASE_TRADES.some((t) => t.id === key) ? (key as ShowcaseTrade['id']) : TRADE_ALIASES[key]
+  const id = ALL_SCENES.some((t) => t.id === key) ? (key as ShowcaseTrade['id']) : TRADE_ALIASES[key]
   if (!id) return null
-  const idx = SHOWCASE_TRADES.findIndex((t) => t.id === id)
+  const idx = ALL_SCENES.findIndex((t) => t.id === id)
   return idx === -1 ? null : idx
 }
 
@@ -155,6 +214,10 @@ export function showcaseIdForTradeText(text: string | null | undefined): Showcas
   const t = (text ?? '').toLowerCase()
   if (!t.trim()) return null
   if (/roof/.test(t)) return 'roofing'
+  // Before building/landscaping: "Plumbing & heating" is plumbing, "Electrical contractor" isn't a builder.
+  if (/plumb|drain/.test(t)) return 'plumbing'
+  if (/hvac|heating|air ?con|cooling|furnace|heat pump|a\/c\b/.test(t)) return 'hvac'
+  if (/electric/.test(t)) return 'electrical'
   if (/loft|extension|build|renovat/.test(t)) return 'lofts'
   if (/drive|paving|patio|resin/.test(t)) return 'driveways'
   if (/landscap|garden|groundwork/.test(t)) return 'landscaping'

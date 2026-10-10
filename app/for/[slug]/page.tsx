@@ -12,7 +12,7 @@ import { PreviewBeacon } from '@/components/preview-beacon'
 import { PreviewRace } from '@/components/preview-race'
 import { MIN_RACE_GAP_MS, SCALAR_BUILD } from '@/lib/speedRace'
 import { getProspect, type Prospect } from '@/lib/prospect-api'
-import { SHOWCASE_TRADES, showcaseIdForTradeText } from '@/lib/showcase'
+import { ALL_SCENES, showcaseIdForTradeText } from '@/lib/showcase'
 import { teardownFindings, teardownPasses, usableFrames } from '@/lib/teardown'
 import { PrintButton } from '@/components/print-button'
 import { PreviewOptOut } from '@/components/preview-optout'
@@ -101,7 +101,7 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
   // clear win: a Scalar build that's been measured, their LCP known, and at
   // least MIN_RACE_GAP_MS slower. Otherwise the section simply isn't there.
   const theirLcpMs = p.lcp_s != null ? Math.round(p.lcp_s * 1000) : null
-  const scene = SHOWCASE_TRADES.find((t) => t.id === sceneId)
+  const scene = ALL_SCENES.find((t) => t.id === sceneId)
   const raceCopy = scene ? { eyebrow: scene.eyebrow, headline: scene.headline, cta: scene.cta } : undefined
   const showRace =
     SCALAR_BUILD.lcpMs != null && theirLcpMs != null && p.website != null && theirLcpMs - SCALAR_BUILD.lcpMs >= MIN_RACE_GAP_MS
@@ -221,6 +221,7 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
             <div>
               <SiteShowcase
                 initialTrade={sceneId}
+                us={us}
                 firm={{
                   name: p.business_name,
                   domain: p.website,
