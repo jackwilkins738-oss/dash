@@ -12,7 +12,9 @@ with no website at all (a letter). Ranked highest first, into outreach/area-scou
 of the table in the log.
 
 Leave Areas blank for the South East commuter towns below - where homes are worth most, so jobs are
-bigger. Searches and scores are kept 30 days, so a second scout is quick and costs nothing.
+bigger. In the US panel, blank means the Utah towns below, and areas are city and state ("Provo, UT;
+Ogden, UT"); a firm with no website adds nothing there, as there are no letters in the US. Searches
+and scores are kept 30 days, so a second scout is quick and costs nothing.
 
 Needs GOOGLE_PLACES_API_KEY (or PAGESPEED_API_KEY with Places API (New) enabled) and PAGESPEED_API_KEY.
 """
@@ -45,8 +47,12 @@ DEFAULT_TOWNS = [
     "Harpenden", "Rickmansworth", "Amersham", "Beaconsfield", "High Wycombe", "Marlow", "Maidenhead", "Windsor",
     "Wokingham", "Reading", "Basingstoke", "Winchester", "Chichester",
 ]
-TRADE_QUERY = {"roofing": "roofer", "lofts": "loft conversion company", "driveways": "driveway contractor",
-               "landscaping": "landscaper", "building": "builder"}
+# The US panel's blank: the Wasatch Front's busiest towns, then Utah's other cities.
+US_DEFAULT_TOWNS = [
+    "Salt Lake City, UT", "West Jordan, UT", "Sandy, UT", "South Jordan, UT", "Draper, UT", "Murray, UT",
+    "Provo, UT", "Orem, UT", "Lehi, UT", "American Fork, UT", "Spanish Fork, UT", "Ogden, UT", "Layton, UT",
+    "Bountiful, UT", "Logan, UT", "St. George, UT", "Cedar City, UT", "Park City, UT",
+]
 COLUMNS = ["Rank", "Town", "Opportunity", "Firms on Google Maps", "Established (10+ reviews)", "With a website",
            "Speed checked", "Median score", "Under 50", "Established, no website", "Already in your lists",
            "Busiest firm's reviews"]
@@ -75,12 +81,12 @@ def save_cache(outreach: Path, cache: dict) -> None:
 
 def firms_in(town: str, trades: list[str], key: str, cache: dict, post=None) -> list[dict]:
     """Every firm Google Maps shows first for these trades in this town, once each."""
-    from places_finder import keep, own_site, search
+    from places_finder import keep, own_site, query_for, search
     from push_prospects import domain_of
 
     seen, firms = set(), []
     for trade in trades:
-        query = f"{TRADE_QUERY.get(trade, trade)} in {town}"
+        query = query_for(trade, town)
         hit = cache["searches"].get(query)
         if not (hit and _fresh(hit.get("at", ""))):
             places = [p for p in search(query, key, post, pages=1) if keep(p, [], [])]
@@ -97,7 +103,8 @@ def firms_in(town: str, trades: list[str], key: str, cache: dict, post=None) -> 
     return firms
 
 
-def score_town(town: str, firms: list[dict], known: set[str], psi_key: str, cache: dict, score=None) -> dict:
+def score_town(town: str, firms: list[dict], known: set[str], psi_key: str, cache: dict, score=None,
+               letters: bool = True) -> dict:
     from google_extras import mobile_score
 
     score = score or mobile_score
@@ -118,7 +125,8 @@ def score_town(town: str, firms: list[dict], known: set[str], psi_key: str, cach
     already = sum(1 for f in firms if f["domain"] and f["domain"] in known)
     return {
         "Town": town,
-        "Opportunity": round(len(new_with_site) * slow_share + 0.5 * len(no_site), 1),
+        # No website: a letter in the UK; in the US there's no way to reach them, so they add nothing.
+        "Opportunity": round(len(new_with_site) * slow_share + (0.5 * len(no_site) if letters else 0), 1),
         "Firms on Google Maps": len(firms),
         "Established (10+ reviews)": len(established),
         "With a website": len(with_site),
@@ -189,7 +197,7 @@ def run(towns: list[str], trades: list[str], outreach: Path, places_key: str, ps
     try:
         for i, town in enumerate(towns, 1):
             firms = firms_in(town, trades, places_key, cache, post)
-            row = score_town(town, firms, known, psi_key, cache, score)
+            row = score_town(town, firms, known, psi_key, cache, score, workspace.config(outreach)["letters"])
             rows.append(row)
             median = "-" if row["Median score"] is None else row["Median score"]
             log(f"[{i}/{len(towns)}] {town}: {row['Established (10+ reviews)']} established firms, median score {median}")
@@ -205,18 +213,19 @@ def run(towns: list[str], trades: list[str], outreach: Path, places_key: str, ps
 
 
 def main(argv: list[str] | None = None) -> int:
-    from find_prospects import TRADES, split_list
-    from places_finder import PlacesError
+    from find_prospects import TRADES, split_areas
+    from places_finder import PlacesError, area_label
 
     ap = argparse.ArgumentParser(description="Rank towns by how many busy trade firms have slow websites.")
     ap.add_argument("--trades", default="roofing")
-    ap.add_argument("--areas", default="", help="towns, comma separated (blank: South East commuter towns)")
+    ap.add_argument("--areas", default="", help="towns, comma separated (blank: South East commuter towns, or Utah's in the US)")
     ap.add_argument("--outreach", type=Path, default=workspace.outreach_dir())
     args = ap.parse_args(argv)
     trades = [t.strip() for t in args.trades.split(",") if t.strip() in TRADES]
     if not trades:
         raise SystemExit("Tick at least one trade.")
-    towns = [t.strip().title() for t in split_list(args.areas)] or DEFAULT_TOWNS
+    us = workspace.market(args.outreach) == "us"
+    towns = [area_label(t) for t in split_areas(args.areas)] or (US_DEFAULT_TOWNS if us else DEFAULT_TOWNS)
     args.outreach.mkdir(parents=True, exist_ok=True)
     places_key = (os.environ.get("GOOGLE_PLACES_API_KEY") or os.environ.get("PAGESPEED_API_KEY") or "").strip()
     try:

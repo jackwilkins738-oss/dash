@@ -80,6 +80,32 @@ class Finding(unittest.TestCase):
         self.assertIn("Google Maps", str(stop.exception))
 
 
+class Scout(unittest.TestCase):
+    def test_us_scout_searches_us_towns_with_us_words_and_counts_no_letters(self):
+        import area_scout
+        from test_area_scout import place
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"OUTREACH_DIR": "outreach-us"}):
+            out = Path(tmp) / "outreach-us"
+            out.mkdir()
+            queries = []
+
+            def post(body, key):
+                queries.append((body["textQuery"], body["regionCode"]))
+                return {"places": [place(1, "No Site Roofing", "", 40)]} if "Provo" in body["textQuery"] else {}
+
+            # The towns the panel's Areas box becomes: a state stays with its city; blank is Utah, not Surrey.
+            with mock.patch.object(area_scout, "run") as run:
+                area_scout.main(["--trades", "roofing", "--areas", "provo, ut, Ogden, UT", "--outreach", str(out)])
+                area_scout.main(["--trades", "roofing", "--outreach", str(out)])
+            self.assertEqual(run.call_args_list[0].args[0], ["Provo, UT", "Ogden, UT"])
+            self.assertEqual(run.call_args_list[1].args[0], area_scout.US_DEFAULT_TOWNS)
+            rows = area_scout.run(["Provo, UT"], ["roofing"], out, "k", "", post=post, log=lambda s: None)
+        self.assertEqual(queries, [("roofing contractor in Provo, UT", "us")])
+        self.assertEqual(rows[0]["Established, no website"], 1)
+        self.assertEqual(rows[0]["Opportunity"], 0)  # no letters in the US: a firm without a website adds nothing
+
+
 class Channel(unittest.TestCase):
     def test_us_sole_traders_get_email_and_no_one_gets_a_letter(self):
         row = {"Email": "mike@wasatchplumbing.com", "Company type": "Sole trader"}
