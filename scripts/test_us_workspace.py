@@ -262,6 +262,15 @@ class Replies(unittest.TestCase):
         self.assertIn("$4,500", ai_reply.brief({"message": "how much?"}, values, ""))
         self.assertEqual(ai_reply.system_prompt("uk"), ai_reply.SYSTEM)
 
+    def test_the_dashboard_after_its_free_year_is_59_dollars_in_the_us(self):
+        with mock.patch.dict(os.environ, {"OUTREACH_DIR": "outreach-us"}):
+            text = saved_replies.default_for()
+            values = ai_reply.env_values({})
+        self.assertIn("then $59 a month", text)
+        self.assertIn("$59 a month", ai_reply.brief({"message": "is there a monthly fee?"}, values, ""))
+        with mock.patch.dict(os.environ, {"OUTREACH_DIR": ""}):
+            self.assertIn("£39 a month", ai_reply.brief({"message": "?"}, ai_reply.env_values({}), ""))
+
 
 if __name__ == "__main__":
     unittest.main()

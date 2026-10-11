@@ -1088,6 +1088,7 @@ def reply_values(settings: dict, body: dict) -> dict[str, str]:
         "booking_link": settings.get("BOOKING_LINK", ""),
         "price_build": price("QUOTE_PRICE_BUILD", f"{market['prices']['build']:,}"),
         "price_landing": price("QUOTE_PRICE_LANDING", f"{market['prices']['landing']:,}"),
+        "price_monthly": str(market["monthly"]),
         "currency": market["currency"],
         "market": workspace.market(OUTREACH),
     }

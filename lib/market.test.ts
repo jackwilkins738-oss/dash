@@ -18,7 +18,8 @@ test('no US hosts set: everything stays UK, unless ?m=us asks', () => {
 })
 
 test('prices and how they read in each market', () => {
-  assert.deepEqual(pricesFor('us'), { landing: 1500, build: 4500 })
+  assert.deepEqual(pricesFor('us'), { landing: 1500, build: 4500, dashboardMonthly: 59 })
+  assert.equal(formatPrice('us', pricesFor('us').dashboardMonthly), '$59')
   assert.equal(formatPrice('us', pricesFor('us').build), '$4,500')
   assert.equal(formatPrice('uk', pricesFor('uk').build), '£2,500')
 })

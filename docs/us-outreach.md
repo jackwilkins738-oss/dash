@@ -20,6 +20,7 @@ the title, beside the UK panel on 8765.
 | No email | A letter | Not contacted - no letters |
 | Every email must have | - | Your postal address (`{{postal_address}}`) and a way to opt out |
 | Prices | £750 / £2,500 | $1,500 / $4,500 |
+| Dashboard after its free year | £39 a month | $59 a month (`lib/market.ts`, `scripts/workspace.py`) |
 | Online quotes | Yes (dashboard) | No - the dashboard's are pounds + UK VAT + UK terms. Send the price in a reply |
 | Preview page | scalardigital.co.uk | The US domain: dollars, no UK phone or WhatsApp, "call" not "ring" |
 
@@ -53,7 +54,5 @@ the title, beside the UK panel on 8765.
 - **No showcase scene for plumbing, electrical or HVAC.** The preview's concept site falls back to
   the driveways design for those trades (true in the UK too). Until there are scenes for them, the
   best-matching US trades are roofing, landscaping, concrete and general contractors.
-- **The dashboard's price after its free first year** isn't set for the US, so US pages and replies
-  only say the first 12 months are free.
 - **Online quotes and payment in dollars** need the dashboard (a separate repo) to support USD with
   no VAT, and US terms of business.

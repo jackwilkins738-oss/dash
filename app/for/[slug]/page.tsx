@@ -492,9 +492,7 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
               ['Do I own it?', 'Yes - the code and the domain are yours outright once it’s paid for. No being locked to me to make a change.'],
               ['What do I have to do?', 'A short call, then one page of details and some photos of your work. You check the whole site on your phone before anything goes live.'],
               ['Will my email keep working?', 'Yes. Your email settings are checked and carried over before your domain is pointed at the new site, and your current site stays up until then.'],
-              ['What about the dashboard?', us
-                ? 'It comes with The Scalar build, free for the first 12 months. The website works without it.'
-                : `It comes with The Scalar build, free for the first 12 months, then £${PRICES.dashboardMonthly} a month only if you want to keep it. The website works without it.`],
+              ['What about the dashboard?', `It comes with The Scalar build, free for the first 12 months, then ${formatPrice(market, prices.dashboardMonthly)} a month only if you want to keep it. The website works without it.`],
             ].map(([q, a]) => (
               <div key={q} className="py-5">
                 <dt className="font-semibold">{q}</dt>
