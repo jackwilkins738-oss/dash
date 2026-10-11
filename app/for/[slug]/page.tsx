@@ -23,6 +23,7 @@ import { QuickReply } from '@/components/quick-reply'
 import { StickyReply } from '@/components/sticky-reply'
 import { LoadFilmstrip } from '@/components/load-filmstrip'
 import { PAY_MONTHLY_MONTHS, PRICES } from '@/lib/site'
+import { UsPreviewNav } from '@/components/us-preview-nav'
 import { formatPrice, marketFor, pricesFor } from '@/lib/market'
 import { reviewsView, rivalsView, stars, videoSrc } from '@/lib/preview-extras'
 import { SITE } from '@/lib/site'
@@ -135,6 +136,8 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
     <main>
       {/* The site's header, footer, WhatsApp button and call bar are the UK's (data-uk-only). */}
       {us && <style>{'[data-uk-only]{display:none!important}'}</style>}
+      {us && <UsPreviewNav businessName={p.business_name} />}
+      <span id="top" aria-hidden="true" />
       <PreviewBeacon slug={p.slug} />
       {/* On paper only: whose report this is, and where the live version lives. */}
       <div data-print="only" className="border-b border-border px-5 pb-3 pt-1 text-xs text-muted-foreground">
