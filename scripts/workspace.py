@@ -31,6 +31,8 @@ MARKETS: dict[str, dict] = {
         "online_quotes": True,
         # Defaults when QUOTE_PRICE_BUILD / QUOTE_PRICE_LANDING aren't set - the website's own (lib/site.ts).
         "prices": {"build": 2500, "landing": 750},
+        # The dashboard (and Care plan) after its free first 12 months - optional (lib/site.ts).
+        "monthly": 39,
     },
     "us": {
         "label": "US",
@@ -45,6 +47,7 @@ MARKETS: dict[str, dict] = {
         # The dashboard's quotes are pounds + UK VAT + UK terms: a US firm gets its price in a reply instead.
         "online_quotes": False,
         "prices": {"build": 4500, "landing": 1500},
+        "monthly": 59,  # lib/market.ts US_PRICES.dashboardMonthly
     },
 }
 

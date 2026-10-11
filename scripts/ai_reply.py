@@ -125,6 +125,8 @@ def brief(firm: dict, values: dict, saved: str) -> str:
         f"Booking link: {values.get('booking_link') or 'none - ask for a good time and number instead'}",
         f"Price, single-page site: {values.get('currency') or '£'}{values.get('price_landing')}",
         f"Price, five-page site with dashboard: {values.get('currency') or '£'}{values.get('price_build')}",
+        f"Dashboard after its free first 12 months (optional, the website works without it): "
+        f"{values.get('currency') or '£'}{values.get('price_monthly')} a month",
         f"Sender's name: {values.get('your_name')}",
     ]
     reply = (firm.get("message") or "").strip()[:MAX_REPLY_CHARS]
@@ -185,6 +187,7 @@ def env_values(env: dict, display_name: str = "") -> dict[str, str]:
         "booking_link": env.get("BOOKING_LINK", ""),
         "price_build": price("QUOTE_PRICE_BUILD", market["prices"]["build"]),
         "price_landing": price("QUOTE_PRICE_LANDING", market["prices"]["landing"]),
+        "price_monthly": str(market["monthly"]),
         "currency": market["currency"],
         "market": workspace.market(),
         "your_name": env.get("MAIL_FROM_NAME") or env.get("LETTER_SIGNOFF") or "Scalar Digital",

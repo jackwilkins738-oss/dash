@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import workspace
+
 FILE = "reply-templates.txt"
 FIELDS = {"greeting_name", "business", "your_name", "preview_url", "booking_link", "price_build", "price_landing"}
 HEADING = re.compile(r"^===\s*(.+?)\s*===\s*$", re.M)
@@ -86,14 +88,14 @@ All the best,
 """
 
 
-# The US workspace's starting replies: dollars, US wording. The dashboard's price after its free first
-# year isn't set for the US yet, so it isn't quoted - only that the first 12 months are free.
+# The US workspace's starting replies: dollars, US wording, and the US price for the dashboard after
+# its free first year (workspace.py).
 US_SWAPS = [
     ("- £{{price_landing}}", "- ${{price_landing}}"),
     ("- £{{price_build}} for a five-page site, plus your own dashboard for enquiries, quotes, jobs and invoices "
      "(free for the first 12 months, then £39 a month if you want to keep it)",
      "- ${{price_build}} for a five-page site, plus your own dashboard for leads, quotes, jobs and invoices "
-     "(free for the first 12 months)"),
+     f"(free for the first 12 months, then ${workspace.MARKETS['us']['monthly']} a month if you want to keep it)"),
     ("and I'll ring you.", "and I'll call you."),
     ("Enquiries come straight to your phone.", "Leads come straight to your phone."),
     ("Kind regards,", "Thanks,"),

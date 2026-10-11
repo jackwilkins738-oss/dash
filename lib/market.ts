@@ -12,7 +12,8 @@ import { PRICES } from './site.ts'
 export type Market = 'uk' | 'us'
 
 // The outreach-us workspace quotes the same in its emails and replies (scripts/workspace.py).
-export const US_PRICES = { landing: 1500, build: 4500 } as const
+// dashboardMonthly: the dashboard (Care plan) after its free first 12 months - optional.
+export const US_PRICES = { landing: 1500, build: 4500, dashboardMonthly: 59 } as const
 
 export function usHosts(env: string | undefined = process.env.US_SITE_HOSTS): string[] {
   return (env ?? '')
@@ -28,8 +29,8 @@ export function marketFor(host: string | null | undefined, param?: string | stri
   return bare && hosts.includes(bare) ? 'us' : 'uk'
 }
 
-export function pricesFor(market: Market): { landing: number; build: number } {
-  return market === 'us' ? US_PRICES : { landing: PRICES.landing, build: PRICES.build }
+export function pricesFor(market: Market): { landing: number; build: number; dashboardMonthly: number } {
+  return market === 'us' ? US_PRICES : { landing: PRICES.landing, build: PRICES.build, dashboardMonthly: PRICES.dashboardMonthly }
 }
 
 /** "£2,500" or "$4,500". */
