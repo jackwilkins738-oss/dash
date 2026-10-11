@@ -53,8 +53,15 @@ EXCLUSIONS = (
 )
 
 
-def payment_terms(deposit_percent: int) -> str:
-    """The one-line version, shown beside the price."""
+PAY_MONTHLY_MONTHS = 12  # workspace.MONTHS - kept here too so terms.py stays importable on its own
+LATE_DAYS = 14  # a missed payment: reminder after this many days, site offline this many days after that
+
+
+def payment_terms(deposit_percent: int, monthly: int = 0) -> str:
+    """The one-line version, shown beside the price. `monthly` (whole pounds) makes it a pay-monthly quote."""
+    if monthly:
+        return (f"Nothing upfront. {PAY_MONTHLY_MONTHS} monthly payments of £{monthly:,} from the day your site goes live "
+                f"(£{monthly * PAY_MONTHLY_MONTHS:,} in total, no interest), by Direct Debit or card. Pay off the rest any time.")
     if deposit_percent >= 100:
         return "Paid in full on acceptance. Invoices are due within 7 days."
     if deposit_percent > 0:
@@ -63,8 +70,10 @@ def payment_terms(deposit_percent: int) -> str:
     return "Paid in full when your site is ready to go live and you've checked it. Invoices are due within 7 days."
 
 
-def terms(package: str, deposit_percent: int, vat_rate: int = 0, founding: bool = False) -> str:
-    """The full terms for one quote, numbered, as plain text (the quote page keeps the line breaks)."""
+def terms(package: str, deposit_percent: int, vat_rate: int = 0, founding: bool = False, monthly: int = 0) -> str:
+    """The full terms for one quote, numbered, as plain text (the quote page keeps the line breaks).
+    `monthly` (whole pounds per payment) makes it pay monthly: nothing upfront, PAY_MONTHLY_MONTHS payments from
+    launch, hosted on my account until the last one, then the site is theirs."""
     if package not in INCLUDED:
         raise ValueError(f"unknown package {package!r}")
     founding = founding and package == "build"  # the founding offer is for The Scalar build only
@@ -77,6 +86,11 @@ def terms(package: str, deposit_percent: int, vat_rate: int = 0, founding: bool 
                   "The balance is due when your site is ready to go live and you've checked it; it goes live on your domain once that's paid.")
     else:
         paying = "Nothing is due until your site is ready to go live and you've checked it; it goes live on your domain once it's paid."
+    if monthly:
+        total = monthly * PAY_MONTHLY_MONTHS
+        paying = (f"There's nothing to pay upfront. From the day your site goes live you pay £{monthly:,} a month for "
+                  f"{PAY_MONTHLY_MONTHS} months - £{total:,} in total, which is never more than the one-off price. There's no "
+                  "interest and no fee for paying this way. You can pay off whatever's left at any time.")
     if founding:
         paying += (" Founding-client speed guarantee: if the live site doesn't score 90+ on Google's mobile speed test at launch "
                    "(checked together), the balance isn't due.")
@@ -87,7 +101,8 @@ def terms(package: str, deposit_percent: int, vat_rate: int = 0, founding: bool 
         ("The price",
          "The price is fixed. It doesn't move once we start, whatever the job turns out to involve. "
          + ("It includes VAT at 20%." if vat_rate == 20 else "No VAT is charged.")),
-        ("Paying", paying + " Invoices are due within 7 days, by bank transfer or card."),
+        ("Paying", paying + (" Payments are taken by Direct Debit or card on the same date each month." if monthly
+                             else " Invoices are due within 7 days, by bank transfer or card.")),
         ("Your part",
          "Send me what I ask for - photos of your work, your logo, reviews you're happy to show, the towns you cover, and logins for "
          "your domain - within 14 days of my asking, and check things when I ask you to. You confirm you have the right to use "
@@ -100,13 +115,26 @@ def terms(package: str, deposit_percent: int, vat_rate: int = 0, founding: bool 
          f"For {days} days after launch, tweaks and fixes are free. After that there's no retainer on your website: any later change "
          "is quoted as a one-off, and you're free to use anyone you like."),
         ("Ownership",
-         "Once it's paid for in full, the site's code, design and the words written for it are yours, and your domain is registered "
-         "in your name. Your photos, logo and content stay yours throughout. I may show the finished site in my portfolio unless you "
+         ("Your domain is registered in your name from the start. Once your last monthly payment is made (or you pay off the rest), "
+          "the site's code, design and the words written for it are yours." if monthly else
+          "Once it's paid for in full, the site's code, design and the words written for it are yours, and your domain is registered "
+          "in your name.")
+         + " Your photos, logo and content stay yours throughout. I may show the finished site in my portfolio unless you "
          "ask me not to."),
         ("Hosting",
-         "Your site is hosted on Cloudflare, on a free account in your name, so there's no monthly hosting fee on the website. "
-         "Cloudflare provides the hosting under its own terms; I set it up and publish to it."),
+         ("Until your last monthly payment, your site is hosted on Cloudflare under my account, at no extra cost. Once it's paid "
+          "off, I move it to a free Cloudflare account in your name, so there's no monthly hosting fee on the website from then on. "
+          if monthly else
+          "Your site is hosted on Cloudflare, on a free account in your name, so there's no monthly hosting fee on the website. ")
+         + "Cloudflare provides the hosting under its own terms; I set it up and publish to it."),
     ]
+    if monthly:
+        sections.append((
+            "If a payment is missed",
+            f"I'll let you know straight away. If it's still unpaid {LATE_DAYS} days after it was due, I'll remind you in writing; "
+            f"if it's still unpaid {LATE_DAYS} days after that, I can take the site offline until you're up to date. It goes back "
+            "up as soon as you've caught up, at no charge. Your domain stays yours throughout, and nothing extra is ever added "
+            "for paying late."))
     if founding:
         sections.append((
             "Founding client",
@@ -126,9 +154,13 @@ def terms(package: str, deposit_percent: int, vat_rate: int = 0, founding: bool 
          "I build every site to be fast and found locally, but nobody can honestly promise a Google ranking or a number of "
          "enquiries, so I don't."),
         ("Cancelling",
-         "You can cancel at any time by telling me in writing. Before I've started, any deposit is refunded in full. After that, you "
-         "pay for the work done up to that point - never more than the full price - with the deposit counting towards it, and you "
-         "get everything built so far."),
+         ("You can cancel before your site goes live by telling me in writing, and you pay nothing. Once it's live, you can stop "
+          "whenever you like: pay off what's left and the site is yours, or tell me in writing and it comes down at the end of the "
+          "last month you've paid for. Payments already made aren't refunded, and your domain stays yours either way."
+          if monthly else
+          "You can cancel at any time by telling me in writing. Before I've started, any deposit is refunded in full. After that, you "
+          "pay for the work done up to that point - never more than the full price - with the deposit counting towards it, and you "
+          "get everything built so far.")),
         ("Liability",
          "If something goes wrong that's my fault, my liability is limited to the price of this quote, and I'm not liable for "
          "indirect losses such as lost profit or business. Nothing here limits anything the law doesn't allow to be limited."),

@@ -109,6 +109,12 @@ def model_for(key: str, chosen: str = "") -> str:
     return _model_cache[key]
 
 
+def workspace_months() -> int:
+    import workspace
+
+    return workspace.MONTHS
+
+
 def brief(firm: dict, values: dict, saved: str) -> str:
     """Everything Claude knows about this conversation, as one message."""
     facts = [
@@ -125,6 +131,10 @@ def brief(firm: dict, values: dict, saved: str) -> str:
         f"Booking link: {values.get('booking_link') or 'none - ask for a good time and number instead'}",
         f"Price, single-page site: {values.get('currency') or '£'}{values.get('price_landing')}",
         f"Price, five-page site with dashboard: {values.get('currency') or '£'}{values.get('price_build')}",
+        f"Or pay monthly instead: nothing upfront, {workspace_months()} payments from launch of "
+        f"{values.get('currency') or '£'}{values.get('price_build_monthly')} (five-page site) or "
+        f"{values.get('currency') or '£'}{values.get('price_landing_monthly')} (single page), no interest, "
+        f"then it's theirs outright; they can pay off the rest any time",
         f"Dashboard after its free first 12 months (optional, the website works without it): "
         f"{values.get('currency') or '£'}{values.get('price_monthly')} a month",
         f"Sender's name: {values.get('your_name')}",
@@ -181,12 +191,16 @@ def env_values(env: dict, display_name: str = "") -> dict[str, str]:
         except ValueError:
             return f"{default:,}"
 
+    build = price("QUOTE_PRICE_BUILD", market["prices"]["build"])
+    landing = price("QUOTE_PRICE_LANDING", market["prices"]["landing"])
     return {
         "greeting_name": first_name(display_name),
         "preview_url": "",
         "booking_link": env.get("BOOKING_LINK", ""),
-        "price_build": price("QUOTE_PRICE_BUILD", market["prices"]["build"]),
-        "price_landing": price("QUOTE_PRICE_LANDING", market["prices"]["landing"]),
+        "price_build": build,
+        "price_landing": landing,
+        "price_build_monthly": f"{workspace.monthly(build.replace(',', '')):,}",
+        "price_landing_monthly": f"{workspace.monthly(landing.replace(',', '')):,}",
         "price_monthly": str(market["monthly"]),
         "currency": market["currency"],
         "market": workspace.market(),

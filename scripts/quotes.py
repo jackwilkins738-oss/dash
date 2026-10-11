@@ -62,29 +62,42 @@ def extras(settings: dict[str, str]) -> list[dict]:
     return [e for e in out if e["price_pence"] > 0][:MAX_EXTRAS]
 
 
-def quote_body(settings: dict[str, str], package: str, founding: bool = False) -> dict:
+def quote_body(settings: dict[str, str], package: str, founding: bool = False, monthly: bool = False) -> dict:
     """What any quote for this package says - price, deposit, VAT, payment terms, exclusions, terms of
-    business, extras - the same whether you send it or they start it from their preview."""
+    business, extras - the same whether you send it or they start it from their preview.
+
+    monthly: pay monthly (terms.PAY_MONTHLY_MONTHS payments from launch, nothing upfront). The quote's total is
+    the payments added up - never more than the one-off price - and `payment_plan` tells the dashboard."""
     import terms
+    import workspace
 
     _, _, description = PACKAGES[package]
-    founding = founding and package == "build"
+    founding = founding and package == "build" and not monthly  # the founding guarantee is about a balance due at launch
     if founding:
         description += " (founding client)"
+    each = workspace.monthly(price(settings, package)) if monthly else 0
+    if each:
+        description += f" - pay monthly, {terms.PAY_MONTHLY_MONTHS} x £{each:,}"
     vat = 20 if str(settings.get("QUOTE_VAT_RATE") or "0").strip() == "20" else 0
     try:
         deposit = max(0, min(100, int(float(settings.get("QUOTE_DEPOSIT_PERCENT") or 0))))
     except ValueError:
         deposit = 0
-    return {
-        "line_items": [{"category": "labour", "description": description, "unit_price_pence": price(settings, package) * 100}],
+    if each:
+        deposit = 0  # nothing upfront
+    body = {
+        "line_items": [{"category": "labour", "description": description,
+                        "unit_price_pence": (each * terms.PAY_MONTHLY_MONTHS if each else price(settings, package)) * 100}],
         "vat_rate": vat,
         "deposit_percent": deposit,
-        "payment_terms": terms.payment_terms(deposit),
+        "payment_terms": terms.payment_terms(deposit, each),
         "exclusions": terms.EXCLUSIONS,
-        "terms": terms.terms(package, deposit, vat, founding),
+        "terms": terms.terms(package, deposit, vat, founding, each),
         "optional_items": extras(settings),
     }
+    if each:
+        body["payment_plan"] = {"instalments": terms.PAY_MONTHLY_MONTHS, "instalment_pence": each * 100, "first_due": "at launch"}
+    return body
 
 
 def publish_self_serve(settings: dict[str, str], post=None) -> list[str]:
@@ -116,7 +129,7 @@ def _post_template(url: str, body: dict, secret: str) -> None:
 
 
 def create_quote(settings: dict[str, str], business: str, email: str, phone: str, package: str,
-                 slug: str | None = None, note: str = "", founding: bool = False) -> dict:
+                 slug: str | None = None, note: str = "", founding: bool = False, monthly: bool = False) -> dict:
     """{quote_number, total_pence, quote_url} from the dashboard, or raises QuoteFailed with the reason."""
     if package not in PACKAGES:
         raise QuoteFailed("unknown package")
@@ -127,7 +140,7 @@ def create_quote(settings: dict[str, str], business: str, email: str, phone: str
         "email": email or None,
         "phone": phone or None,
         "note": note or "Quoted from the outreach call list",
-        **quote_body(settings, package, founding),
+        **quote_body(settings, package, founding, monthly),
     }
     api = (settings.get("DASHBOARD_API_URL") or "https://admin.scalardigital.co.uk").rstrip("/")
     req = urllib.request.Request(

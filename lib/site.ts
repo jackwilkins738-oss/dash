@@ -22,6 +22,14 @@ export const UPDATED = '2026-09-24'
 
 export const PRICES = { landing: 750, build: 2500, dashboardMonthly: 39, growthMonthly: 149 } as const
 
+// Pay monthly: the same build, nothing upfront, in PAY_MONTHLY_MONTHS payments starting at launch, then
+// it's theirs outright. Each payment is the price / 12 rounded down to whole pounds, so the total is never
+// more than the one-off price and there's no interest or fee. (For sole traders that keeps it inside the
+// UK consumer-credit exemption: 12 or fewer payments, within 12 months, no charge for the credit.)
+// scripts/workspace.py works it out the same way for emails, replies and quotes.
+export const PAY_MONTHLY_MONTHS = 12
+export const monthlyOf = (price: number, months = PAY_MONTHLY_MONTHS) => Math.floor(price / months)
+
 // Founding clients: the first Scalar builds get extras in return for a case study. When one signs,
 // raise `taken` and redeploy - the offer shows the places left, and disappears once none are.
 export const FOUNDING = { places: 3, taken: 0 } as const

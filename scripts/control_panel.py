@@ -87,7 +87,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 40  # speed checks per step of Run the whole list - each step is pushed, so stopping loses nothing
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "108"
+PANEL_VERSION = "109"
 MAX_LOG_LINES = 5000
 
 
@@ -973,17 +973,20 @@ def quote_action(body: dict) -> tuple[dict, int]:
     if len(settings["PROSPECTS_API_SECRET"]) < 32:
         return {"error": "Add PROSPECTS_API_SECRET in Settings first."}, 400
     slug = make_slug(business, website, settings["PROSPECTS_API_SECRET"]) if DOMAIN.match(website) else None
-    founding = bool(body.get("founding")) and package == "build"
+    monthly = bool(body.get("monthly"))
+    founding = bool(body.get("founding")) and package == "build" and not monthly
     try:
-        result = quotes.create_quote(settings, business, email, phone, package, slug, founding=founding)
+        result = quotes.create_quote(settings, business, email, phone, package, slug, founding=founding,
+                                     **({"monthly": True} if monthly else {}))
     except quotes.QuoteFailed as e:
         return {"error": f"No quote made: {e}."}, 502
-    quotes.record(OUTREACH, sheet, key, business, package, result)
+    quotes.record(OUTREACH, sheet, key, business, f"{package} (monthly)" if monthly else package, result)
     try:
         import proposal
 
         proposal.make(OUTREACH, sheet, key, business, package, result, settings, founding,
-                      {"website": website, "contact": str(body.get("contact") or "")})
+                      {"website": website, "contact": str(body.get("contact") or "")},
+                      monthly=workspace.monthly(quotes.price(settings, package)) if monthly else 0)
         made_proposal = True
     except (OSError, ValueError, KeyError):
         made_proposal = False  # the quote exists either way; the proposal is the extra
@@ -1080,14 +1083,18 @@ def reply_values(settings: dict, body: dict) -> dict[str, str]:
 
     market = workspace.config(OUTREACH)
     preview = str(body.get("preview") or "")
+    build = price("QUOTE_PRICE_BUILD", f"{market['prices']['build']:,}")
+    landing = price("QUOTE_PRICE_LANDING", f"{market['prices']['landing']:,}")
     return {
         "greeting_name": saved_replies.first_name(str(body.get("contact") or "")),
         "business": str(body.get("business") or "")[:120],
         "your_name": settings.get("MAIL_FROM_NAME") or settings.get("LETTER_SIGNOFF") or "Scalar Digital",
         "preview_url": preview.replace("src=dashboard", "src=email") if preview.startswith("https://") else "",
         "booking_link": settings.get("BOOKING_LINK", ""),
-        "price_build": price("QUOTE_PRICE_BUILD", f"{market['prices']['build']:,}"),
-        "price_landing": price("QUOTE_PRICE_LANDING", f"{market['prices']['landing']:,}"),
+        "price_build": build,
+        "price_landing": landing,
+        "price_build_monthly": f"{workspace.monthly(build.replace(',', '')):,}",
+        "price_landing_monthly": f"{workspace.monthly(landing.replace(',', '')):,}",
         "price_monthly": str(market["monthly"]),
         "currency": market["currency"],
         "market": workspace.market(OUTREACH),
