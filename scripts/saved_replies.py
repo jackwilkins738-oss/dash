@@ -9,7 +9,7 @@ Kept in outreach/reply-templates.txt, edited in the panel as one block of text:
     ...
 
 Placeholders: {{greeting_name}} {{business}} {{your_name}} {{preview_url}} {{booking_link}}
-{{price_build}} {{price_landing}}. A line with {{booking_link}} is left out while no booking
+{{price_build}} {{price_landing}} {{price_build_monthly}} {{price_landing_monthly}}. A line with {{booking_link}} is left out while no booking
 link is set in Settings, so nothing reads "pick a time: " with nothing after it.
 """
 
@@ -21,7 +21,8 @@ from pathlib import Path
 import workspace
 
 FILE = "reply-templates.txt"
-FIELDS = {"greeting_name", "business", "your_name", "preview_url", "booking_link", "price_build", "price_landing"}
+FIELDS = {"greeting_name", "business", "your_name", "preview_url", "booking_link", "price_build", "price_landing",
+          "price_build_monthly", "price_landing_monthly"}
 HEADING = re.compile(r"^===\s*(.+?)\s*===\s*$", re.M)
 PLACEHOLDER = re.compile(r"\{\{\s*([a-z_]+)\s*\}\}")
 
@@ -33,7 +34,9 @@ Thanks for getting back to me. It's a fixed price, agreed before I start anythin
 - £{{price_landing}} for a single-page site
 - £{{price_build}} for a five-page site, plus your own dashboard for enquiries, quotes, jobs and invoices (free for the first 12 months, then £39 a month if you want to keep it)
 
-You own the site outright either way - no monthly fee on the website itself.
+Or nothing upfront: 12 monthly payments from the day it goes live - £{{price_build_monthly}} a month for the five-page site, £{{price_landing_monthly}} for the single page. No interest, and it's yours outright after the last one.
+
+You own the site outright either way - no ongoing fee on the website itself.
 
 If it's easier to talk it through, pick a time that suits you here: {{booking_link}}
 Or just reply with a good time and number and I'll ring you.
@@ -96,6 +99,8 @@ US_SWAPS = [
      "(free for the first 12 months, then £39 a month if you want to keep it)",
      "- ${{price_build}} for a five-page site, plus your own dashboard for leads, quotes, jobs and invoices "
      f"(free for the first 12 months, then ${workspace.MARKETS['us']['monthly']} a month if you want to keep it)"),
+    ("£{{price_build_monthly}} a month", "${{price_build_monthly}} a month"),
+    ("£{{price_landing_monthly}} for", "${{price_landing_monthly}} for"),
     ("and I'll ring you.", "and I'll call you."),
     ("Enquiries come straight to your phone.", "Leads come straight to your phone."),
     ("Kind regards,", "Thanks,"),

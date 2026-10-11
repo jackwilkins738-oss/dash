@@ -80,6 +80,8 @@ DEFAULT_TEMPLATES = {
 
 I checked your current site on my phone too. {{score_line}} {{issue_line}} {{why_line}}
 
+There's nothing to pay upfront if you'd rather: 12 monthly payments from the day it goes live, then it's yours outright.
+
 Worth a 10-minute chat?
 
 {{your_name}}
@@ -133,6 +135,8 @@ US_DEFAULT_TEMPLATES = {
 I checked your current site on my phone too. {{score_line}} {{issue_line}} {{why_line}}
 
 Most contractors I talk to are paying Angi, Thumbtack or Google for leads their own website should be bringing in for free. That's what this is built to fix.
+
+Nothing to pay upfront if you'd rather: 12 monthly payments from the day it goes live, then it's yours outright.
 
 Worth a 10-minute call? Just reply here.
 Or pick a time that suits you: {{booking_link}}

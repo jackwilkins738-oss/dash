@@ -413,7 +413,7 @@ Scalar Digital · 07401 696272</textarea>
 
     <div class="card">
       <h2>Saved replies</h2>
-      <p class="hint">Used by the Reply box on Calls. Each starts with a line like <code>=== How much? ===</code>. Fields: {{greeting_name}} {{business}} {{your_name}} {{preview_url}} {{booking_link}} {{price_build}} {{price_landing}}.</p>
+      <p class="hint">Used by the Reply box on Calls. Each starts with a line like <code>=== How much? ===</code>. Fields: {{greeting_name}} {{business}} {{your_name}} {{preview_url}} {{booking_link}} {{price_build}} {{price_landing}} {{price_build_monthly}} {{price_landing_monthly}} (pay monthly: each of the 12 payments).</p>
       <textarea id="sr-text" rows="16"></textarea>
       <div class="row"><button class="primary" id="sr-save">Save replies</button><button id="sr-reset">Back to the originals</button><span class="saved" id="sr-saved"></span></div>
     </div>
@@ -827,7 +827,7 @@ function callRow(i, section) {
     ${i.script && i.script.length ? `<details class="why"><summary>Call script</summary>${i.script.map((l) => `<div>${esc(l)}</div>`).join("")}</details>` : ""}
     <div class="btns">${(callData.outcomes || []).map((o) => `<button data-outcome="${esc(o)}" ${o === "Not interested" ? 'class="danger"' : o === "Interested" || o === "Won" ? 'class="primary"' : ""}>${esc(o)}</button>`).join("")}
       <input type="text" placeholder="note (optional)" data-note></div>
-    <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><label class="hint" title="One of the first three Scalar builds: 24 months' free dashboard, the speed guarantee, first in the queue - for a case study, video and review"><input type="checkbox" data-founding> founding client</label><button data-draft>Draft their site</button><button data-research title="Company age and directors, what their site says, their speed check - before you dial">🔎 Research</button></div>
+    <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><label class="hint" title="One of the first three Scalar builds: 24 months' free dashboard, the speed guarantee, first in the queue - for a case study, video and review"><input type="checkbox" data-founding> founding client</label><label class="hint" title="Nothing upfront, 12 monthly payments from launch (the price / 12, rounded down), then it's theirs. Hosted on your Cloudflare until paid off."><input type="checkbox" data-monthly> pay monthly</label><button data-draft>Draft their site</button><button data-research title="Company age and directors, what their site says, their speed check - before you dial">🔎 Research</button></div>
     <div class="why" data-research-box hidden></div>
     <div class="why" data-quote-result></div>
     ${section === "replied" && i.email ? `<div class="btns" style="margin-top:6px">
@@ -965,13 +965,15 @@ let quotePrices = { build: "2500", landing: "750" };
 async function makeQuote(b) {
   const card = b.closest(".ritem");
   const item = (callData[card.dataset.sec] || []).find((x) => x.key === card.dataset.key);
-  const founding = b.dataset.quote === "build" && !!card.querySelector("[data-founding]")?.checked;
-  const label = b.dataset.quote === "build" ? (founding ? "founding-client Scalar build" : "Scalar build") : "landing page";
+  const monthly = !!card.querySelector("[data-monthly]")?.checked;
+  const founding = !monthly && b.dataset.quote === "build" && !!card.querySelector("[data-founding]")?.checked;
+  const label = (b.dataset.quote === "build" ? (founding ? "founding-client Scalar build" : "Scalar build") : "landing page")
+    + (monthly ? ", pay monthly (12 payments, nothing upfront)" : "");
   if (!confirm(`Make a ${label} quote for ${item.business}? It's added to your dashboard as a sent quote - you send the link.`)) return;
   b.disabled = true;
   const r = await post("/api/quote", { sheet: sheetOf(item), key: item.key, business: item.business, email: item.email,
     phone: item.phone, website: item.website, contact: item.contact, package: b.dataset.quote,
-    founding });
+    founding, monthly });
   b.disabled = false;
   const box = card.querySelector("[data-quote-result]");
   if (r.error) { box.style.color = "var(--bad)"; box.textContent = r.error; return; }

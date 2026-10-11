@@ -7,7 +7,7 @@
 //
 // `?m=us` on a preview link shows the US version on any host, to check it before the domain is live.
 
-import { PRICES } from './site.ts'
+import { monthlyOf, PRICES } from './site.ts'
 
 export type Market = 'uk' | 'us'
 
@@ -29,8 +29,18 @@ export function marketFor(host: string | null | undefined, param?: string | stri
   return bare && hosts.includes(bare) ? 'us' : 'uk'
 }
 
-export function pricesFor(market: Market): { landing: number; build: number; dashboardMonthly: number } {
-  return market === 'us' ? US_PRICES : { landing: PRICES.landing, build: PRICES.build, dashboardMonthly: PRICES.dashboardMonthly }
+export type MarketPrices = {
+  landing: number
+  build: number
+  dashboardMonthly: number
+  /** Pay monthly (lib/site.ts): each of the PAY_MONTHLY_MONTHS payments. */
+  landingMonthly: number
+  buildMonthly: number
+}
+
+export function pricesFor(market: Market): MarketPrices {
+  const base = market === 'us' ? US_PRICES : { landing: PRICES.landing, build: PRICES.build, dashboardMonthly: PRICES.dashboardMonthly }
+  return { ...base, landingMonthly: monthlyOf(base.landing), buildMonthly: monthlyOf(base.build) }
 }
 
 /** "£2,500" or "$4,500". */

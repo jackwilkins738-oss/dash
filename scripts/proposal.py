@@ -73,17 +73,25 @@ def render(facts: dict) -> str:
     """facts: business, contact, website, trade, area, before, package, founding, quote_number, total_pence,
     vat_rate, deposit_percent, quote_url, expires, from_name, from_email, from_phone."""
     e = lambda v: html.escape(str(v or ""), quote=True)  # noqa: E731
-    package, founding = facts["package"], bool(facts.get("founding")) and facts["package"] == "build"
+    package = facts["package"]
+    founding = bool(facts.get("founding")) and package == "build" and not facts.get("monthly")
     deposit_pct = facts["deposit_percent"]
     total = facts["total_pence"]
     deposit = round(total * deposit_pct / 100) if deposit_pct else 0
     days = terms.AFTERCARE_DAYS[package]
     now = where_now(facts.get("before") or {}, facts.get("website") or "", facts.get("trade") or "", facts.get("area") or "")
     included = terms.included(package, founding)
-    full_terms = terms.terms(package, deposit_pct, facts.get("vat_rate", 0), founding)
+    monthly = int(facts.get("monthly") or 0)
+    if monthly:
+        deposit_pct = deposit = 0
+    full_terms = terms.terms(package, deposit_pct, facts.get("vat_rate", 0), founding, monthly)
     greeting = f"Prepared for {e(facts.get('contact'))}, {e(facts['business'])}" if facts.get("contact") else f"Prepared for {e(facts['business'])}"
     contact_bits = " &middot; ".join(e(x) for x in (facts.get("from_email"), facts.get("from_phone")) if x)
-    if deposit and deposit < total:
+    if monthly:
+        pay_rows = (f"<tr><td>Upfront</td><td>{_money(0)}</td></tr>"
+                    f"<tr><td>{terms.PAY_MONTHLY_MONTHS} monthly payments from the day your site goes live</td>"
+                    f"<td>{_money(monthly * 100)} a month</td></tr>")
+    elif deposit and deposit < total:
         pay_rows = (f"<tr><td>Deposit on acceptance ({deposit_pct}%)</td><td>{_money(deposit)}</td></tr>"
                     f"<tr><td>Balance when your site is ready to go live</td><td>{_money(total - deposit)}</td></tr>")
     elif deposit:
@@ -140,7 +148,7 @@ def render(facts: dict) -> str:
 <ol class="steps">{steps}</ol>
 <h2>The price</h2>
 <table><tr class="total"><td>{e(LABELS[package])} - fixed price</td><td>{_money(total)}</td></tr>{pay_rows}</table>
-<p class="note">{e(vat_note)} {e(terms.payment_terms(deposit_pct))} Not included: {e(terms.EXCLUSIONS)}</p>
+<p class="note">{e(vat_note)} {e(terms.payment_terms(deposit_pct, monthly))} Not included: {e(terms.EXCLUSIONS)}</p>
 <div class="accept"><strong>To go ahead, accept online:</strong><br><a href="{e(facts['quote_url'])}">{e(facts['quote_url'])}</a>
 <p class="note">You'll see this quote and the terms below, and sign by typing your name. Any questions first, just ask.</p></div>
 <footer>{e(facts.get('from_name') or terms.BUSINESS)}{' &middot; ' + contact_bits if contact_bits else ''} &middot; scalardigital.co.uk</footer>
@@ -150,7 +158,7 @@ def render(facts: dict) -> str:
 
 
 def make(outreach: Path, sheet: str, key: str, business: str, package: str, result: dict, settings: dict,
-         founding: bool = False, fallback: dict | None = None) -> Path:
+         founding: bool = False, fallback: dict | None = None, monthly: int = 0) -> Path:
     """Writes the proposal for a quote just made; returns its path."""
     from launch_report import before_from_log
     from push_prospects import domain_of
@@ -172,7 +180,7 @@ def make(outreach: Path, sheet: str, key: str, business: str, package: str, resu
         "business": business, "contact": get("Contact name", "contact"), "website": website,
         "trade": get("Trade", "trade"), "area": get("Area", "area"),
         "before": before_from_log(outreach, website) if website else {},
-        "package": package, "founding": founding, "quote_number": result.get("quote_number") or "",
+        "package": package, "founding": founding and not monthly, "monthly": monthly, "quote_number": result.get("quote_number") or "",
         "total_pence": int(result.get("total_pence") or 0), "vat_rate": vat, "deposit_percent": deposit,
         "quote_url": result["quote_url"],
         # The dashboard's default life for a quote (app/api/prospects/quote: expires_days 30).

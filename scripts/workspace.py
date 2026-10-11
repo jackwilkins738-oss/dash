@@ -76,6 +76,18 @@ def market(outreach: Path | None = None) -> str:
     return suffix if suffix in MARKETS else "uk"
 
 
+# Pay monthly: nothing upfront, MONTHS payments from launch, then the site is theirs (lib/site.ts). Each
+# payment is the price / MONTHS rounded down to whole units, so the total is never more than paying at once
+# and nothing is charged for spreading it - for a UK sole trader that keeps it inside the consumer-credit
+# exemption (12 or fewer payments, within 12 months, no charge for the credit).
+MONTHS = 12
+
+
+def monthly(price) -> int:
+    """Each pay-monthly payment for a one-off price: 2500 -> 208, 750 -> 62, 4500 -> 375."""
+    return int(float(price or 0) // MONTHS)
+
+
 def config(outreach: Path | None = None) -> dict:
     return MARKETS[market(outreach)]
 

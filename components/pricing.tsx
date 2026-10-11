@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { Check } from 'lucide-react'
 import { FoundingOffer } from '@/components/founding-offer'
 import { Reveal } from '@/components/reveal'
-import { PRICES } from '@/lib/site'
+import { monthlyOf, PAY_MONTHLY_MONTHS, PRICES } from '@/lib/site'
 
 const LANDING_INCLUDED: ReactNode[] = [
   'One hand-coded page, engineered to convert, not just to exist',
@@ -59,6 +59,7 @@ export function Pricing() {
           <PriceCard
             label="The Scalar build"
             price="£2,500"
+            monthly={monthlyOf(PRICES.build)}
             included={BUILD_INCLUDED}
             footnote="Fixed at the outset — nothing added later"
             exampleHref="/examples/verdigris-roofing/"
@@ -67,6 +68,7 @@ export function Pricing() {
           <PriceCard
             label="Landing Page"
             price="£750"
+            monthly={monthlyOf(PRICES.landing)}
             included={LANDING_INCLUDED}
             footnote="Fixed at the outset — nothing added later"
             exampleHref="/examples/verdigris-roofing/landing.html"
@@ -146,6 +148,7 @@ function PlanCard({ name, price, note, items }: { name: string; price: number; n
 function PriceCard({
   label,
   price,
+  monthly,
   included,
   footnote,
   exampleHref,
@@ -153,6 +156,8 @@ function PriceCard({
 }: {
   label: string
   price: string
+  /** Pay monthly: each payment, nothing upfront (lib/site.ts). */
+  monthly?: number
   included: ReactNode[]
   footnote: string
   exampleHref?: string
@@ -188,6 +193,12 @@ function PriceCard({
             one-off
           </span>
         </div>
+        {monthly ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Or nothing upfront: {PAY_MONTHLY_MONTHS} payments of £{monthly} a month from launch, then it&apos;s yours
+            outright. No interest.
+          </p>
+        ) : null}
 
         <div className="my-8 h-px w-full bg-border" />
 

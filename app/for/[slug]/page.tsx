@@ -22,7 +22,7 @@ import { PreviewVideo } from '@/components/preview-video'
 import { QuickReply } from '@/components/quick-reply'
 import { StickyReply } from '@/components/sticky-reply'
 import { LoadFilmstrip } from '@/components/load-filmstrip'
-import { PRICES } from '@/lib/site'
+import { PAY_MONTHLY_MONTHS, PRICES } from '@/lib/site'
 import { formatPrice, marketFor, pricesFor } from '@/lib/market'
 import { reviewsView, rivalsView, stars, videoSrc } from '@/lib/preview-extras'
 import { SITE } from '@/lib/site'
@@ -82,6 +82,7 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
   const market = marketFor((await headers()).get('host'), (await searchParams).m)
   const us = market === 'us'
   const prices = pricesFor(market)
+  const monthlyLine = (each: number) => `or ${formatPrice(market, each)}/month for ${PAY_MONTHLY_MONTHS} months, nothing upfront`
   const locale = us ? 'en-US' : 'en-GB'
   const ring = us ? 'call' : 'ring'
 
@@ -423,6 +424,7 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
                 <a href="#reply" className="group rounded-2xl border border-blueprint/50 bg-card p-6 transition-colors hover:border-blueprint">
                   <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-blueprint">The Scalar build</span>
                   <span className="mt-2 block font-display text-3xl font-bold">{formatPrice(market, prices.build)}</span>
+                  <span className="mt-1 block text-sm font-semibold text-blueprint">{monthlyLine(prices.buildMonthly)}</span>
                   <span className="mt-2 block text-sm text-muted-foreground">
                     Five pages plus your own dashboard for leads, quotes and invoices.
                   </span>
@@ -431,6 +433,7 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
                 <a href="#reply" className="group rounded-2xl border border-border bg-card/50 p-6 transition-colors hover:border-blueprint">
                   <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Landing page</span>
                   <span className="mt-2 block font-display text-3xl font-bold">{formatPrice(market, prices.landing)}</span>
+                  <span className="mt-1 block text-sm font-semibold text-blueprint">{monthlyLine(prices.landingMonthly)}</span>
                   <span className="mt-2 block text-sm text-muted-foreground">One fast page, built to turn visitors into calls.</span>
                   <span className="mt-4 inline-block font-semibold text-blueprint">I want this &rarr;</span>
                 </a>
@@ -445,6 +448,7 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
               >
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-blueprint">The Scalar build</span>
                 <span className="mt-2 block font-display text-3xl font-bold">£{PRICES.build.toLocaleString('en-GB')}</span>
+                <span className="mt-1 block text-sm font-semibold text-blueprint">{monthlyLine(prices.buildMonthly)}</span>
                 <span className="mt-2 block text-sm text-muted-foreground">
                   Five pages plus your own dashboard for enquiries, quotes and invoices.
                 </span>
@@ -458,11 +462,19 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
               >
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Landing page</span>
                 <span className="mt-2 block font-display text-3xl font-bold">£{PRICES.landing.toLocaleString('en-GB')}</span>
+                <span className="mt-1 block text-sm font-semibold text-blueprint">{monthlyLine(prices.landingMonthly)}</span>
                 <span className="mt-2 block text-sm text-muted-foreground">One fast page, built to turn visitors into enquiries.</span>
                 <span className="mt-4 inline-block font-semibold text-blueprint">See my quote &rarr;</span>
               </StartQuote>
             </div>
             )}
+            <p className="mt-4 text-sm text-muted-foreground">
+              Rather pay monthly?{' '}
+              <a href="#reply" className="font-semibold text-blueprint underline-offset-4 hover:underline">
+                Tell me here
+              </a>{' '}
+              and I&apos;ll set it up: nothing upfront, {PAY_MONTHLY_MONTHS} payments from the day it goes live, then it&apos;s yours.
+            </p>
           </Reveal>
           {!us && (
             <Reveal className="mt-6">
@@ -489,7 +501,8 @@ export default async function ProspectPreviewPage({ params, searchParams }: Prop
           <dl className="mt-12 divide-y divide-border border-y border-border">
             {[
               ['Is the price fixed?', `Yes. ${formatPrice(market, prices.landing)} or ${formatPrice(market, prices.build)}, agreed before anything starts, and it doesn't move. No monthly fee on the website itself.`],
-              ['Do I own it?', 'Yes - the code and the domain are yours outright once it’s paid for. No being locked to me to make a change.'],
+              ['Can I pay monthly?', `Yes. Nothing upfront, then ${PAY_MONTHLY_MONTHS} monthly payments from the day it goes live - ${formatPrice(market, prices.buildMonthly)} for The Scalar build, ${formatPrice(market, prices.landingMonthly)} for the landing page. No interest, never more than paying at once, and you can pay off the rest whenever you like. After the last payment it's yours outright.`],
+              ['Do I own it?', 'Yes - the code is yours outright once it’s paid for, and the domain is in your name from day one. No being locked to me to make a change.'],
               ['What do I have to do?', 'A short call, then one page of details and some photos of your work. You check the whole site on your phone before anything goes live.'],
               ['Will my email keep working?', 'Yes. Your email settings are checked and carried over before your domain is pointed at the new site, and your current site stays up until then.'],
               ['What about the dashboard?', `It comes with The Scalar build, free for the first 12 months, then ${formatPrice(market, prices.dashboardMonthly)} a month only if you want to keep it. The website works without it.`],
