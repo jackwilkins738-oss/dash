@@ -121,6 +121,9 @@ class SendEmail(unittest.TestCase):
         self.assertEqual(self.send(smtp, test=True), 1)
         self.assertEqual(smtp.sent[0]["To"], "jack@scalar.co.uk")
         self.assertIn("would go to bill@kerr.co.uk", smtp.sent[0]["Subject"])
+        text = smtp.sent[0].get_body(("plain",)).get_content()
+        self.assertIn("src=dashboard", text)  # your click on the test isn't counted as theirs
+        self.assertNotIn("src=email", text)
         self.assertFalse((self.out / eb.SENT).exists())
         self.assertTrue((self.out / eb.PENDING).exists())
 

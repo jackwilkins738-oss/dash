@@ -763,11 +763,12 @@ class CallList(unittest.TestCase):
             self.assertEqual((hot["phone"], hot["contact"], hot["views"]), ("01483 111111", "Amy Hot", 3))
             self.assertTrue(hot["preview"].endswith("?src=dashboard"))  # your own look isn't counted as theirs
             self.assertEqual([(i["business"], i["phone"], i["waited"]) for i in out["letters"]], [("Quiet Roofing", "07700 900000", 17)])
-            # Called after their last visit: off the list until they look again.
+            # No answer since their last visit: still on the list (worth another go), below anyone not yet tried.
             with (d / "calls.csv").open("a", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow([overrides.row_key({"Business": "Hot Roofing"}), "s.xlsx", "Hot Roofing", "No answer", "", "2026-09-27T12:30:00+00:00"])
             later = datetime(2026, 9, 27, 13, tzinfo=timezone.utc)
-            self.assertEqual([i["business"] for i in calls.call_list(d, "s.xlsx", secret, "https://site", act, later)["viewing"]], ["Warm Roofing"])
+            self.assertEqual([i["business"] for i in calls.call_list(d, "s.xlsx", secret, "https://site", act, later)["viewing"]],
+                             ["Warm Roofing", "Hot Roofing"])
 
     def test_dashboard_without_the_endpoint(self):
         import calls
