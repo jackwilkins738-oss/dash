@@ -35,6 +35,9 @@ FINAL = {"Not interested", "Won"}
 # scorecard can count them. A month of these says what the real objection is.
 LOST_REASONS = ["Price", "Timing", "Has someone", "No need", "Other"]
 LETTER_WAIT_DAYS = 7
+# Hidden from the call list by hand ("Hide - my test / not a lead"): key -> when. They come back only if
+# they open their preview again after that.
+HIDDEN = "calls-hidden.csv"
 PHONE_COLUMNS = ["Phone", "Phone number", "Telephone", "Tel", "Mobile", "Landline"]
 
 
@@ -103,6 +106,26 @@ def fetch_activity(api: str, secret: str, tenant: str) -> dict[str, dict]:
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
         raise DashboardMissing(f"Couldn't reach the dashboard ({getattr(e, 'reason', e)}).") from e
     return {r["slug"]: r for r in rows if r.get("slug")}
+
+
+def load_hidden(outreach: Path) -> dict[str, str]:
+    path = outreach / HIDDEN
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as f:
+        return {r["key"]: r.get("at") or "" for r in csv.DictReader(f) if r.get("key")}
+
+
+def hide(outreach: Path, key: str, business: str, why: str = "") -> None:
+    """Takes a firm off the call list - your own test click, or someone who isn't a lead."""
+    path = outreach / HIDDEN
+    new = not path.exists()
+    with path.open("a", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["key", "business", "why", "at"])
+        if new:
+            w.writeheader()
+        w.writerow({"key": key, "business": business, "why": why[:80],
+                    "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
 
 
 def load_calls(outreach: Path) -> dict[str, list[dict]]:
@@ -260,6 +283,7 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
         with sent_path.open(encoding="utf-8") as f:
             posted = {r["key"]: r.get("posted") or "" for r in csv.DictReader(f) if r.get("key")}
     calls = load_calls(outreach)
+    hidden = load_hidden(outreach)
 
     viewing, letters, choices = [], [], []
     for row in rows:
@@ -304,12 +328,19 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
         }
         called = _when(item["last_call_at"])
         viewed = _when(item["last_viewed"])
-        if item["views"] and (not called or not viewed or viewed > called or last.get("outcome") in ("Call back", "Interested")):
-            # Hottest first: seen recently, and more than once.
+        hid = _when(hidden.get(key))
+        if hid and (not viewed or viewed <= hid):
+            continue  # hidden by hand (a test, not a lead) - back only if they look again
+        unanswered = bool(last) and last.get("outcome") in ("No answer", "Call back", "Interested")
+        if item["views"] and (not called or not viewed or viewed > called or unanswered):
+            # Hottest first: seen recently, and more than once. Older clicks stay on the list (a firm that
+            # looked weeks ago is still worth a call) - they just sort below fresh ones, as do firms you've
+            # already tried since they looked.
             age_h = (now - viewed).total_seconds() / 3600 if viewed else 1e6
-            item["heat"] = round(interest(item) / (1 + age_h / 24), 2)
+            item["heat"] = round(interest(item) / (1 + age_h / 24), 4)
+            item["tried"] = bool(called and viewed and called > viewed)  # already rung since they looked
             viewing.append(item)
-        elif item["posted"] and activity is not None and not item["views"]:
+        elif item["posted"] and activity is not None and not item["views"] and key not in hidden:
             try:
                 waited = (now.date() - date.fromisoformat(item["posted"])).days
             except ValueError:
@@ -318,7 +349,7 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
             if waited >= LETTER_WAIT_DAYS and not recently_called:
                 item["waited"] = waited
                 letters.append(item)
-    viewing.sort(key=lambda i: -i["heat"])
+    viewing.sort(key=lambda i: (i["tried"], -i["heat"]))
     if choices:
         sync_choices(outreach, choices)
     letters.sort(key=lambda i: -i["waited"])
@@ -334,12 +365,17 @@ def call_list(outreach: Path, sheet: str, secret: str, site: str, activity: dict
             for r in csv.DictReader(f):
                 if r.get("kind") not in ("interested", "read it") or r.get("handled"):
                     continue
+                if (r.get("message_id") or "").startswith("preview-choice:") and r.get("intent") == "later":
+                    continue  # tapped "Maybe later" on their preview - not someone to ring now
                 row = by_site.get(r.get("website") or "") or {}
+                rkey = overrides.row_key(row) if row else overrides.row_key({"Business": r.get("business", "")})
+                if rkey in hidden and (r.get("date") or "") <= hidden[rkey][:16].replace("T", " "):
+                    continue
                 extra = found.get(r.get("website") or "") or {}
                 slug = make_slug(str(row.get("Business") or r.get("business") or ""), r.get("website") or "", secret) if r.get("website") else ""
                 act = (activity or {}).get(slug) or {}
                 replied.append({
-                    "key": overrides.row_key(row) if row else overrides.row_key({"Business": r.get("business", "")}),
+                    "key": rkey,
                     "business": r.get("business", ""), "website": r.get("website", ""), "email": r.get("from", ""),
                     "contact": str(row.get("Contact name") or "").strip() or extra.get("contact", ""),
                     "phone": next((str(row[c]).strip() for c in PHONE_COLUMNS if str(row.get(c) or "").strip()), "") or extra.get("phone", ""),

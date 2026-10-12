@@ -816,7 +816,7 @@ function callRow(i, section) {
     : section === "callbacks"
     ? `<b style="color:var(--warn)">Call back ${i.overdue ? `- ${i.overdue} day${i.overdue === 1 ? "" : "s"} overdue` : "today"}</b>${i.note ? ` · "${esc(i.note)}"` : ""}${views}`
     : section === "viewing"
-    ? `<b style="color:var(--ok)">${i.views} visit${i.views === 1 ? "" : "s"}</b> · last ${esc(agoIso(i.last_viewed))}${engagedText(i)}`
+    ? `<b style="color:var(--ok)">${i.views} visit${i.views === 1 ? "" : "s"}</b> · last ${esc(agoIso(i.last_viewed))}${engagedText(i)}${i.sheet && i.sheet !== $("sheet").value ? ` <span class="hint">· from ${esc(i.sheet)}</span>` : ""}`
     : `letter posted ${i.waited} days ago · not opened yet`;
   const last = i.last_call ? ` · last call: ${esc(i.last_call)} ${esc(agoIso(i.last_call_at))}` : "";
   return `<div class="ritem" data-key="${esc(i.key)}" data-sec="${section}">
@@ -826,7 +826,8 @@ function callRow(i, section) {
     <div class="why">${seen}${last}</div>
     ${i.script && i.script.length ? `<details class="why"><summary>Call script</summary>${i.script.map((l) => `<div>${esc(l)}</div>`).join("")}</details>` : ""}
     <div class="btns">${(callData.outcomes || []).map((o) => `<button data-outcome="${esc(o)}" ${o === "Not interested" ? 'class="danger"' : o === "Interested" || o === "Won" ? 'class="primary"' : ""}>${esc(o)}</button>`).join("")}
-      <input type="text" placeholder="note (optional)" data-note></div>
+      <input type="text" placeholder="note (optional)" data-note>
+      <button data-hide title="Your own test click, or someone who isn't a lead - off the list until they open their preview again">Hide (test / not a lead)</button></div>
     <div class="btns" style="margin-top:6px"><button class="primary" data-quote="build">Quote: Scalar build £${esc(Number(quotePrices.build).toLocaleString())}</button><button data-quote="landing">Quote: landing page £${esc(Number(quotePrices.landing).toLocaleString())}</button><label class="hint" title="One of the first three Scalar builds: 24 months' free dashboard, the speed guarantee, first in the queue - for a case study, video and review"><input type="checkbox" data-founding> founding client</label><label class="hint" title="Nothing upfront, 12 monthly payments from launch (the price / 12, rounded down), then it's theirs. Hosted on your Cloudflare until paid off."><input type="checkbox" data-monthly> pay monthly</label><button data-draft>Draft their site</button><button data-research title="Company age and directors, what their site says, their speed check - before you dial">🔎 Research</button></div>
     <div class="why" data-research-box hidden></div>
     <div class="why" data-quote-result></div>
@@ -856,6 +857,7 @@ function renderCalls() {
     + (rp ? `<h2 style="font-size:12px;color:var(--ok);text-transform:uppercase;letter-spacing:.06em">Replied to your email - answer these first</h2>` + rp : "") + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em">Looking at their preview - hottest first</h2>` + v
     + `<h2 style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:18px">Letter follow-ups (${LETTER_WAIT} days+, not opened)</h2>` + l;
   document.querySelectorAll("#calls [data-outcome]").forEach((b) => b.addEventListener("click", () => callOutcome(b)));
+  document.querySelectorAll("#calls [data-hide]").forEach((b) => b.addEventListener("click", () => callOutcome(b, "", "Hide")));
   document.querySelectorAll("#calls [data-quote]").forEach((b) => b.addEventListener("click", () => makeQuote(b)));
   document.querySelectorAll("#calls [data-draft]").forEach((b) => b.addEventListener("click", () => draftSite(b)));
   document.querySelectorAll("#calls [data-research]").forEach((b) => b.addEventListener("click", () => researchFirm(b)));
@@ -1004,11 +1006,11 @@ async function makeQuote(b) {
     try { await navigator.clipboard.writeText(e.target.dataset.copy); e.target.textContent = "Copied"; } catch (err) {}
   });
 }
-async function callOutcome(b, dueIn) {
+async function callOutcome(b, dueIn, forced) {
   const card = b.closest(".ritem");
   const list = callData[card.dataset.sec] || [];
   const item = list.find((x) => x.key === card.dataset.key);
-  const outcome = dueIn ? "Call back" : b.dataset.outcome;
+  const outcome = forced || (dueIn ? "Call back" : b.dataset.outcome);
   let reason = "";
   if (outcome === "Not interested") {
     const reasons = callData.reasons || [];

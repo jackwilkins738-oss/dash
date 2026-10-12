@@ -603,6 +603,9 @@ def send_batch(outreach: Path, followups: bool = False, test: bool = False, smtp
                 wait_turn(inbox)
             to = me if test else email
             if test:
+                # Your click on the test's preview link mustn't count as theirs (or put them on the call list):
+                # ?src=dashboard is the owner's own visit, never recorded.
+                body = body.replace("src=email", "src=dashboard")
                 subject = f"[TEST to yourself - would go to {email}{', version ' + variant if has_variant_b(templates) and variant else ''}] {subject}"
             msg = build_message(to, subject, body, reply_to, env=inbox.env())
             try:

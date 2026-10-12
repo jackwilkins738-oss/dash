@@ -87,7 +87,7 @@ SECRET_KEYS = {"GOOGLE_PLACES_API_KEY", "ANTHROPIC_API_KEY", "CLOUDFLARE_API_TOK
 ALERT_AFTER_S = 180
 RUN_ALL_BATCH = 40  # speed checks per step of Run the whole list - each step is pushed, so stopping loses nothing
 # Shown in the header. Bump it with every change, so an old panel still running is obvious.
-PANEL_VERSION = "109"
+PANEL_VERSION = "110"
 MAX_LOG_LINES = 5000
 
 
@@ -934,6 +934,25 @@ def calls_for(sheet: str) -> dict:
         out = calls.call_list(OUTREACH, sheet, secret, site, activity)
     except Exception as e:  # a sheet open in Excel, an odd file
         return {"viewing": [], "letters": [], "message": f"Couldn't read {sheet}: {e}"}
+    # Who's looking, from every list - not just the one picked - so a firm from an older list that opened
+    # its preview is still on the call list. Each carries its own sheet, so outcomes land on the right one.
+    seen = {i["key"] for i in out["viewing"] + out["letters"]}
+    for item in out["viewing"] + out["letters"]:
+        item.setdefault("sheet", sheet)
+    for other in sheets():
+        if other == sheet:
+            continue
+        try:
+            more = calls.call_list(OUTREACH, other, secret, site, activity)
+        except Exception:  # an unreadable list shouldn't hide the rest
+            continue
+        for section in ("viewing", "letters"):
+            for item in more[section]:
+                if item["key"] not in seen:
+                    seen.add(item["key"])
+                    out[section].append({**item, "sheet": other})
+    out["viewing"].sort(key=lambda i: (i.get("tried", False), -i.get("heat", 0)))
+    out["letters"].sort(key=lambda i: -i.get("waited", 0))
     import call_script
 
     me = settings.get("MAIL_FROM_NAME") or ""
@@ -1214,6 +1233,11 @@ def call_action(body: dict) -> tuple[dict, int]:
     key = str(body.get("key") or "")
     outcome = str(body.get("outcome") or "")
     business = str(body.get("business") or "")[:150]
+    if outcome == "Hide":  # your own test click, or not a lead - off the list until they look again
+        if not REVIEW_KEY.match(key) or not business:
+            return {"error": "That doesn't look right."}, 400
+        calls.hide(OUTREACH, key, business, str(body.get("note") or ""))
+        return {"ok": True, "message": f"{business}: hidden - back on the list only if they open their preview again"}, 200
     if not sheet_path(sheet) or not REVIEW_KEY.match(key) or outcome not in calls.OUTCOMES or not business:
         return {"error": "That doesn't look right."}, 400
     note = str(body.get("note") or "")[:300]
