@@ -27,5 +27,20 @@
       }
     ],
     "changed": "2026-10-03"
+  },
+  "/speed-test": {
+    "title": "Free Website Speed Test",
+    "description": "Paste in your site and get its real Google PageSpeed score, live. Free, no sign-up, nothing stored. See how fast your site loads on mobile.",
+    "changed": "2026-11-01"
+  },
+  "/guides/is-a-website-worth-it-for-tradesmen": {
+    "description": "Work out if a website pays for itself: the profit on a typical job against the cost of the site. Put in your own numbers and see how many jobs it takes.",
+    "faqs": [
+      {
+        "q": "When is a website not worth it for a tradesman?",
+        "a": "If you are booked solid for months from repeat customers and word of mouth, and don't want to grow or move up to better-paid work, a website won't change much yet. Keep your Google Business Profile up to date and revisit the sum when that changes."
+      }
+    ],
+    "changed": "2026-11-01"
   }
 }
